@@ -1,0 +1,341 @@
+{
+  "checkedAt": "2026-09-09T00:37:35.765Z",
+  "packageManager": "bun@1.4.2",
+  "js": [
+    {
+      "name": "@earendil-works/pi-coding-agent",
+      "installed": "0.85.1",
+      "latest": "0.85.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40earendil-works%2Fpi-coding-agent/latest"
+    },
+    {
+      "name": "@iconify-json/ph",
+      "installed": "1.2.2",
+      "latest": "1.2.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40iconify-json%2Fph/latest"
+    },
+    {
+      "name": "@iconify/react",
+      "installed": "6.0.2",
+      "latest": "6.0.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40iconify%2Freact/latest"
+    },
+    {
+      "name": "@lobehub/ui",
+      "installed": "5.40.2",
+      "latest": "5.40.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40lobehub%2Fui/latest"
+    },
+    {
+      "name": "@pierre/diffs",
+      "installed": "1.4.1",
+      "latest": "1.4.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40pierre%2Fdiffs/latest"
+    },
+    {
+      "name": "@radix-ui/react-dialog",
+      "installed": "1.1.23",
+      "latest": "1.1.23",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40radix-ui%2Freact-dialog/latest"
+    },
+    {
+      "name": "@radix-ui/react-dropdown-menu",
+      "installed": "2.1.24",
+      "latest": "2.1.24",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40radix-ui%2Freact-dropdown-menu/latest"
+    },
+    {
+      "name": "@radix-ui/react-hover-card",
+      "installed": "1.1.23",
+      "latest": "1.1.23",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40radix-ui%2Freact-hover-card/latest"
+    },
+    {
+      "name": "@radix-ui/react-select",
+      "installed": "2.3.7",
+      "latest": "2.3.7",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40radix-ui%2Freact-select/latest"
+    },
+    {
+      "name": "@radix-ui/react-separator",
+      "installed": "1.1.15",
+      "latest": "1.1.15",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40radix-ui%2Freact-separator/latest"
+    },
+    {
+      "name": "@radix-ui/react-tooltip",
+      "installed": "1.2.16",
+      "latest": "1.2.16",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40radix-ui%2Freact-tooltip/latest"
+    },
+    {
+      "name": "@streamdown/cjk",
+      "installed": "1.0.3",
+      "latest": "1.0.3",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40streamdown%2Fcjk/latest"
+    },
+    {
+      "name": "@streamdown/code",
+      "installed": "1.1.1",
+      "latest": "1.1.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40streamdown%2Fcode/latest"
+    },
+    {
+      "name": "@streamdown/math",
+      "installed": "1.0.2",
+      "latest": "1.0.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40streamdown%2Fmath/latest"
+    },
+    {
+      "name": "@streamdown/mermaid",
+      "installed": "1.0.2",
+      "latest": "1.0.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40streamdown%2Fmermaid/latest"
+    },
+    {
+      "name": "@tanstack/react-query",
+      "installed": "5.102.8",
+      "latest": "5.102.8",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40tanstack%2Freact-query/latest"
+    },
+    {
+      "name": "@tauri-apps/api",
+      "installed": "2.11.1",
+      "latest": "2.11.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40tauri-apps%2Fapi/latest"
+    },
+    {
+      "name": "@tauri-apps/plugin-dialog",
+      "installed": "2.7.3",
+      "latest": "2.7.3",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40tauri-apps%2Fplugin-dialog/latest"
+    },
+    {
+      "name": "ai",
+      "installed": "7.0.94",
+      "latest": "7.0.94",
+      "matches": true,
+      "source": "https://registry.npmjs.org/ai/latest"
+    },
+    {
+      "name": "border-beam",
+      "installed": "1.3.0",
+      "latest": "1.3.0",
+      "matches": true,
+      "source": "https://registry.npmjs.org/border-beam/latest"
+    },
+    {
+      "name": "cmdk",
+      "installed": "1.1.1",
+      "latest": "1.1.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/cmdk/latest"
+    },
+    {
+      "name": "katex",
+      "installed": "0.18.7",
+      "latest": "0.18.7",
+      "matches": true,
+      "source": "https://registry.npmjs.org/katex/latest"
+    },
+    {
+      "name": "lucide-react",
+      "installed": "1.43.0",
+      "latest": "1.43.0",
+      "matches": true,
+      "source": "https://registry.npmjs.org/lucide-react/latest"
+    },
+    {
+      "name": "metal-fx",
+      "installed": "2.0.10",
+      "latest": "2.0.10",
+      "matches": true,
+      "source": "https://registry.npmjs.org/metal-fx/latest"
+    },
+    {
+      "name": "motion",
+      "installed": "13.2.0",
+      "latest": "13.2.0",
+      "matches": true,
+      "source": "https://registry.npmjs.org/motion/latest"
+    },
+    {
+      "name": "nanoid",
+      "installed": "6.0.1",
+      "latest": "6.0.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/nanoid/latest"
+    },
+    {
+      "name": "react",
+      "installed": "19.2.8",
+      "latest": "19.2.8",
+      "matches": true,
+      "source": "https://registry.npmjs.org/react/latest"
+    },
+    {
+      "name": "react-dom",
+      "installed": "19.2.8",
+      "latest": "19.2.8",
+      "matches": true,
+      "source": "https://registry.npmjs.org/react-dom/latest"
+    },
+    {
+      "name": "streamdown",
+      "installed": "2.6.0",
+      "latest": "2.6.0",
+      "matches": true,
+      "source": "https://registry.npmjs.org/streamdown/latest"
+    },
+    {
+      "name": "use-stick-to-bottom",
+      "installed": "1.1.6",
+      "latest": "1.1.6",
+      "matches": true,
+      "source": "https://registry.npmjs.org/use-stick-to-bottom/latest"
+    },
+    {
+      "name": "zustand",
+      "installed": "5.0.15",
+      "latest": "5.0.15",
+      "matches": true,
+      "source": "https://registry.npmjs.org/zustand/latest"
+    },
+    {
+      "name": "@tailwindcss/vite",
+      "installed": "4.3.3",
+      "latest": "4.3.3",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40tailwindcss%2Fvite/latest"
+    },
+    {
+      "name": "@tauri-apps/cli",
+      "installed": "2.11.4",
+      "latest": "2.11.4",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40tauri-apps%2Fcli/latest"
+    },
+    {
+      "name": "@types/node",
+      "installed": "26.5.0",
+      "latest": "26.5.0",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40types%2Fnode/latest"
+    },
+    {
+      "name": "@types/react",
+      "installed": "19.2.18",
+      "latest": "19.2.18",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40types%2Freact/latest"
+    },
+    {
+      "name": "@types/react-dom",
+      "installed": "19.2.7",
+      "latest": "19.2.7",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40types%2Freact-dom/latest"
+    },
+    {
+      "name": "@vitejs/plugin-react",
+      "installed": "6.1.1",
+      "latest": "6.1.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/%40vitejs%2Fplugin-react/latest"
+    },
+    {
+      "name": "bun",
+      "installed": "1.4.2",
+      "latest": "1.4.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/bun/latest"
+    },
+    {
+      "name": "oxlint",
+      "installed": "1.82.0",
+      "latest": "1.82.0",
+      "matches": true,
+      "source": "https://registry.npmjs.org/oxlint/latest"
+    },
+    {
+      "name": "tailwindcss",
+      "installed": "4.3.3",
+      "latest": "4.3.3",
+      "matches": true,
+      "source": "https://registry.npmjs.org/tailwindcss/latest"
+    },
+    {
+      "name": "typescript",
+      "installed": "7.0.2",
+      "latest": "7.0.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/typescript/latest"
+    },
+    {
+      "name": "vite",
+      "installed": "8.2.2",
+      "latest": "8.2.2",
+      "matches": true,
+      "source": "https://registry.npmjs.org/vite/latest"
+    }
+  ],
+  "rust": {
+    "toolchain": "1.98.1",
+    "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+    "crates": [
+      {
+        "name": "tauri",
+        "latest": "2.11.5",
+        "source": "https://crates.io/api/v1/crates/tauri"
+      },
+      {
+        "name": "tauri-build",
+        "latest": "2.6.3",
+        "source": "https://crates.io/api/v1/crates/tauri-build"
+      },
+      {
+        "name": "tauri-plugin-log",
+        "latest": "2.9.1",
+        "source": "https://crates.io/api/v1/crates/tauri-plugin-log"
+      },
+      {
+        "name": "serde",
+        "latest": "1.0.229",
+        "source": "https://crates.io/api/v1/crates/serde"
+      },
+      {
+        "name": "serde_json",
+        "latest": "1.0.151",
+        "source": "https://crates.io/api/v1/crates/serde_json"
+      },
+      {
+        "name": "log",
+        "latest": "0.4.34",
+        "source": "https://crates.io/api/v1/crates/log"
+      },
+      {
+        "name": "reqwest",
+        "latest": "0.13.4",
+        "source": "https://crates.io/api/v1/crates/reqwest"
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+[package]
+name = "pi-gui"
+version = "0.1.0"
+description = "A local desktop workspace for Pi"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+serde_json = "=1.0.151"
+serde = { version = "=1.0.229", features = ["derive"] }
+log = "=0.4.34"
+tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-log = "=2.9.1"
+tauri-plugin-dialog = "=2.7.3"
+reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }

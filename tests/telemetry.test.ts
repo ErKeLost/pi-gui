@@ -1,0 +1,26 @@
+import {test,expect} from 'bun:test'
+import {observe,emptyTelemetry} from '../src/lib/telemetry'
+import {getChange} from '../src/lib/changes'
+import {mergeProjects} from '../src/lib/projects'
+test('compaction keeps actual status and estimates, never invents progress percentages',()=>{
+ let state=observe(emptyTelemetry(),{type:'compaction_start',reason:'threshold'},1000)
+ expect(state.compaction?.status).toBe('running')
+ expect(state.compaction).not.toHaveProperty('percent')
+ state=observe(state,{type:'compaction_end',reason:'threshold',result:{tokensBefore:96000,estimatedTokensAfter:23000,summary:'saved'},aborted:false,willRetry:true},6000)
+ expect(state.compaction).toMatchObject({status:'complete',startedAt:1000,endedAt:6000,tokensBefore:96000,estimatedTokensAfter:23000,willRetry:true})
+})
+test('failed or cancelled compaction never displays a successful token reduction',()=>{
+ const started=observe(emptyTelemetry(),{type:'compaction_start',reason:'manual'},0)
+ const cancelled=observe(started,{type:'compaction_end',reason:'manual',result:null,aborted:true},3)
+ const failed=observe(started,{type:'compaction_end',reason:'manual',result:null,errorMessage:'quota'},3)
+ expect(cancelled.compaction?.status).toBe('cancelled');expect(failed.compaction?.status).toBe('error');expect(failed.compaction?.estimatedTokensAfter).toBeUndefined()
+})
+test('Pi full patch is preferred over its display diff; write is not falsely marked as a new file',()=>{
+ expect(getChange('edit',{path:'x.ts'},{details:{patch:'--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@\n-a\n+b',diff:'not a patch'}})?.kind).toBe('patch')
+ expect(getChange('edit',{path:'x.ts'},{details:{diff:'+changed'}})).toBeNull()
+ expect(getChange('write',{path:'x.ts',content:'new'},{})).toEqual({kind:'file',name:'x.ts',contents:'new'})
+})
+test('multiple project directories deduplicate by path, not by display name',()=>{
+ const projects=mergeProjects([] ,['/a/app/','/b/app','/a/app'])
+ expect(projects).toEqual([{path:'/a/app',name:'app'},{path:'/b/app',name:'app'}])
+})

@@ -1,0 +1,5 @@
+import {readFileSync,writeFileSync} from 'node:fs'
+const collection=JSON.parse(readFileSync(new URL('../node_modules/@iconify-json/ph/icons.json',import.meta.url)))
+const names=['code','user','brain','terminal-window','caret-down','copy','folder-open','magnifying-glass','arrow-up-right','arrow-down','paperclip','command','x','stop-fill','arrow-up','plus','chats','git-commit','arrow-bend-up-right','bookmark-simple','git-fork','tree-structure','sparkle','puzzle-piece','text-align-left','arrow-right','chat-circle-dots','chat-circle-text','sidebar-simple','folder-simple','caret-up-down','dots-three','chat-circle','gear-six','desktop','export','browser','warning-circle','info','sun','moon']
+for(const name of names)if(!collection.icons[name])throw new Error('Missing official icon: '+name)
+writeFileSync(new URL('../src/icons.generated.json',import.meta.url),JSON.stringify({prefix:collection.prefix,width:collection.width,height:collection.height,icons:Object.fromEntries(names.map(name=>[name,collection.icons[name]]))})+'\n')
