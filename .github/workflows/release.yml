@@ -36,8 +36,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         if: runner.os == 'macOS'
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install Intel macOS target
+        if: matrix.name == 'macOS Intel'
+        run: rustup target add x86_64-apple-darwin
 
       - uses: dtolnay/rust-toolchain@stable
         if: runner.os == 'Windows'
