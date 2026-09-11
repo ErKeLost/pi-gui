@@ -1,5 +1,7 @@
 # 文档与代码依据
 
+Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beautifului.dev/) 的 Reasoning / Drive 组件，保留其 [MIT 许可](licenses/beautiful-ui.txt)。演示用固定阶段与示例文本已替换为 Pi 实际推理内容和运行事件；支持减少动态效果，计时器使用实际经过时间。
+
 核对日期：2026-09-09。使用官方文档、发布注册表和安装包自带源码作为依据。项目中的演示状态已移除，连接、模型、工具和会话数据均来自 Pi。
 
 | 编号 | 官方来源 | 已读取 / 核对的内容 | 实现位置 |

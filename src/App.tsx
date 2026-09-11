@@ -3,7 +3,7 @@ import {useProjects} from './lib/projects'
 import {Button} from './components/UI'
 import { useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { AnimatePresence, m } from 'motion/react'
+import { AnimatePresence } from 'motion/react'
 import {Inspector} from './components/Inspector'
 import {MetricsSync} from './lib/metrics'
 import { useQuery } from '@tanstack/react-query'
@@ -13,19 +13,13 @@ import type { Session } from './lib/protocol'
 import { Icon } from './components/Icon'
 import { Chat } from './components/Chat'
 import { Panel, ExtensionDialog } from './components/Panels'
-import {useBlurFadeThemeTransition} from './components/BlurFadeThemeTransition'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './components/ui/resizable'
 import './styles/workspace-base.css'
 import './App.css'
 const navigation:{id:PanelName;label:string;icon:string}[]=[{id:'chat',label:'工作台',icon:'chat-circle-text'},{id:'sessions',label:'所有会话',icon:'chats'},{id:'tree',label:'会话树',icon:'tree-structure'},{id:'commands',label:'技能与命令',icon:'puzzle-piece'},{id:'pi-tools',label:'Pi 工具',icon:'puzzle-piece'},{id:'changes',label:'代码变更',icon:'code'},{id:'console',label:'控制台',icon:'terminal-window'}]
 let started=false
-export function ThemeToggle(){
- const {theme,triggerTransition,isAnimating}=useBlurFadeThemeTransition()
- const target=theme==='dark'?'浅色':'深色'
- return <Button className="icon-button theme-toggle" aria-label={`切换到${target}主题`} title={`切换到${target}主题`} disabled={isAnimating} onClick={()=>triggerTransition()}><Icon name={theme==='dark'?'sun':'moon'}/></Button>
-}
 export default function App(){
- const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),error=useWorkspace(s=>s.error),dialogs=useWorkspace(s=>s.dialogs),notices=useWorkspace(s=>s.notices),statuses=useWorkspace(s=>s.statuses)
+ const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector)
  const online=connection==='online'
  const discovery=useQuery({queryKey:['discovery'],queryFn:()=>invoke<{pi:string;node:string;version:string;cwd:string}>('discover'),enabled:native})
  const sessions=useQuery({queryKey:['pi','sessions',cwd],queryFn:()=>invoke<Session[]>('list_sessions',{cwd}),enabled:native&&Boolean(cwd)})
@@ -36,6 +30,9 @@ export default function App(){
    useWorkspace.getState().set({cwd:path,piVersion:discovery.data.version})
    void connect(path).catch(report)
  },[discovery.data])
+ useEffect(()=>{
+   if(discovery.error)useWorkspace.getState().set({error:String(discovery.error)})
+ },[discovery.error])
  useEffect(()=>{
    const handler=(event:KeyboardEvent)=>{
     if(!(event.metaKey||event.ctrlKey))return
@@ -64,17 +61,17 @@ export default function App(){
    <ResizableHandle />
    <ResizablePanel id="workspace" minSize="420px" groupResizeBehavior="preserve-relative-size">
    <section className="workspace">
-    {(error||discovery.error)&&<div role="alert" className="error-banner"><Icon name="warning-circle"/><span>{error||String(discovery.error)}</span><Button aria-label="关闭提示" onClick={()=>useWorkspace.getState().set({error:null})}><Icon name="x"/></Button></div>}
     <MetricsSync/><div className="work-content"><div className="main-content"><div className="chat-host" hidden={panel!=='chat'}><Chat key={cwd}/></div><AnimatePresence mode="wait">{panel!=='chat'&&<Panel key={panel}/>}</AnimatePresence></div></div>
     {Object.entries(statuses).flatMap(([key,value])=>!key.startsWith('gui-')&&value?[<div key={key} className="extension-status">{key}: {value}</div>]:[])}
    </section>
    </ResizablePanel>
-   <ResizableHandle />
-   <ResizablePanel id="inspector" minSize="260px" maxSize="420px" groupResizeBehavior="preserve-relative-size">
-    <Inspector/>
-   </ResizablePanel>
+   {inspector&&<>
+    <ResizableHandle />
+    <ResizablePanel id="inspector" minSize="260px" maxSize="420px" groupResizeBehavior="preserve-relative-size">
+     <Inspector/>
+    </ResizablePanel>
+   </>}
    </ResizablePanelGroup>
-   {notices.length>0&&<m.div className="notice-stack" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}>{notices.map(notice=><Button key={notice} onClick={()=>useWorkspace.getState().set({notices:(current=>{const index=current.indexOf(notice);return index<0?current:[...current.slice(0,index),...current.slice(index+1)]})(useWorkspace.getState().notices)})}><Icon name="info"/><span>{notice}</span><Icon name="x"/></Button>)}</m.div>}
    {dialogs[0]&&<ExtensionDialog key={dialogs[0].id} dialog={dialogs[0]}/>}
   </main>
 }

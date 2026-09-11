@@ -10,5 +10,5 @@ export function MessageContent({className = '', children, ...props}: HTMLAttribu
 }
 
 export function MessageResponse({children, animated = false}: {children: string; animated?: boolean}) {
- return <div className={`ai-message-response ${animated ? 'is-streaming' : ''}`}><Streamdown content={children} granularity="char" smoothing="balanced" /></div>
+ return <div className={`ai-message-response ${animated ? 'is-streaming' : 'markdown-static'}`}><Streamdown content={children} granularity="char" smoothing="balanced" /></div>
 }

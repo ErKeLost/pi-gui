@@ -55,10 +55,11 @@ fn read_json_file(path: PathBuf, label: &str) -> Result<Value, String> {
     serde_json::from_str(&fs::read_to_string(path).map_err(|_| format!("{label} 不可读"))?).map_err(|_| format!("{label} 不是有效 JSON"))
 }
 
-async fn fetch_model_catalog(base_url: &str, api_key: &str, api: &str, auth_header: bool) -> Result<Value, String> {
+async fn fetch_model_catalog(base_url: &str, models_url: Option<&str>, api_key: &str, api: &str, auth_header: bool) -> Result<Value, String> {
     let base_url = base_url.trim_end_matches('/');
     if !(base_url.starts_with("https://") || base_url.starts_with("http://")) { return Err("Base URL 必须是 HTTP(S) 地址".into()); }
-    let endpoint = format!("{base_url}/models");
+    let endpoint = models_url.filter(|value| !value.trim().is_empty()).map(|value| value.trim().to_string()).unwrap_or_else(|| format!("{base_url}/models"));
+    if !(endpoint.starts_with("https://") || endpoint.starts_with("http://")) { return Err("模型列表接口必须是 HTTP(S) 地址".into()); }
     let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
     let request = client.get(endpoint);
     let request = if api_key.is_empty() || !auth_header { request } else if api == "anthropic-messages" {
@@ -77,14 +78,19 @@ fn catalog_models(catalog: &Value) -> Vec<Value> {
 fn pi_model_from_catalog(item: &Value) -> Option<Value> {
     let id = item.get("id").and_then(Value::as_str)?.to_string();
     let mut model = json!({"id": id});
-    if let Some(name) = item.get("name").and_then(Value::as_str) { model["name"] = Value::from(name); }
+    if let Some(name) = item.get("name").or_else(|| item.get("display_name")).and_then(Value::as_str) { model["name"] = Value::from(name); }
     let input_values = item.get("architecture").and_then(|value| value.get("input_modalities"))
         .or_else(|| item.get("input_modalities"));
     if let Some(inputs) = input_values.and_then(Value::as_array) {
         let inputs = inputs.iter().filter_map(Value::as_str).filter(|value| *value == "text" || *value == "image").map(Value::from).collect::<Vec<_>>();
         if !inputs.is_empty() { model["input"] = Value::Array(inputs); }
+    } else if let Some(tags) = item.get("capability_tags").and_then(Value::as_array) {
+        let mut inputs = Vec::new();
+        if tags.iter().any(|tag| matches!(tag.as_str(), Some("chat" | "text" | "completion"))) { inputs.push(Value::from("text")); }
+        if tags.iter().any(|tag| matches!(tag.as_str(), Some("vision" | "image" | "image_input"))) { inputs.push(Value::from("image")); }
+        if !inputs.is_empty() { model["input"] = Value::Array(inputs); }
     }
-    if let Some(context) = item.get("context_length").and_then(Value::as_u64) { model["contextWindow"] = Value::from(context); }
+    if let Some(context) = item.get("context_length").or_else(|| item.get("context_window")).and_then(Value::as_u64) { model["contextWindow"] = Value::from(context); }
     if let Some(max_tokens) = item.get("max_output_tokens").or_else(|| item.get("max_tokens")).and_then(Value::as_u64) { model["maxTokens"] = Value::from(max_tokens); }
     if let Some(reasoning) = item.get("reasoning").and_then(Value::as_bool) {
         model["reasoning"] = Value::from(reasoning);
@@ -108,6 +114,38 @@ fn agent_dir() -> Result<PathBuf, String> {
 }
 
 fn provider_store_path(dir: &std::path::Path) -> PathBuf { dir.join("pi-gui-providers.json") }
+
+fn settings_path(dir: &std::path::Path) -> PathBuf { dir.join("settings.json") }
+
+fn project_trust_mode(value: &Value) -> &'static str {
+    match value.get("defaultProjectTrust").and_then(Value::as_str) {
+        Some("always") => "always",
+        Some("never") => "never",
+        _ => "ask",
+    }
+}
+
+#[tauri::command]
+pub fn get_project_trust_mode() -> Result<String, String> {
+    let dir = agent_dir()?;
+    let path = settings_path(&dir);
+    if !path.exists() { return Ok("ask".into()); }
+    Ok(project_trust_mode(&read_json_file(path, "Pi settings.json")?).into())
+}
+
+#[tauri::command]
+pub fn set_project_trust_mode(mode: String) -> Result<String, String> {
+    if !matches!(mode.as_str(), "ask" | "always" | "never") { return Err("无效的项目权限模式".into()); }
+    let dir = agent_dir()?;
+    fs::create_dir_all(&dir).map_err(|e| format!("创建 Pi 配置目录失败：{e}"))?;
+    let path = settings_path(&dir);
+    let mut settings = if path.exists() { read_json_file(path.clone(), "Pi settings.json")? } else { json!({}) };
+    if !settings.is_object() { settings = json!({}); }
+    settings["defaultProjectTrust"] = Value::from(mode.clone());
+    fs::write(&path, serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())? + "\n")
+        .map_err(|e| format!("写入 Pi settings.json 失败：{e}"))?;
+    Ok(mode)
+}
 
 fn load_provider_store(dir: &std::path::Path) -> Result<Value, String> {
     let path = provider_store_path(dir);
@@ -150,7 +188,8 @@ pub async fn list_provider_models(provider: String) -> Result<Value, String> {
     let auth = read_json_file(dir.join("auth.json"), "Pi auth.json").unwrap_or_else(|_| json!({}));
     let api = provider_config.get("api").and_then(Value::as_str).unwrap_or("openai-completions");
     let auth_header = provider_config.get("authHeader").and_then(Value::as_bool).unwrap_or(true);
-    fetch_model_catalog(base_url, &stored_api_key(&auth, &provider).unwrap_or_default(), api, auth_header).await
+    let models_url = provider_config.get("modelsUrl").and_then(Value::as_str);
+    fetch_model_catalog(base_url, models_url, &stored_api_key(&auth, &provider).unwrap_or_default(), api, auth_header).await
 }
 
 #[tauri::command]
@@ -169,6 +208,7 @@ pub async fn list_provider_profiles() -> Result<Value, String> {
             "id": id,
             "name": saved.get("name").and_then(Value::as_str).or_else(|| config.get("name").and_then(Value::as_str)),
             "baseUrl": saved.get("baseUrl").and_then(Value::as_str).or_else(|| config.get("baseUrl").and_then(Value::as_str)),
+            "modelsUrl": saved.get("modelsUrl").and_then(Value::as_str).or_else(|| config.get("modelsUrl").and_then(Value::as_str)),
             "api": saved.get("api").and_then(Value::as_str).or_else(|| config.get("api").and_then(Value::as_str)),
             "authHeader": saved.get("authHeader").and_then(Value::as_bool).or_else(|| config.get("authHeader").and_then(Value::as_bool)),
             "hasApiKey": stored_api_key(&auth, &id).is_some(),
@@ -179,17 +219,17 @@ pub async fn list_provider_profiles() -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub async fn probe_provider_models(provider: String, base_url: String, api: String, api_key: Option<String>, auth_header: bool) -> Result<Value, String> {
+pub async fn probe_provider_models(provider: String, base_url: String, api: String, api_key: Option<String>, auth_header: bool, models_url: Option<String>) -> Result<Value, String> {
     if !valid_provider_id(&provider) { return Err("Provider ID 只能包含字母、数字、-、_、.".into()); }
     if !supported_api(&api) { return Err("不支持的 Pi API 类型".into()); }
     let dir = agent_dir()?;
     let auth = read_json_file(dir.join("auth.json"), "Pi auth.json").unwrap_or_else(|_| json!({}));
     let key = api_key.filter(|value| !value.trim().is_empty()).or_else(|| stored_api_key(&auth, &provider)).unwrap_or_default();
-    fetch_model_catalog(&base_url, &key, &api, auth_header).await
+    fetch_model_catalog(&base_url, models_url.as_deref(), &key, &api, auth_header).await
 }
 
 #[tauri::command]
-pub async fn save_provider(provider: String, name: Option<String>, base_url: String, api: String, api_key: Option<String>, auth_header: bool) -> Result<Value, String> {
+pub async fn save_provider(provider: String, name: Option<String>, base_url: String, models_url: Option<String>, api: String, api_key: Option<String>, auth_header: bool) -> Result<Value, String> {
     if !valid_provider_id(&provider) { return Err("Provider ID 只能包含字母、数字、-、_、.".into()); }
     if !supported_api(&api) { return Err("不支持的 Pi API 类型".into()); }
     let dir = agent_dir()?;
@@ -200,6 +240,7 @@ pub async fn save_provider(provider: String, name: Option<String>, base_url: Str
     let mut provider_config = providers.get(&provider).cloned().unwrap_or_else(|| json!({}));
     if !provider_config.is_object() { provider_config = json!({}); }
     provider_config["baseUrl"] = Value::from(base_url.trim_end_matches('/'));
+    if let Some(value) = models_url.as_ref().filter(|value| !value.trim().is_empty()) { provider_config["modelsUrl"] = Value::from(value.trim_end_matches('/')); } else { provider_config.as_object_mut().map(|object| object.remove("modelsUrl")); }
     provider_config["api"] = Value::from(api.clone());
     provider_config["authHeader"] = Value::from(auth_header);
     if let Some(value) = name.as_ref().filter(|value| !value.trim().is_empty()) { provider_config["name"] = Value::from(value.as_str()); }
@@ -216,7 +257,8 @@ pub async fn save_provider(provider: String, name: Option<String>, base_url: Str
     let mut store = load_provider_store(&dir)?;
     let providers = store.get_mut("providers").and_then(Value::as_object_mut).ok_or("Provider 配置缺少 providers 对象")?;
     let previous_key = providers.get(&provider).and_then(|value| value.get("apiKey")).cloned();
-    let mut entry = json!({"name":name,"baseUrl":base_url.trim_end_matches('/'),"api":api,"authHeader":auth_header});
+    let normalized_models_url = models_url.as_deref().map(|value| value.trim().trim_end_matches('/')).filter(|value| !value.is_empty());
+    let mut entry = json!({"name":name,"baseUrl":base_url.trim_end_matches('/'),"modelsUrl":normalized_models_url,"api":api,"authHeader":auth_header});
     if let Some(key) = api_key.as_ref().filter(|value| !value.trim().is_empty()).map(|value| Value::from(value.as_str())).or(previous_key) { entry["apiKey"] = key; }
     providers.insert(provider.clone(), entry);
     write_provider_store(&dir, &store)?;

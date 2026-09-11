@@ -25,3 +25,5 @@ tauri = { version = "=2.11.5", features = [] }
 tauri-plugin-log = "=2.9.1"
 tauri-plugin-dialog = "=2.7.3"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
+tauri-plugin-updater = "2.11.0"
+tauri-plugin-process = "2.3.1"

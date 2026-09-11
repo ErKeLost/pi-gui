@@ -1,24 +1,18 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { AtSign, FileText, List, RefreshCw } from "lucide-react";
+import { Select as ShadcnSelect, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWorkspace } from "../lib/store";
 import {
-  listProjectFiles,
-  listProviderModels,
   request,
   report,
   stop,
 } from "../lib/rpc";
 import type { Model, Part, DisplayMessage, Tool, PiMessage } from "../lib/protocol";
 import { Icon } from "./Icon";
-import { Button, Input, Select, Skeleton } from "./UI";
-import { ProjectPicker } from "./ProjectPicker";
-import { ContextBar } from "./Inspector";
-import { ThemeToggle } from "../App";
+import { Button, Select, Skeleton } from "./UI";
 import { Thinking } from "./RichMessage";
-import { ToolCall } from "./ai-elements/tool-call";
+import { ToolActivityGroup, ToolCall } from "./ai-elements/tool-call";
 import {
   Conversation,
   ConversationContent,
@@ -37,17 +31,20 @@ import {
   PromptInputTextarea,
   type PromptInputMessage,
 } from "./ai-elements/prompt-input";
-import { ThinkingOrb } from "thinking-orbs";
-import { Beam } from "./Effects";
-import { BorderBeam } from "border-beam";
-import { ModelLogo, ModelModalities } from "./ModelMeta";
-import { formatContextLength, modelLabel, modelModalities } from "../lib/model-meta";
+import LoadingState from "./ai-elements/loading-state";
+import { modelLabel } from "../lib/model-meta";
 
 type Attachment = { name: string; data: string; mimeType: string };
 const composerCache = new Map<
   string,
   { text: string; attachments: Attachment[] }
 >();
+function composerModelLabel(id: string, fallback?: string) {
+  return modelLabel(id, fallback)
+    .replace(/^gpt-/i, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
 function imageAttachments(files: Iterable<File>) {
   return Promise.all(
     Array.from(files).flatMap((file) => file.type.startsWith("image/") ? [
@@ -81,7 +78,7 @@ function PartView({
       <MessageResponse animated={running}>{part.text ?? ""}</MessageResponse>
     );
   if (part.type === "thinking")
-    return <Thinking text={part.thinking ?? ""} running={thinking} />;
+    return <Thinking text={part.thinking ?? ""} running={thinking && !part.thinkingComplete} />;
   if (part.type === "image")
     return (
       <img
@@ -95,9 +92,7 @@ function PartView({
     const result = tool?.result;
     return (
       <ToolCall
-        label={`完成 ${part.name ?? "工具"}`}
-        activeLabel={`正在执行 ${part.name ?? "工具"}`}
-        query={part.argsText ?? ""}
+        toolName={part.name ?? tool?.name ?? "工具"}
         request={part.argsText ?? JSON.stringify(part.arguments ?? {})}
         result={
           result === undefined
@@ -107,7 +102,7 @@ function PartView({
               : JSON.stringify(result)
         }
         usage={tool?.usage}
-        running={result === undefined}
+        running={tool?.running ?? false}
       />
     );
   }
@@ -133,6 +128,45 @@ const TranscriptMessage = memo(
     const content = Array.isArray(item.message.content)
       ? item.message.content
       : [{ type: "text", text: item.message.content ?? "" }];
+    const contentNodes: ReactNode[] = [];
+    for (let index = 0; index < content.length; index += 1) {
+      const part = content[index] as Part;
+      if (part.type !== "toolCall") {
+        contentNodes.push(
+          <PartView
+            key={item.id + "-" + index}
+            part={part}
+            tools={tools}
+            running={streaming}
+            thinking={thinking && index === content.length - 1}
+          />,
+        );
+        continue;
+      }
+      const calls: Part[] = [];
+      while (index < content.length && content[index]?.type === "toolCall") {
+        calls.push(content[index] as Part);
+        index += 1;
+      }
+      index -= 1;
+      contentNodes.push(
+        <ToolActivityGroup
+          key={item.id + "-" + index}
+          toolNames={calls.map(call => call.name ?? tools[call.id ?? ""]?.name ?? "工具")}
+          running={calls.some(call => tools[call.id ?? ""]?.running)}
+        >
+          {calls.map((call, callIndex) => (
+            <PartView
+              key={item.id + "-" + (index + callIndex)}
+              part={call}
+              tools={tools}
+              running={streaming}
+              thinking={false}
+            />
+          ))}
+        </ToolActivityGroup>,
+      );
+    }
     return (
       <m.div
         className={`transcript-message ${role}`}
@@ -142,15 +176,7 @@ const TranscriptMessage = memo(
       >
         <Message from={role}>
           <MessageContent>
-            {content.map((part, index) => (
-              <PartView
-                key={`${item.id}-${index}`}
-                part={part as Part}
-                tools={tools}
-                running={streaming}
-                thinking={thinking}
-              />
-            ))}
+            {contentNodes}
           </MessageContent>
         </Message>
       </m.div>
@@ -176,6 +202,7 @@ const TranscriptMessage = memo(
 export function Chat() {
   const project = useWorkspace((s) => s.cwd),
     transcript = useWorkspace((s) => s.transcript),
+    telemetry = useWorkspace((s) => s.telemetry),
     online = useWorkspace((s) => s.connection === "online"),
     state = useWorkspace((s) => s.state);
   const [attachments, setAttachments] = useState<Attachment[]>(
@@ -201,8 +228,6 @@ export function Chat() {
     return () => window.removeEventListener("paste", pasteImage);
   }, []);
   const { ref, atBottom, scrollToBottom } = useConversationScroll();
-  const [filePickerOpen, setFilePickerOpen] = useState(false), [fileSearch, setFileSearch] = useState("");
-  const projectFiles = useQuery({queryKey:["pi", "project-files", project], queryFn:()=>listProjectFiles(project), enabled:filePickerOpen && !!project, staleTime:300000});
   const models = useQuery({
     queryKey: ["pi", "models", project],
     queryFn: () =>
@@ -225,64 +250,24 @@ export function Chat() {
   });
   const activeProvider = state?.model?.provider;
   const activeMessage = transcript.messages[transcript.active]?.message;
-  const activeHasText = Boolean(
-    activeMessage &&
-      (Array.isArray(activeMessage.content)
-        ? activeMessage.content.some(
-            (part) => part.type === "text" && Boolean(part.text?.trim()),
-          )
-        : typeof activeMessage.content === "string" &&
-          activeMessage.content.trim()),
-  );
+  const activeHasOutput = Boolean(
+    Array.isArray(activeMessage?.content)
+      ? activeMessage.content.some(part =>
+          part.type === "toolCall" ||
+          part.type === "image" ||
+          Boolean(part.text?.trim()) ||
+          Boolean(part.thinking?.trim()),
+        )
+      : typeof activeMessage?.content === "string" && activeMessage.content.trim(),
+  ) || Object.values(transcript.tools).some(tool => tool.running);
   const configuredModels = activeProvider
     ? (models.data?.models ?? []).filter((model) => model.provider === activeProvider)
     : [];
-  const [catalogOpen, setCatalogOpen] = useState(false);
-  const catalog = useQuery({
-    queryKey: ["pi", "provider-models", project, state?.model?.provider],
-    queryFn: () => listProviderModels(state?.model?.provider ?? ""),
-    enabled: online && !!state?.model?.provider,
-    staleTime: 300000,
-    refetchOnWindowFocus: false,
-  });
-  const configuredIds = new Set((models.data?.models ?? []).map((model) => `${model.provider}/${model.id}`));
-  const remoteModels = (catalog.data?.data ?? []).filter((model) => model.id);
-  const catalogContent = (
-    <div className="provider-catalog">
-      <div className="provider-catalog-header">
-        <strong>中转站模型</strong>
-        <Button title="刷新模型目录" onClick={() => void catalog.refetch()}>
-          <RefreshCw className={catalog.isFetching ? "spin" : ""} />
-        </Button>
-      </div>
-      {catalog.isLoading ? (
-        <span className="orb-status"><ThinkingOrb state="searching" size={20} theme="dark" aria-label="查询中" />查询中</span>
-      ) : catalog.error ? (
-        <p className="error-inline">{String(catalog.error)}</p>
-      ) : remoteModels.length === 0 ? (
-        <p className="metric-note">接口没有返回模型。</p>
-      ) : (
-        <>
-          <div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div>
-          <div className="provider-model-list provider-model-table">
-            {remoteModels.map((model) => {
-              const key = `${state?.model?.provider}/${model.id}`;
-              const inputs = modelModalities(model, "input");
-              const outputs = modelModalities(model, "output");
-              return (
-                <div className="provider-model-row" key={model.id}>
-                  <span className="provider-model-name"><ModelLogo modelId={model.id} size={16} /><strong>{modelLabel(model.id, model.name)}</strong><small>{configuredIds.has(key) ? "Pi 已配置" : "仅远端目录"}</small></span>
-                  <span className="provider-model-context">{formatContextLength(model.context_length)}{typeof model.context_length === "number" && <small> tokens</small>}</span>
-                  <ModelModalities values={inputs} />
-                  <ModelModalities values={outputs} />
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
+  const retry = telemetry.retry;
+  const retrying = retry?.status === "waiting" || retry?.status === "running";
+  const retryDetail = retrying && retry
+    ? `第 ${Number.isFinite(retry.attempt) ? retry.attempt : "?"}${retry.maxAttempts && Number.isFinite(retry.maxAttempts) ? ` / ${retry.maxAttempts}` : ""} 次${retry.delayMs && Number.isFinite(retry.delayMs) ? ` · 等待 ${retry.delayMs} ms` : ""} · ${retry.error || "原因未提供"}`
+    : undefined;
   useEffect(() => {
     const timer = setTimeout(
       () =>
@@ -335,14 +320,6 @@ export function Chat() {
   }
   return (
     <div className="chat-root tessera-thread-root">
-      <div className="chat-toolbar">
-        <ProjectPicker compact />
-        <ContextBar />
-        <div className="chat-toolbar-actions">
-          <ThemeToggle />
-          <Button title="上下文与运行详情" onClick={()=>useWorkspace.getState().set({inspector:!useWorkspace.getState().inspector})}><Icon name="brain"/></Button>
-        </div>
-      </div>
       <Conversation
         ref={ref}
         className="chat-conversation tessera-conversation"
@@ -360,53 +337,37 @@ export function Chat() {
                 item={item}
                 tools={transcript.tools}
                 streaming={transcript.running && index === transcript.active}
-                thinking={transcript.running && index === transcript.active && !activeHasText}
+                thinking={transcript.running && index === transcript.active && !item.message.stopReason}
               />
             ))
           )}
-          {transcript.running && !activeHasText && <Beam active className="thinking-beam"><div className="run-status"><ThinkingOrb state="composing" size={20} theme="dark" aria-label={transcript.phase || "正在处理"} /><span>{transcript.phase || "正在处理"}</span></div></Beam>}
+          {transcript.running && !activeHasOutput && (
+            <LoadingState className="chat-loading-state" label={transcript.phase || "正在处理"} detail={retryDetail} />
+          )}
         </ConversationContent>
         {!atBottom && <ConversationScrollButton onClick={scrollToBottom} />}
       </Conversation>
       <div className="composer-container tessera-composer-dock">
         <div className="tessera-composer-form">
-          <AnimatePresence>
-            {attachments.length > 0 && (
-              <m.div
-                className="attachments"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                {attachments.map((a) => (
-                  <div className="attachment-preview" key={`${a.name}-${a.data.slice(0, 16)}`}>
-                    <img src={`data:${a.mimeType};base64,${a.data}`} alt={a.name} />
-                    <Button
-                      title={`移除 ${a.name}`}
-                      onClick={() =>
-                        setAttachments((current) => current.filter((item) => item !== a))
-                      }
-                    >
-                      <Icon name="x" />
-                    </Button>
-                  </div>
-                ))}
-              </m.div>
-            )}
-          </AnimatePresence>
-              <BorderBeam
-                className="composer-beam"
-                active
-                size="md"
-                colorVariant="mono"
-                strength={0.55}
-                theme="dark"
-              >
                 <PromptInput
                   onSubmit={(message) => void submit(message)}
                   className="composer studio-composer"
                   allowEmpty={attachments.length > 0}
                 >
+                <AnimatePresence>
+                  {attachments.length > 0 && (
+                    <m.div className="attachments" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                      {attachments.map((a) => (
+                        <div className="attachment-preview" key={`${a.name}-${a.data.slice(0, 16)}`}>
+                          <img src={`data:${a.mimeType};base64,${a.data}`} alt={a.name} />
+                          <Button title={`移除 ${a.name}`} onClick={() => setAttachments((current) => current.filter((item) => item !== a))}>
+                            <Icon name="x" />
+                          </Button>
+                        </div>
+                      ))}
+                    </m.div>
+                  )}
+                </AnimatePresence>
                 <PromptInputTextarea
                   placeholder="Build anything…"
                   value={draft}
@@ -432,31 +393,11 @@ export function Chat() {
                       event.target.value = "";
                     }}
                   />
-                  <Button
-                    title="添加附件"
-                    onClick={() => fileInput.current?.click()}
-                  >
-                    <Icon name="paperclip" />
-                  </Button>
-                  <Popover open={filePickerOpen} onOpenChange={setFilePickerOpen}>
-                    <PopoverTrigger render={<Button title="引用项目文件" aria-label="引用项目文件" />}><AtSign /></PopoverTrigger>
-                    <PopoverContent side="top" align="start" className="project-file-picker">
-                      <Input autoFocus placeholder="搜索项目文件" value={fileSearch} onChange={event=>setFileSearch(event.target.value)} />
-                      <div className="project-file-options">
-                        {(projectFiles.data ?? []).filter(file=>file.toLowerCase().includes(fileSearch.toLowerCase())).slice(0,80).map(file=><Button key={file} onClick={()=>{setDraft(value=>`${value}${value && !value.endsWith(" ") ? " " : ""}@${file} `);setFilePickerOpen(false);setFileSearch("")}}><FileText/><span>{file}</span></Button>)}
-                        {projectFiles.isLoading && <span className="metric-note">读取文件列表…</span>}
-                        {projectFiles.error && <span className="error-inline">{String(projectFiles.error)}</span>}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  {transcript.running && (
-                    <Button
-                      title="停止"
-                      onClick={() => void stop().catch(report)}
-                    >
-                      <Icon name="stop-fill" />
+                  <div className="composer-tool-cluster">
+                    <Button variant="ghost" size="icon" aria-label="上传附件" onClick={() => fileInput.current?.click()}>
+                      <Icon name="plus" />
                     </Button>
-                  )}
+                  </div>
                   <div className="composer-selectors">
                     {models.isLoading ? (
                       <span className="studio-model-loading" aria-busy="true">
@@ -464,19 +405,17 @@ export function Chat() {
                         <Skeleton className="studio-model-loading-label" />
                       </span>
                     ) : (
-                      <Select
-                        aria-label="模型"
-                        className="composer-model-select"
+                      <ShadcnSelect
                         disabled={!online || transcript.running}
                         value={
                           state?.model
                             ? `${state.model.provider}/${state.model.id}`
                             : ""
                         }
-                        onChange={(event) => {
+                        onValueChange={(value) => {
                           const model = configuredModels.find(
                             (m) =>
-                              `${m.provider}/${m.id}` === event.target.value,
+                              `${m.provider}/${m.id}` === value,
                           );
                           if (model)
                             void choose({
@@ -486,22 +425,24 @@ export function Chat() {
                             });
                         }}
                       >
-                        {configuredModels.map((model) => (
-                          <option
+                        <SelectTrigger aria-label="模型" className="composer-model-select">
+                          <SelectValue>Standard</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent side="top" align="end" sideOffset={10}>
+                          <SelectGroup>
+                            <SelectLabel>模型</SelectLabel>
+                            {configuredModels.map((model) => (
+                              <SelectItem
                             key={`${model.provider}/${model.id}`}
                             value={`${model.provider}/${model.id}`}
                           >
-                            <span className="model-option"><ModelLogo modelId={model.id} size={16} /><span>{modelLabel(model.id, model.name)}</span></span>
-                          </option>
-                        ))}
-                      </Select>
+                            {composerModelLabel(model.id, model.name)}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </ShadcnSelect>
                     )}
-                    <Popover open={catalogOpen} onOpenChange={setCatalogOpen}>
-                      <PopoverTrigger render={<Button className="composer-catalog-button" aria-label="查询中转站模型" />}>
-                        <List />
-                      </PopoverTrigger>
-                      <PopoverContent side="top">{catalogContent}</PopoverContent>
-                    </Popover>
                     <Select
                       aria-label="思考强度"
                       className="composer-thinking-select"
@@ -532,6 +473,13 @@ export function Chat() {
                         <option value="followUp">跟进</option>
                       </Select>
                     )}
+                    <Button variant="ghost" size="default" aria-label="Plan" title="Plan">
+                      <Icon name="lightbulb" />
+                      <span>Plan</span>
+                    </Button>
+                    <Button variant="ghost" size="icon" aria-label="语音输入" title="语音输入">
+                      <Icon name="microphone" />
+                    </Button>
                   </div>
                   {(transcript.queue.steering.length > 0 || transcript.queue.followUp.length > 0) && (
                     <span className="composer-queue-status" aria-live="polite">
@@ -547,7 +495,6 @@ export function Chat() {
                   />
                 </div>
                 </PromptInput>
-              </BorderBeam>
         </div>
       </div>
     </div>

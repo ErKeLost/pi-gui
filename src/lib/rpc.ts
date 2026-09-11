@@ -13,8 +13,12 @@ export type ProviderModel={
   created?:number
   owned_by?:string
   context_length?:number
+  context_window?:number
   max_output_tokens?:number
   max_tokens?:number
+  display_name?:string
+  capability_tags?:string[]
+  provider_id?:string
   input_modalities?:string[]
   output_modalities?:string[]
   architecture?:{modality?:string;input_modalities?:string[];output_modalities?:string[];tokenizer?:string;instruct_type?:string|null}
@@ -24,7 +28,7 @@ export type ProviderModel={
   supported_endpoint_types?:string[]
   [key:string]:unknown
 }
-export type ProviderProfile={id:string;name?:string;baseUrl?:string;api?:string;authHeader?:boolean;hasApiKey:boolean;modelCount:number}
+export type ProviderProfile={id:string;name?:string;baseUrl?:string;modelsUrl?:string;api?:string;authHeader?:boolean;hasApiKey:boolean;modelCount:number}
 type Snapshot=Pick<Workspace,'transcript'|'telemetry'|'state'|'connection'|'error'|'draft'|'dialogs'|'notices'|'statuses'|'widgets'>
 type Pending={project:string;resolve:(value:unknown)=>void;reject:(error:Error)=>void;timeout:ReturnType<typeof setTimeout>}
 const pending=new Map<string,Pending>(),snapshots=new Map<string,Snapshot>(),connections=new Map<string,symbol>(),eventQueues=new Map<string,Event[]>(),flushTimers=new Map<string,ReturnType<typeof setTimeout>>()
@@ -77,10 +81,13 @@ export async function refresh(project=useWorkspace.getState().cwd){const state=a
 export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
 export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(!native) throw new Error('文件索引需要桌面应用'); return invoke<string[]>('list_project_files',{cwd:project}) }
 export async function listProviderProfiles():Promise<ProviderProfile[]> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<ProviderProfile[]>('list_provider_profiles') }
-export async function probeProviderModels(provider:string,baseUrl:string,api:string,apiKey?:string,authHeader=true):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('probe_provider_models',{provider,baseUrl,api,apiKey:apiKey||null,authHeader}) }
-export async function saveProvider(input:{provider:string;name?:string;baseUrl:string;api:string;apiKey?:string;authHeader:boolean}):Promise<{id:string;hasApiKey:boolean}> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<{id:string;hasApiKey:boolean}>('save_provider',{provider:input.provider,name:input.name||null,baseUrl:input.baseUrl,api:input.api,apiKey:input.apiKey||null,authHeader:input.authHeader}) }
+export async function probeProviderModels(provider:string,baseUrl:string,api:string,apiKey?:string,authHeader=true,modelsUrl?:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('probe_provider_models',{provider,baseUrl,api,apiKey:apiKey||null,authHeader,modelsUrl:modelsUrl||null}) }
+export async function saveProvider(input:{provider:string;name?:string;baseUrl:string;modelsUrl?:string;api:string;apiKey?:string;authHeader:boolean}):Promise<{id:string;hasApiKey:boolean}> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<{id:string;hasApiKey:boolean}>('save_provider',{provider:input.provider,name:input.name||null,baseUrl:input.baseUrl,modelsUrl:input.modelsUrl||null,api:input.api,apiKey:input.apiKey||null,authHeader:input.authHeader}) }
 export async function deleteSession(sessionPath:string):Promise<void> { if(!native) throw new Error('删除会话需要桌面应用'); return invoke<void>('delete_session',{sessionPath}) }
 export async function syncProviderModels(provider:string):Promise<{provider:string;count:number;previous:number}> { if(!native) throw new Error('同步模型需要桌面应用'); return invoke<{provider:string;count:number;previous:number}>('sync_provider_models',{provider}) }
+export type ProjectTrustMode = 'ask' | 'always' | 'never'
+export async function getProjectTrustMode():Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('get_project_trust_mode') }
+export async function setProjectTrustMode(mode:ProjectTrustMode):Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('set_project_trust_mode',{mode}) }
 export async function loadMessages(project=useWorkspace.getState().cwd){const data=await request<{messages:PiMessage[]}>({type:'get_messages'},30000,project);patch(project,{transcript:hydrate(data.messages)});await refresh(project)}
 export async function connect(cwd:string){
  if(!native)throw new Error('请在桌面应用中选择项目')

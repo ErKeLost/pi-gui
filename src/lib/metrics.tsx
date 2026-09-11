@@ -18,6 +18,18 @@ export function MetricsSync(){
  const state=useQuery({queryKey:['pi','live-state',cwd],queryFn:()=>request<RpcSessionState>({type:'get_state'},30000,cwd),enabled:online,refetchInterval:2000,refetchIntervalInBackground:true})
  const capabilities=useQuery({queryKey:['pi','capabilities',cwd],queryFn:()=>request<{commands:{name:string}[]}>({type:'get_commands'},30000,cwd),enabled:online})
  const observation=useQuery({queryKey:['pi','runtime-snapshot',cwd],queryFn:async()=>{await request({type:'prompt',message:'/gui-observe'},30000,cwd);return true},enabled:online&&!!capabilities.data?.commands.some(c=>c.name==='gui-observe'),refetchInterval:5000,refetchIntervalInBackground:true})
- useEffect(()=>{if(state.data&&online&&useWorkspace.getState().cwd===cwd)useWorkspace.getState().set({state:state.data})},[state.data,online,cwd])
+ useEffect(()=>{
+  if(!state.data||!online||useWorkspace.getState().cwd!==cwd)return
+  const current=useWorkspace.getState()
+  useWorkspace.getState().set({
+   state:state.data,
+   transcript:{
+    ...current.transcript,
+    running:state.data.isStreaming,
+    compacting:state.data.isCompacting,
+    phase:state.data.isCompacting?'正在压缩上下文':state.data.isStreaming?current.transcript.phase:'就绪',
+   },
+  })
+ },[state.data,online,cwd])
  return observation.error?<span className="runtime-error">SDK 状态读取失败：{String(observation.error)}</span>:null
 }

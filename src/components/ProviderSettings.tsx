@@ -17,7 +17,8 @@ import { report } from "../lib/rpc";
 import { Button, Input, Select, Switch, Disclosure, Skeleton } from "./UI";
 import { useWorkspace } from "../lib/store";
 import { ModelLogo, ModelModalities } from "./ModelMeta";
-import { formatContextLength, modelLabel, modelModalities } from "../lib/model-meta";
+import { formatContextLength, modelDisplayName, modelModalities } from "../lib/model-meta";
+import { gooeyToast } from "goey-toast";
 
 const apiTypes = [
   "openai-completions",
@@ -48,8 +49,8 @@ function ModelDetails({ model, onUse, disabled }: { model: ProviderModel; onUse:
     <div className="provider-model-details">
       <dl className="provider-meta-grid">
         <div><dt>ID</dt><dd>{display(model.id)}</dd></div>
-        <div><dt>名称</dt><dd>{display(model.name)}</dd></div>
-        <div><dt>上下文长度</dt><dd>{display(model.context_length)}</dd></div>
+        <div><dt>名称</dt><dd>{display(modelDisplayName(model))}</dd></div>
+        <div><dt>上下文长度</dt><dd>{display(model.context_length ?? model.context_window)}</dd></div>
         <div><dt>最大输出</dt><dd>{display(model.max_output_tokens ?? model.max_tokens)}</dd></div>
         <div><dt>输入类型</dt><dd>{display(inputs)}</dd></div>
         <div><dt>输出类型</dt><dd>{display(outputs)}</dd></div>
@@ -74,89 +75,110 @@ export function ProviderSettings() {
   const [provider, setProvider] = useState("");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [modelsUrl, setModelsUrl] = useState("");
   const [api, setApi] = useState<(typeof apiTypes)[number]>("openai-completions");
   const [apiKey, setApiKey] = useState("");
   const [authHeader, setAuthHeader] = useState(true);
   const [models, setModels] = useState<ProviderModel[]>([]);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<"save" | "probe" | "sync" | "use" | null>(null);
-  const [message, setMessage] = useState("");
+  const [isNewProvider, setIsNewProvider] = useState(false);
 
   const selected = profiles.data?.find((item) => item.id === provider);
   useEffect(() => {
     const first = profiles.data?.[0];
-    if (provider || !first) return;
+    if (provider || isNewProvider || !first) return;
     setProvider(first.id);
     setName(first.name ?? "");
     setBaseUrl(first.baseUrl ?? "");
+    setModelsUrl(first.modelsUrl ?? "");
     setApi((first.api as (typeof apiTypes)[number]) || "openai-completions");
     setAuthHeader(first.authHeader !== false);
-  }, [profiles.data, provider]);
+  }, [profiles.data, provider, isNewProvider]);
   function selectProvider(id: string) {
     setProvider(id);
     const profile = profiles.data?.find((item) => item.id === id);
     if (profile) {
       setName(profile.name ?? "");
       setBaseUrl(profile.baseUrl ?? "");
+      setModelsUrl(profile.modelsUrl ?? "");
       setApi((profile.api as (typeof apiTypes)[number]) || "openai-completions");
       setAuthHeader(profile.authHeader !== false);
       setApiKey("");
     }
     setModels([]);
-    setMessage("");
+    setIsNewProvider(false);
   }
 
   function newProvider() {
-    setProvider(""); setName(""); setBaseUrl(""); setApi("openai-completions"); setApiKey(""); setAuthHeader(true); setModels([]); setMessage("");
+    setIsNewProvider(true); setProvider(""); setName(""); setBaseUrl(""); setModelsUrl(""); setApi("openai-completions"); setApiKey(""); setAuthHeader(true); setModels([]);
   }
 
   function applyPreset(preset: (typeof presets)[number]) {
-    setProvider(preset.id); setName(preset.name); setBaseUrl(preset.baseUrl); setApi(preset.api); setAuthHeader(true); setModels([]); setMessage(`已填入 ${preset.name} 官方端点`);
+    setIsNewProvider(true); setProvider(preset.id); setName(preset.name); setBaseUrl(preset.baseUrl); setModelsUrl(`${preset.baseUrl}/models`); setApi(preset.api); setAuthHeader(true); setModels([]); gooeyToast.info(`已填入 ${preset.name} 官方端点`, { showTimestamp: false });
   }
 
   async function save() {
-    setBusy("save"); setMessage("");
+    setBusy("save");
     try {
-      const result = await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), api, apiKey: apiKey.trim() || undefined, authHeader });
-      setProvider(result.id); setApiKey(""); setMessage("已保存 Provider"); await profiles.refetch();
+      const result = await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
+      setProvider(result.id); setIsNewProvider(false); setApiKey("");
+      let switched = false;
+      try {
+        try { await syncProviderModels(result.id); } catch { /* Keep the saved provider selectable even when its catalog is offline. */ }
+        if (online) await disconnect();
+        await connect(cwd);
+        const available = await request<{ models: { provider: string; id: string }[] }>({ type: "get_available_models" }, 30_000, cwd);
+        const firstModel = available.models.find((model) => model.provider === result.id);
+        if (firstModel) {
+          await request({ type: "set_model", provider: firstModel.provider, modelId: firstModel.id }, 30_000, cwd);
+          await refresh(cwd);
+          switched = true;
+        }
+      } catch (activationError) {
+        gooeyToast.warning("Provider 已保存，但暂时无法切换", { description: activationError instanceof Error ? activationError.message : String(activationError), showTimestamp: false });
+      }
+      gooeyToast.success(switched ? `已保存并切换到 ${result.id}` : "Provider 已保存", { showTimestamp: false });
+      await queryClient.invalidateQueries({ queryKey: ["pi", "models", cwd] });
+      await profiles.refetch();
     } catch (error) { report(error); } finally { setBusy(null); }
   }
 
   async function probe() {
-    setBusy("probe"); setMessage("");
+    setBusy("probe");
     try {
-      const catalog = await probeProviderModels(provider.trim(), baseUrl.trim(), api, apiKey.trim() || undefined, authHeader);
+      const catalog = await probeProviderModels(provider.trim(), baseUrl.trim(), api, apiKey.trim() || undefined, authHeader, modelsUrl.trim() || undefined);
       const next = Array.isArray(catalog.data) ? catalog.data : [];
-      setModels(next); setMessage(`接口返回 ${next.length} 个模型`);
+      setModels(next); gooeyToast.success(`已加载 ${next.length} 个模型`, { description: "模型目录已更新", showTimestamp: false });
     } catch (error) { report(error); } finally { setBusy(null); }
   }
 
   async function sync() {
-    setBusy("sync"); setMessage("");
+    setBusy("sync");
     try {
-      await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), api, apiKey: apiKey.trim() || undefined, authHeader });
+      await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
       const result = await syncProviderModels(provider.trim());
-      setMessage(`已按接口返回同步 ${result.count} 个模型；缺失字段交给 Pi 默认值`);
+      gooeyToast.success(`已同步 ${result.count} 个模型`, { description: "缺失字段交给 Pi 默认值", showTimestamp: false });
       await queryClient.invalidateQueries({ queryKey: ["pi", "models"] });
       await profiles.refetch();
     } catch (error) { report(error); } finally { setBusy(null); }
   }
 
   async function applyModel(model: ProviderModel) {
-    setBusy("use"); setMessage("");
+    setBusy("use");
     try {
-      await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), api, apiKey: apiKey.trim() || undefined, authHeader });
+      await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
       await syncProviderModels(provider.trim());
       if (online) await disconnect();
       await connect(cwd);
       await request({ type: "set_model", provider: provider.trim(), modelId: model.id }, 30_000, cwd);
       await refresh(cwd);
-      setApiKey(""); setMessage(`当前模型：${provider.trim()} / ${model.id}`);
+      setApiKey(""); gooeyToast.success("模型已切换", { description: `${provider.trim()} / ${model.id}`, showTimestamp: false });
       await profiles.refetch();
     } catch (error) { report(error); } finally { setBusy(null); }
   }
 
-  const visibleModels = useMemo(() => models.filter((model) => `${model.id} ${model.name ?? ""}`.toLowerCase().includes(search.toLowerCase())), [models, search]);
+  const visibleModels = useMemo(() => models.filter((model) => `${model.id} ${modelDisplayName(model)}`.toLowerCase().includes(search.toLowerCase())), [models, search]);
   return (
     <section className="settings-section provider-settings">
       <div className="provider-settings-heading"><div><h2>Provider 与模型目录</h2><p>URL、协议和凭据保存在 Pi 配置中。模型能力只展示接口返回的元数据。</p></div><div className="provider-preset-row">{presets.map((preset) => <Button key={preset.id} className="secondary" onClick={() => applyPreset(preset)}>{preset.name}</Button>)}</div></div>
@@ -171,14 +193,14 @@ export function ProviderSettings() {
       <div className="provider-form-grid">
         <label>Provider ID<Input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 my-gateway" /></label>
         <label>显示名称<Input value={name} onChange={(event) => setName(event.target.value)} placeholder="可选" /></label>
-        <label className="provider-form-wide">Base URL<Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com/v1" /></label>
+        <label>Base URL<Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com/v1" /></label>
+        <label>模型列表接口<Input value={modelsUrl} onChange={(event) => setModelsUrl(event.target.value)} placeholder="留空则使用 Base URL/models" /></label>
         <label>API 类型<Select value={api} onChange={(event) => setApi(event.target.value as (typeof apiTypes)[number])}>{apiTypes.map((item) => <option key={item} value={item}>{item}</option>)}</Select></label>
         <label>API Key<Input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={selected?.hasApiKey ? "已保存，留空保持不变" : "不会显示在前端"} autoComplete="off" /></label>
       </div>
       <div className="provider-auth-row"><span>发送 API 认证请求头</span><Switch aria-label="发送 API 认证请求头" checked={authHeader} onChange={setAuthHeader} /><span className="provider-secret-state">{selected?.hasApiKey ? "已保存凭据" : "未保存凭据"}</span></div>
       <div className="provider-actions"><Button className="primary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void save()}>{busy === "save" ? "保存中…" : "保存"}</Button><Button className="secondary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void probe()}>{busy === "probe" ? "查询中…" : "测试并加载模型"}</Button><Button className="secondary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void sync()}>{busy === "sync" ? "同步中…" : "同步到 Pi"}</Button></div>
-      {message && <p className="field-note provider-message">{message}</p>}
-      {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong>接口返回的模型（{visibleModels.length}/{models.length}）</strong><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="筛选模型" /></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelLabel(model.id, model.name)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_length)}{typeof model.context_length === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
+      {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong>接口返回的模型（{visibleModels.length}/{models.length}）</strong><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="筛选模型" /></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelDisplayName(model)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_length ?? model.context_window)}{typeof (model.context_length ?? model.context_window) === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
     </section>
   );
 }

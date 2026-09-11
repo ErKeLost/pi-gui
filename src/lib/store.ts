@@ -9,6 +9,6 @@ export type Workspace = {
   set: (patch: Partial<Omit<Workspace,'set'|'event'>>) => void; event:(event:Event)=>void;
 }
 export const useWorkspace=create<Workspace>((set)=>({
-  telemetry:emptyTelemetry(),inspector:true,transcript:emptyTranscript(),state:null,connection:'offline',cwd:'',piVersion:'',panel:'chat',error:null,draft:'',dialogs:[],notices:[],statuses:{},widgets:{},
+  telemetry:emptyTelemetry(),inspector:false,transcript:emptyTranscript(),state:null,connection:'offline',cwd:'',piVersion:'',panel:'chat',error:null,draft:'',dialogs:[],notices:[],statuses:{},widgets:{},
   set:(patch)=>set(patch),event:(event)=>set(current=>({transcript:reduceEvent(current.transcript,event),telemetry:observe(current.telemetry,event)})),
 }))

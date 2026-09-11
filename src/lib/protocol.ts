@@ -1,7 +1,7 @@
 import type { RpcSessionState, RpcExtensionUIRequest } from '@earendil-works/pi-coding-agent'
 export type { RpcSessionState, RpcCommand, RpcExtensionUIRequest } from '@earendil-works/pi-coding-agent'
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
-export type Part = { type: string; text?: string; thinking?: string; data?: string; mimeType?: string; id?: string; name?: string; arguments?: Record<string, Json>; argsText?: string }
+export type Part = { type: string; text?: string; thinking?: string; thinkingComplete?: boolean; data?: string; mimeType?: string; id?: string; name?: string; arguments?: Record<string, Json>; argsText?: string }
 export type PiMessage = { role: string; content?: string | Part[]; command?: string; output?: string; summary?: string; display?: boolean; timestamp?: number; toolCallId?: string; toolName?: string; isError?: boolean; details?: unknown; usage?: ToolUsage; errorMessage?: string; stopReason?: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string }
 export type DisplayMessage = { id: string; message: PiMessage }
 export type ToolUsage = { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost?: { total?: number } }
@@ -56,7 +56,7 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
         case 'text_end': if (delta.content !== undefined) part = {...part, type:'text', text:delta.content}; break
         case 'thinking_start': part = {type:'thinking', thinking:''}; break
         case 'thinking_delta': part = { ...part, type:'thinking', thinking:(part.thinking ?? '')+(delta.delta ?? '') }; break
-        case 'thinking_end': if (delta.content !== undefined) part = {...part,type:'thinking',thinking:delta.content}; break
+        case 'thinking_end': part = {...part,type:'thinking',thinking:delta.content ?? part.thinking,thinkingComplete:true}; break
         case 'toolcall_start': part = {type:'toolCall', id:delta.id, name:delta.toolName,argsText:''}; break
         case 'toolcall_delta': part = {...part,argsText:(part.argsText ?? '')+(delta.delta ?? '')}; break
         case 'toolcall_end': if(delta.toolCall) part = delta.toolCall; break
@@ -68,7 +68,10 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
     }
     case 'message_end': {
       if (!event.message || (event.message.role==='custom'&&event.message.display===false)) return state
-      const message = normalizeMessage(event.message)
+      const message = { ...normalizeMessage(event.message) }
+      if (message.role === 'assistant' && Array.isArray(message.content)) {
+        message.content = message.content.map(part => part.type === 'thinking' ? {...part,thinkingComplete:true} : part)
+      }
       if (message.role === 'toolResult' && message.toolCallId) return { ...state, tools: {...state.tools,[message.toolCallId]:{...state.tools[message.toolCallId],name:message.toolName ?? 'tool',running:false,result:{content:message.content,details:message.details},isError:message.isError,usage:message.usage as ToolUsage|undefined}} }
       const index = message.role === 'assistant' ? state.active : state.messages.length - 1
       if(index >= 0) {

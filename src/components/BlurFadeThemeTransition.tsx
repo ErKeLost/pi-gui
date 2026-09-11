@@ -34,11 +34,11 @@ type BlurFadeThemeTransitionProps = {
   onThemeChange?: (theme: ColorTheme) => void
 }
 
-/** Adapted from Great UI's MIT-licensed Blur Fade Theme Transition. */
+/** Adapted from Great UI's MIT-licensed Split Theme Provider. */
 export default function BlurFadeThemeTransition({
   children,
   duration = 500,
-  maxBlur = 16,
+  maxBlur: _maxBlur = 16,
   easing = 'ease-in-out',
   onTransition,
   theme: themeProp,
@@ -85,7 +85,7 @@ export default function BlurFadeThemeTransition({
     if (isAnimating) return
 
     const activeDuration = customDuration ?? duration
-    const activeBlur = customBlur ?? maxBlur
+    void customBlur
     const targetTheme = activeTheme === 'light' ? 'dark' : 'light'
     const applyTheme = () => {
       if (!controlled) setLocalTheme(targetTheme)
@@ -103,7 +103,7 @@ export default function BlurFadeThemeTransition({
     }
 
     setIsAnimating(true)
-    const animationStyleId = 'great-ui-blur-anim-style'
+    const animationStyleId = 'great-ui-split-anim-style'
     let animationStyle = document.getElementById(animationStyleId) as HTMLStyleElement | null
     if (!animationStyle) {
       animationStyle = document.createElement('style')
@@ -111,19 +111,14 @@ export default function BlurFadeThemeTransition({
       document.head.appendChild(animationStyle)
     }
     animationStyle.textContent = `
-      @keyframes great-ui-blur-old {
-        from { filter: blur(0); opacity: 1; }
-        to { filter: blur(${activeBlur}px); opacity: 0; }
+      @keyframes great-ui-split-in-to-out {
+        from { clip-path: inset(0 50% 0 50%); -webkit-clip-path: inset(0 50% 0 50%); opacity: 1; }
+        to { clip-path: inset(0 0 0 0); -webkit-clip-path: inset(0 0 0 0); opacity: 1; }
       }
-      @keyframes great-ui-blur-new {
-        from { filter: blur(${activeBlur}px); opacity: 0; }
-        to { filter: blur(0); opacity: 1; }
-      }
-      ::view-transition-old(root) {
-        animation: great-ui-blur-old ${activeDuration}ms ${easing} both !important;
-      }
+      ::view-transition-old(root) { opacity: 1 !important; z-index: 1 !important; }
       ::view-transition-new(root) {
-        animation: great-ui-blur-new ${activeDuration}ms ${easing} both !important;
+        animation: great-ui-split-in-to-out ${activeDuration}ms ${easing} both !important;
+        z-index: 9999 !important;
       }
     `
     const cleanup = () => {
@@ -145,7 +140,7 @@ export default function BlurFadeThemeTransition({
       applyTheme()
       onTransition?.()
     }
-  }, [activeTheme, controlled, duration, easing, isAnimating, maxBlur, onThemeChange, onTransition])
+  }, [activeTheme, controlled, duration, easing, isAnimating, _maxBlur, onThemeChange, onTransition])
 
   const contextValue = useMemo(() => ({theme: activeTheme, triggerTransition, isAnimating}), [activeTheme, isAnimating, triggerTransition])
   return (

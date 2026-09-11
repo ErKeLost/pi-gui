@@ -25,6 +25,14 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5MEM1MjBFNDUwREVDMTAKUldRUTdBMUZEbElNYWRINzZkMWNreEoyL2k5eGxXenpHTE1PTiswQnhTT0UxeWptOTdzMUZ5WFgK",
+      "endpoints": [
+        "https://github.com/ErKeLost/pi-gui/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
@@ -40,6 +48,7 @@
     },
     "resources": [
       "resources/gui-extension.ts"
-    ]
+    ],
+    "createUpdaterArtifacts": true
   }
 }
