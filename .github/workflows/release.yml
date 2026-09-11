@@ -21,7 +21,7 @@ jobs:
             os: macos-14
             args: --target aarch64-apple-darwin
           - name: macOS Intel
-            os: macos-13
+            os: macos-14
             args: --target x86_64-apple-darwin
           - name: Windows
             os: windows-latest
@@ -35,6 +35,12 @@ jobs:
           bun-version: 1.4.2
 
       - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'macOS'
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'Windows'
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
