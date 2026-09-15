@@ -72,3 +72,210 @@
 @media(max-width:1155px){.chat-toolbar,.chat-root .tessera-conversation > .ai-conversation-content,.tessera-composer-form{left:0}}
 @media(max-width:720px){.chat-toolbar,.chat-root .tessera-conversation > .ai-conversation-content,.tessera-composer-form{width:calc(100% - 24px)}.composer-container.tessera-composer-dock{padding-bottom:calc(12px + env(safe-area-inset-bottom))}}
 .ai-conversation{position:relative;flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--foreground) transparent}.ai-conversation-content{display:flex;flex-direction:column;gap:24px;padding:26px 4px 24px}.ai-conversation-empty{display:grid;place-items:center;gap:12px;min-height:38vh;text-align:center;color:var(--foreground)}.ai-conversation-empty strong{font-size:15px;font-weight:500}.ai-conversation-empty p{font-size:11px}.conversation-download,.conversation-scroll-button{position:sticky;z-index:2;display:grid;place-items:center;width:29px!important;height:29px!important;padding:0!important;border:1px solid var(--border)!important;background:var(--background)!important;color:var(--foreground)!important;border-radius:50%!important}.conversation-download{float:right;top:10px;margin:0 10px 0 auto}.conversation-scroll-button{bottom:12px;left:50%;margin-top:-40px}.transcript-message{display:grid;gap:10px;max-width:96%;padding-bottom:10px}.transcript-message.is-user,.transcript-message.user{align-self:flex-end;justify-items:end}.ai-message{display:contents}.ai-message-content{min-width:0;max-width:100%;font-size:13px;line-height:1.8}.is-user .ai-message-content{padding:11px 14px;border-radius: var(--radius-lg);background:var(--background)}.ai-message-response{min-width:0;overflow-wrap:anywhere}.ai-message-response p{margin:0 0 11px}.ai-message-response pre{overflow:auto;max-width:100%}.ai-message-reasoning{padding:8px 0;color:var(--foreground)}.ai-message-reasoning summary{cursor:pointer}.ai-shimmer{display:inline-block;color:transparent;background-image:linear-gradient(90deg,var(--foreground),var(--foreground),var(--foreground));background-size:250% 100%;background-clip:text;-webkit-background-clip:text}.ai-tool-call{border:1px solid var(--border);border-radius: var(--radius-md);overflow:hidden;background:var(--background)}.ai-tool-trigger{display:flex!important;align-items:center;justify-content:flex-start;width:100%;gap:7px;padding:9px 11px!important;border:0!important;background:transparent!important;color:var(--foreground)!important;font-size:11px!important;text-align:left}.ai-tool-trigger>svg:first-child{transition:transform .18s}.ai-tool-trigger>svg.open{transform:rotate(90deg)}.ai-tool-trigger>code{max-width:35%;margin-left:auto;padding:3px 5px;color:var(--foreground);background:var(--background);border-radius: var(--radius-sm);font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ai-tool-trigger>svg:last-child{color:var(--foreground)}.ai-tool-panel{display:grid;gap:7px;padding:0 11px 11px;border-top:1px solid var(--border)}.ai-tool-panel small{display:block;padding:9px 0 4px;color:var(--foreground);font-size:9px}.ai-tool-panel pre{max-height:230px;margin:0;padding:9px;border:1px solid var(--border);border-radius: var(--radius-sm);background:var(--background);color:var(--foreground);white-space:pre-wrap;overflow:auto;font:10px/1.6 monospace}.ai-prompt-input{display:block}.ai-prompt-input textarea{display:block;width:100%;min-height:66px;resize:none;border:0;outline:0;background:transparent;color:var(--foreground);font-size:14px;line-height:1.7}.ai-prompt-input textarea::placeholder{color:var(--foreground)}.ai-prompt-tools{display:flex;align-items:center;gap:5px}.beam-root,.metal-root{display:block}
+
+/* ========================================================
+   Markdown 排版（Streamdown 输出）。
+   Tailwind preflight 会把标题/列表/表格全部重置，而旧样式挂在
+   已废弃的 .markdown 类名上；这里按实际容器类名恢复。
+   未分层的规则优先级高于 @layer base，可覆盖 preflight。
+   ======================================================== */
+.ai-message-response,
+.markdown-renderer {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--foreground);
+}
+
+.ai-message-response .streamdown-animated > :first-child,
+.markdown-renderer .streamdown-animated > :first-child {
+  margin-top: 0;
+}
+
+.ai-message-response p,
+.markdown-renderer p {
+  margin: 0 0 10px;
+}
+
+.ai-message-response .streamdown-animated > :last-child,
+.markdown-renderer .streamdown-animated > :last-child {
+  margin-bottom: 0;
+}
+
+.ai-message-response h1,
+.markdown-renderer h1,
+.ai-message-response h2,
+.markdown-renderer h2,
+.ai-message-response h3,
+.markdown-renderer h3,
+.ai-message-response h4,
+.markdown-renderer h4,
+.ai-message-response h5,
+.markdown-renderer h5,
+.ai-message-response h6,
+.markdown-renderer h6 {
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 18px 0 8px;
+}
+
+.ai-message-response h1,
+.markdown-renderer h1 {
+  font-size: 17px;
+}
+
+.ai-message-response h2,
+.markdown-renderer h2 {
+  font-size: 15px;
+}
+
+.ai-message-response h3,
+.markdown-renderer h3 {
+  font-size: 14px;
+}
+
+.ai-message-response h4,
+.markdown-renderer h4,
+.ai-message-response h5,
+.markdown-renderer h5,
+.ai-message-response h6,
+.markdown-renderer h6 {
+  font-size: 13px;
+}
+
+.ai-message-response strong,
+.markdown-renderer strong {
+  font-weight: 600;
+}
+
+.ai-message-response ul,
+.markdown-renderer ul {
+  list-style: disc outside;
+  margin: 8px 0 10px;
+  padding-left: 22px;
+}
+
+.ai-message-response ol,
+.markdown-renderer ol {
+  list-style: decimal outside;
+  margin: 8px 0 10px;
+  padding-left: 22px;
+}
+
+.ai-message-response li,
+.markdown-renderer li {
+  margin: 3px 0;
+}
+
+.ai-message-response li::marker,
+.markdown-renderer li::marker {
+  color: var(--muted-foreground);
+}
+
+.ai-message-response li > p,
+.markdown-renderer li > p {
+  margin: 0;
+}
+
+.ai-message-response ul ul,
+.markdown-renderer ul ul,
+.ai-message-response ul ol,
+.markdown-renderer ul ol,
+.ai-message-response ol ul,
+.markdown-renderer ol ul,
+.ai-message-response ol ol,
+.markdown-renderer ol ol {
+  margin: 3px 0;
+}
+
+.ai-message-response :not(pre) > code,
+.markdown-renderer :not(pre) > code {
+  font-size: 11px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  overflow-wrap: anywhere;
+}
+
+.ai-message-response pre,
+.markdown-renderer pre {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin: 10px 0;
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre;
+  overflow: auto;
+  max-width: 100%;
+}
+
+.ai-message-response pre code,
+.markdown-renderer pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  white-space: pre;
+}
+
+.ai-message-response table,
+.markdown-renderer table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 10px 0;
+}
+
+.ai-message-response th,
+.markdown-renderer th,
+.ai-message-response td,
+.markdown-renderer td {
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ai-message-response th,
+.markdown-renderer th {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.ai-message-response blockquote,
+.markdown-renderer blockquote {
+  margin: 8px 0 10px;
+  padding: 2px 12px;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.ai-message-response blockquote > p,
+.markdown-renderer blockquote > p {
+  margin: 4px 0;
+}
+
+.ai-message-response hr,
+.markdown-renderer hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.ai-message-response a,
+.markdown-renderer a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ai-message-response img,
+.markdown-renderer img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+}

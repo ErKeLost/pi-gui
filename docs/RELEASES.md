@@ -21,6 +21,6 @@ To release a version, keep `package.json`, `src-tauri/Cargo.toml`, and
 `src-tauri/tauri.conf.json` aligned, commit the version bump, then push its tag:
 
 ```sh
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
