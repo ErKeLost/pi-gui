@@ -27,9 +27,9 @@ const req=(command)=>new Promise((resolve,reject)=>{const id=String(++sequence);
 const deadline=setTimeout(()=>{console.error('Pi smoke test timed out');child.kill();process.exit(1)},90000)
 try{
  await req({type:'prompt',message:'/gui-observe'});assert(runtimeInfo.compaction.reserveTokens>0);assert.equal(typeof runtimeInfo.systemPrompt,'string');results.push('SDK live context and compaction configuration')
- const state=await req({type:'get_state'});assert.equal(state.model.provider,'jamerly');assert.equal(state.thinkingLevel,'high');results.push('state: jamerly / high')
- const models=await req({type:'get_available_models'});assert(models.models.some(m=>m.id==='openai/gpt-5.6-sol'));results.push('models returned by Pi')
- const levels=await req({type:'get_available_thinking_levels'});assert(levels.levels.includes('high'));results.push('supported thinking levels returned by Pi')
+ const state=await req({type:'get_state'});assert(state.model);assert.equal(typeof state.model.provider,'string');assert.equal(typeof state.model.id,'string');results.push(`state: ${state.model.provider}/${state.model.id} / ${state.thinkingLevel}`)
+ const models=await req({type:'get_available_models'});assert(models.models.some(m=>m.provider===state.model.provider&&m.id===state.model.id));results.push('current model returned by Pi model catalog')
+ const levels=await req({type:'get_available_thinking_levels'});assert(levels.levels.includes(state.thinkingLevel));results.push('current thinking level returned by Pi capability API')
  await req({type:'prompt',message:'/gui-tools'});assert(toolState.tools.length>0);results.push('GUI extension: tool inventory')
  await req({type:'prompt',message:'/gui-tools-set ["read"]'});assert.deepEqual(toolState.active,['read']);results.push('GUI extension: active tools update')
  const bash=await req({type:'bash',command:'printf "Pi GUI integration ok"',excludeFromContext:true});assert.equal(bash.exitCode,0);assert.equal(bash.output,'Pi GUI integration ok');results.push('real Bash execution through RPC')

@@ -1419,7 +1419,7 @@ body,
 }
 
 .composer.studio-composer > .attachments {
-  margin: 0 16px 12px !important;
+  margin: 0 2px 10px !important;
   gap: 8px !important;
 }
 
@@ -1436,6 +1436,28 @@ body,
   width: 22px !important;
   height: 22px !important;
   min-width: 22px !important;
+}
+
+.composer.studio-composer > .attachments .attachment-remove[data-slot="button"] {
+  z-index: 2;
+  display: grid !important;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 28%) !important;
+  background: rgb(18 18 18 / 88%) !important;
+  color: #fff !important;
+  opacity: 1 !important;
+  backdrop-filter: blur(6px);
+}
+
+.composer.studio-composer > .attachments .attachment-remove[data-slot="button"]:hover,
+.composer.studio-composer > .attachments .attachment-remove[data-slot="button"]:focus-visible {
+  background: rgb(42 42 42 / 96%) !important;
+  border-color: rgb(255 255 255 / 48%) !important;
+}
+
+.composer.studio-composer > .attachments .attachment-remove[data-slot="button"] svg {
+  width: 13px !important;
+  height: 13px !important;
 }
 
 @media (max-width: 720px) {
@@ -1808,7 +1830,7 @@ body,
   height: 28px !important;
   min-height: 28px !important;
   padding: 0 8px 0 10px !important;
-  border-radius: 9999px !important;
+  border-radius: var(--radius-2xl) !important;
   border: 1px solid transparent !important;
   background: var(--muted) !important;
   color: var(--muted-foreground) !important;
@@ -1818,6 +1840,132 @@ body,
   transition: all 0.15s ease;
   box-shadow: none !important;
 }
+
+.composer-model-control {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(100%, 300px);
+  height: 30px;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-2xl);
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.composer-model-control:hover,
+.composer-model-control[aria-expanded="true"] { background: var(--accent); }
+.composer-model-control:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.composer-model-control:disabled { cursor: default; opacity: .5; }
+.composer-model-control > span:not(.model-logo) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-model-control small { color: var(--muted-foreground); font: inherit; }
+.composer-model-control i { color: var(--muted-foreground); font-style: normal; }
+.composer-model-control > svg { width: 13px; height: 13px; color: var(--muted-foreground); }
+
+.composer-model-menu[data-slot="popover-content"] {
+  width: min(316px, calc(100vw - 24px));
+  max-height: min(480px, calc(100vh - 120px));
+  gap: 0;
+  padding: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+  background: var(--popover);
+}
+.composer-model-menu section { min-width: 0; }
+.composer-effort-tuner { padding: 7px 8px 11px; }
+.composer-effort-tuner > div:first-child { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 9px; }
+.composer-effort-tuner span { color: var(--muted-foreground) !important; font-size: 11px; }
+.composer-effort-tuner strong { color: var(--foreground); font-size: 13px; font-weight: 600; }
+.composer-effort-tuner input[type="range"] {
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-2xl);
+  outline: 0;
+  background: linear-gradient(to right, var(--foreground) 0 var(--effort-progress), var(--muted) var(--effort-progress) 100%);
+}
+.composer-effort-tuner input[type="range"]::-webkit-slider-thumb {
+  width: 15px;
+  height: 15px;
+  appearance: none;
+  border: 2px solid var(--popover);
+  border-radius: 50%;
+  background: var(--foreground);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+}
+.composer-effort-tuner input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--ring); }
+.composer-effort-scale { display: flex; justify-content: space-between; margin-top: 7px; }
+.composer-effort-scale span { font-size: 9px; }
+.composer-model-picker { padding-top: 8px; border-top: 1px solid var(--border); }
+.composer-model-search {
+  display: flex;
+  height: 31px;
+  align-items: center;
+  gap: 7px;
+  margin: 0 2px 5px;
+  padding: 0 8px;
+  border-radius: var(--radius-lg);
+  background: var(--muted);
+}
+.composer-model-search svg { width: 13px; height: 13px; color: var(--muted-foreground); }
+.composer-model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: 11px; }
+.composer-model-search input::placeholder { color: var(--muted-foreground); }
+.composer-model-options { max-height: 260px; overflow-y: auto; scrollbar-width: thin; }
+.composer-model-options button {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+.composer-model-options button:hover { background: var(--accent); }
+.composer-model-options button.active { color: var(--foreground); font-weight: 550; }
+.composer-model-options button > span:nth-child(2) { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-model-empty { margin: 12px 8px; color: var(--muted-foreground); font-size: 11px; }
+
+/* Workspace switcher: compact rows with enough path context to distinguish
+   projects that share the same directory name. */
+.project-menu[data-slot="popover-content"] {
+  width: min(360px, calc(100vw - 24px));
+  padding: 10px;
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+  background: var(--popover);
+}
+.project-menu-heading { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 4px 9px; }
+.project-menu-heading span { color: var(--foreground); font-size: 13px; font-weight: 600; }
+.project-menu-heading small { color: var(--muted-foreground); font-size: 10px; }
+.project-search { display: flex; height: 34px; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--muted); }
+.project-search > svg { width: 14px; height: 14px; color: var(--muted-foreground); flex: none; }
+.project-search [data-slot="input"] { width: 100%; height: 32px; min-width: 0; padding: 0; border: 0 !important; outline: 0; background: transparent !important; color: var(--foreground); font-size: 11px; }
+.project-options { max-height: 280px; margin: 8px 0; overflow-y: auto; scrollbar-width: thin; }
+.project-options [data-slot="button"] { display: flex; width: 100%; min-height: 49px; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--radius-lg); background: transparent; color: var(--foreground); text-align: left; }
+.project-options [data-slot="button"]:hover { background: var(--accent); }
+.project-options [data-slot="button"].selected { background: color-mix(in srgb, var(--accent) 68%, transparent); }
+.project-options [data-slot="button"] > svg { width: 16px; height: 16px; flex: none; color: var(--muted-foreground); }
+.project-option-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.project-option-copy strong { overflow: hidden; color: var(--foreground); font-size: 12px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.project-option-copy small { overflow: hidden; color: var(--muted-foreground); font: 10px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.project-option-active { flex: none; color: var(--muted-foreground); font-size: 10px; }
+.project-empty { margin: 14px 8px; color: var(--muted-foreground); font-size: 11px; }
+.project-menu .add-project[data-slot="button"] { display: flex; width: 100%; min-height: 38px; align-items: center; gap: 8px; margin-top: 2px; padding: 7px 8px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--foreground); font-size: 11px; }
+.project-menu .add-project[data-slot="button"]:hover { background: var(--accent); }
+.project-menu .add-project[data-slot="button"] svg { width: 15px; height: 15px; }
 .composer.studio-composer .composer-selectors [data-slot="select-trigger"]:hover {
   background: var(--accent) !important;
   color: var(--foreground) !important;

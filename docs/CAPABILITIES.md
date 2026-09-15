@@ -1,10 +1,16 @@
 # Pi 功能覆盖与边界
 
-以 Pi 0.85.1 官方 RPC / SDK / extensions 文档为基准。这里区分原生 GUI、控制台和原始终端入口，不把“有个按钮”当作已支持。
+以 Pi 0.85.1 官方 RPC / SDK / extensions 文档为基准（2026-09-15 复核）。这里区分原生 GUI、控制台和原始终端入口，不把“有个按钮”当作已支持。
+
+## 覆盖结论
+
+- **正式 RPC：33/33。** `RpcCommand` 的全部 33 个命令都有类型安全的控制台入口，聊天、模型、会话、树、队列、压缩等高频命令另有原生 GUI。`samples` 使用 `Record<RpcCommand['type'], ...>`，以后升级 Pi 若新增 RPC 命令，类型检查会直接暴露缺口。
+- **Pi SDK：按 GUI 宿主需要接入，不是逐导出函数 100%。** GUI 使用 RPC 运行会话，并直接使用 SDK 的 `SessionManager.list`、`SettingsManager` 与 extensions API。`createAgentSession`、工具工厂、内存会话等用于开发另一种宿主的底层构件，不应为了“覆盖率”在同一 GUI 中重复实现 RPC 已经提供的能力。
+- **完整 Pi 产品：不是 100% 原生 GUI。** OAuth、终端主题/快捷键和 TUI 专用自定义组件仍由原始 Pi 终端承载；这是 RPC 的公开边界，不是漏接一个 API。
 
 | 能力 | 入口与实现 |
 | --- | --- |
-| 流式回答、Markdown、代码块、图片、思考内容 | assistant-ui 会话；按 contentIndex 合并增量，message_end 覆盖最终结果 |
+| 流式回答、Markdown、代码块、图片、思考内容 | assistant-ui 会话；按 contentIndex 合并增量，message_end 覆盖最终结果；GUI 会为自定义模型声明保留现有输入并追加 `image`，让端点实际决定是否支持图片；RPC、provider 和消息错误统一显示在工作区顶部 |
 | 工具调用、参数、部分结果与最终结果 | 会话工具卡；toolCallId 关联 |
 | 工具/技能用量归因 | Pi 的 `ToolResultMessage.usage` 若存在则按工具显示 input/output/cache/total tokens；普通 read/write/bash 工具没有独立 token 字段时显示未提供。技能和 prompt template 的消耗计入对应 assistant usage，Pi 没有公开的逐技能 token API |
 | 中转地址与 API Key | 沿用本机 Pi models.json / auth.json；不把 Key 复制到前端、项目或包内 |
@@ -38,9 +44,10 @@
 - 目前应用原生启动、终端入口按 **macOS** 实现。Tauri 支持其他平台不等于本应用已经在那些平台验证。
 - 本机必须已有可运行的 Node 与 Pi CLI。GUI 通过登录 shell 发现路径，显式使用 Node 启动 Pi；当前 App 不捆绑独立 Node 运行时。
 - GUI 使用 --offline 禁用 Pi 的启动更新和 catalog 联网；模型请求仍正常联网。更新 Pi/扩展后重新连接。
+- GUI 不信任自定义中转站缺失的图片能力声明。连接前会为 `models.json` 中每个自定义模型保留现有输入并追加 `image`，原文件首次修改前备份为 `models.json.pi-gui.bak`；真正不支持图片的端点可能返回服务端错误。
 - 项目信任沿用 Pi 保存的决定；未信任的项目本地资源可能被 Pi 忽略。可在原始 Pi 终端用 /trust 管理。
 - 浏览器预览不具备原生 IPC，不能真实连接 Pi，也不会显示虚假的连接成功。
-- 持久化依赖 Pi 原始文件。还没有 GUI 的删除/归档实现；Pi 的 RPC 本身也没有这些命令。
+- 持久化依赖 Pi 原始文件。GUI 已提供受路径校验保护的本机会话删除；仍没有归档能力，Pi 的 RPC 本身也没有删除或归档命令。
 
 ## 新增能力
 
@@ -48,3 +55,15 @@
 - 常驻 Context 状态栏与可收起的运行详情：上下文用量/配置上限、剩余量、最大输出、预留 tokens、近期保留量、累计及当前回复用量、缓存读写、费用估算、压缩前后统计、摘要、取消/失败/重试、队列、工具、模型和会话信息。
 - 实时压缩没有虚构百分比；测试确认压缩后 contextUsage 返回 null 时显示待更新。
 - LobeHub Markdown、AI Elements Conversation/PromptInput/Shimmer、assistant-ui ToolCall、组件库控件、Motion 交互动画及 Pierre 文件/差异视图已实际接入。连接提示、版本页脚、快捷键说明和原生 window.prompt 已从常用界面移除。
+
+## 上游未发布 API（2026-09-15）
+
+Pi 的 npm / GitHub 最新正式版仍为 0.85.1。上游 `main` 在该标签之后新增了以下 API，但尚未发布，因此本项目没有把依赖切到 Git 提交：
+
+| 未发布变化 | 对 GUI 的影响 |
+| --- | --- |
+| `ctx.modelRegistry.stream()` / `streamSimple()` | 供扩展通过已配置 provider 发起嵌套模型调用；没有新增 RPC 命令。正式发布并升级后，使用该 API 的扩展可由 Pi 运行，GUI 只需继续显示其标准消息、工具和扩展 UI 事件。 |
+| `compaction.modelOverrides["provider/modelId"]` | 可为不同模型设置 `reserveTokens` / `keepRecentTokens`。当前正式版只有全局压缩预算；发布后应在 GUI 增加按模型编辑入口，并让运行状态按当前模型解析有效值。 |
+| `retry.maxAgentDelayMs` | 限制 agent 层重试退避时间，属于设置项；没有新增 RPC。发布后可加入高级设置。 |
+| 内置工具默认 strict-prefer constrained sampling | Pi 内部请求行为变化，GUI 无需增加控件；工具事件结构未变。 |
+| RPC `steer` / `follow_up` 经过扩展 input handlers | 修复而非新命令。正式升级即可获得，GUI 协议无需改变。 |

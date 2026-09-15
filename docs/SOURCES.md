@@ -2,7 +2,7 @@
 
 Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beautifului.dev/) 的 Reasoning / Drive 组件，保留其 [MIT 许可](licenses/beautiful-ui.txt)。演示用固定阶段与示例文本已替换为 Pi 实际推理内容和运行事件；支持减少动态效果，计时器使用实际经过时间。
 
-核对日期：2026-09-09。使用官方文档、发布注册表和安装包自带源码作为依据。项目中的演示状态已移除，连接、模型、工具和会话数据均来自 Pi。
+核对日期：2026-09-15。使用官方文档、发布注册表和安装包自带源码作为依据。项目中的演示状态已移除，连接、模型、工具和会话数据均来自 Pi。
 
 | 编号 | 官方来源 | 已读取 / 核对的内容 | 实现位置 |
 | --- | --- | --- | --- |
@@ -33,6 +33,8 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 | RS2 | https://static.rust-lang.org/dist/channel-rust-stable.toml | 2026-09-03 stable 为 1.98.1 | 工具链版本依据 |
 
 Pi 的远端 main 分支会继续变化，因此实现同时核对了 **0.85.1 安装包**里的 docs/rpc.md、docs/sdk.md、docs/extensions.md、dist/modes/rpc/rpc-types.d.ts 和 dist/core/messages.d.ts；`src/lib/protocol.ts` 的回归测试覆盖这些实际结构。
+
+2026-09-15 再次核对 npm registry、GitHub 标签和上游 `main`：最新正式版仍为 **0.85.1**（标签提交 `d981de1229ef899957bbe968bc8dcda02a21f477`），正式 RPC 仍为 33 个且类型结构未变。`main` 的未发布 API 与 GUI 影响记录在 [CAPABILITIES.md](CAPABILITIES.md#上游未发布-api2026-09-15)；项目不把不可复现的分支提交冒充正式 SDK 更新。
 
 依赖精确版本与注册表 URL 保存在 `versions.json`。Bun 与 Cargo 的锁文件用于复现，不能用“包名相同”推断它们版本号应相同。Tauri CLI、JS API、Rust crate 各自发布。
 

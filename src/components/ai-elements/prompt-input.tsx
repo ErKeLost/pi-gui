@@ -1,7 +1,8 @@
-import type { FormEvent, KeyboardEvent, TextareaHTMLAttributes } from "react";
+import { useRef, type CompositionEvent, type FormEvent, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { Icon } from "../Icon";
+import { shouldSubmitComposer } from "../../lib/composer";
 export type PromptInputMessage = { text: string; files?: File[] };
 export function PromptInput({
   onSubmit,
@@ -36,12 +37,23 @@ export function PromptInputTextarea({
   value,
   onChange,
   onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
   className = "",
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const composing = useRef(false);
+  function handleCompositionStart(event: CompositionEvent<HTMLTextAreaElement>) {
+    composing.current = true;
+    onCompositionStart?.(event);
+  }
+  function handleCompositionEnd(event: CompositionEvent<HTMLTextAreaElement>) {
+    onCompositionEnd?.(event);
+    setTimeout(() => { composing.current = false; }, 0);
+  }
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     onKeyDown?.(event);
-    if (event.defaultPrevented || event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    if (event.defaultPrevented || !shouldSubmitComposer({key:event.key,shiftKey:event.shiftKey,isComposing:event.nativeEvent.isComposing,keyCode:event.keyCode},composing.current)) return;
     event.preventDefault();
     event.currentTarget.form?.requestSubmit();
   }
@@ -53,6 +65,8 @@ export function PromptInputTextarea({
       value={value}
       onChange={onChange}
       onKeyDown={handleKeyDown}
+      onCompositionStart={handleCompositionStart}
+      onCompositionEnd={handleCompositionEnd}
     />
   );
 }

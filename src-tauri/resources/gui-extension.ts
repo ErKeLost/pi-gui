@@ -4,7 +4,15 @@ import {pathToFileURL} from 'node:url'
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent'
 // Pi official docs/extensions.md: registerCommand, getAllTools, setActiveTools,
 // ExtensionCommandContext.navigateTree and setLabel. Loaded only by this GUI.
+export function ensureImageInput(model: {input: ('text'|'image')[]} | undefined) {
+  if(!model||model.input.includes('image'))return false
+  // Relay model catalogs often omit modality metadata; let the endpoint decide.
+  model.input=[...model.input,'image']
+  return true
+}
 export default async function (pi: ExtensionAPI) {
+  pi.on('model_select',(event)=>{ensureImageInput(event.model)})
+  pi.on('input',(_event,ctx)=>{ensureImageInput(ctx.model);return {action:'continue'}})
   const {SettingsManager}=await import(pathToFileURL(join(dirname(realpathSync(process.argv[1])),'index.js')).href)
   pi.registerCommand('gui-observe',{description:'GUI: observe session configuration',handler:async(_args,ctx)=>{
     const settings=SettingsManager.create(ctx.cwd,undefined,{projectTrusted:ctx.isProjectTrusted()})

@@ -100,6 +100,39 @@ fn read_json_file(path: PathBuf, label: &str) -> Result<Value, String> {
     serde_json::from_str(&fs::read_to_string(path).map_err(|_| format!("{label} 不可读"))?).map_err(|_| format!("{label} 不是有效 JSON"))
 }
 
+fn append_image_input(model: &mut Value) -> bool {
+    let Some(model) = model.as_object_mut() else { return false };
+    let input = model.entry("input").or_insert_with(|| json!(["text"]));
+    let Some(input) = input.as_array_mut() else {
+        model.insert("input".into(), json!(["text", "image"]));
+        return true;
+    };
+    if input.iter().any(|value| value.as_str() == Some("image")) { return false; }
+    input.push(Value::from("image"));
+    true
+}
+
+fn append_image_input_to_custom_models(dir: &std::path::Path) -> Result<usize, String> {
+    let path = dir.join("models.json");
+    if !path.exists() { return Ok(0); }
+    let mut config = read_json_file(path.clone(), "Pi models.json")?;
+    let mut changed = 0;
+    if let Some(providers) = config.get_mut("providers").and_then(Value::as_object_mut) {
+        for provider in providers.values_mut() {
+            if let Some(models) = provider.get_mut("models").and_then(Value::as_array_mut) {
+                for model in models { changed += usize::from(append_image_input(model)); }
+            }
+        }
+    }
+    if changed > 0 {
+        let backup = dir.join("models.json.pi-gui.bak");
+        if !backup.exists() { fs::copy(&path, backup).map_err(|e| format!("备份 Pi models.json 失败：{e}"))?; }
+        fs::write(&path, serde_json::to_string_pretty(&config).map_err(|e| e.to_string())? + "\n")
+            .map_err(|e| format!("写入 Pi models.json 失败：{e}"))?;
+    }
+    Ok(changed)
+}
+
 async fn fetch_model_catalog(base_url: &str, models_url: Option<&str>, api_key: &str, api: &str, auth_header: bool) -> Result<Value, String> {
     let base_url = base_url.trim_end_matches('/');
     if !(base_url.starts_with("https://") || base_url.starts_with("http://")) { return Err("Base URL 必须是 HTTP(S) 地址".into()); }
@@ -150,6 +183,7 @@ fn pi_model_from_catalog(item: &Value) -> Option<Value> {
         for (source, target) in rates { if let Some(value) = pricing.get(source).and_then(Value::as_str).and_then(|value| value.parse::<f64>().ok()) { cost.insert(target.into(), Value::from(value * 1_000_000.0)); } }
         if !cost.is_empty() { model["cost"] = Value::Object(cost); }
     }
+    append_image_input(&mut model);
     Some(model)
 }
 
@@ -373,9 +407,34 @@ mod default_model_tests {
         fs::remove_dir_all(dir).unwrap();
     }
 }
+
+#[cfg(test)]
+mod image_input_tests {
+    use super::*;
+
+    #[test]
+    fn preserves_existing_inputs_and_appends_image() {
+        let dir = std::env::temp_dir().join(format!("pi-gui-image-input-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("models.json"), r#"{"providers":{"relay":{"models":[{"id":"a"},{"id":"b","input":["text"]},{"id":"c","input":["text","image"]}]}}}"#).unwrap();
+
+        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 2);
+        let config = read_json_file(dir.join("models.json"), "models").unwrap();
+        let models = config["providers"]["relay"]["models"].as_array().unwrap();
+        assert_eq!(models[0]["input"], json!(["text", "image"]));
+        assert_eq!(models[1]["input"], json!(["text", "image"]));
+        assert_eq!(models[2]["input"], json!(["text", "image"]));
+        assert!(dir.join("models.json.pi-gui.bak").exists());
+        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 0);
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+}
+
 #[tauri::command]
 pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, state: State<'_, Bridge>) -> Result<Value, String> {
     let path = project(&cwd)?;
+    append_image_input_to_custom_models(&agent_dir()?)?;
     let pi = pi_path()?;
     let node = executable("node")?;
     // Explicit executable paths also work when Finder's PATH lacks the Node version manager.

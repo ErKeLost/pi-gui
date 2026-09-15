@@ -35,7 +35,7 @@ bun run tauri build --bundles app
 - 会话树支持导航、分叉、标签；设置可控制工具和压缩；控制台包含全部 33 个 RPC 命令。
 - OAuth、包管理及终端专有扩展从设置里的原始 Pi 终端入口使用。
 
-完整功能边界：[CAPABILITIES.md](docs/CAPABILITIES.md)。文档与代码依据：[SOURCES.md](docs/SOURCES.md)。精确版本：[versions.json](docs/versions.json)。实际集成结果：[pi-smoke-result.json](docs/pi-smoke-result.json)。
+完整功能边界与 33/33 RPC 覆盖：[CAPABILITIES.md](docs/CAPABILITIES.md)。文档与代码依据：[SOURCES.md](docs/SOURCES.md)。精确版本：[versions.json](docs/versions.json)。实际集成结果：[pi-smoke-result.json](docs/pi-smoke-result.json)。
 
 应用目前验证目标是本机 macOS；没有宣称任意 Pi 终端扩展都可移植，也没有做公开分发签名或公证。
 

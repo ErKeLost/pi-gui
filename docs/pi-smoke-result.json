@@ -1,10 +1,10 @@
 {
-  "checkedAt": "2026-09-09T00:33:53.791Z",
+  "checkedAt": "2026-09-15T14:11:54.788Z",
   "results": [
     "SDK live context and compaction configuration",
-    "state: jamerly / high",
-    "models returned by Pi",
-    "supported thinking levels returned by Pi",
+    "state: openrouter/anthropic/claude-opus-4 / high",
+    "current model returned by Pi model catalog",
+    "current thinking level returned by Pi capability API",
     "GUI extension: tool inventory",
     "GUI extension: active tools update",
     "real Bash execution through RPC",

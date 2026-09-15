@@ -4,7 +4,7 @@
   --tool-faint: var(--muted-foreground);
   --tool-line: var(--border);
   --tool-hover: var(--accent);
-  margin: 4px 0 14px;
+  margin: 2px 0 5px;
   color: var(--tool-ink);
 }
 
@@ -47,7 +47,7 @@
   position: relative;
   display: grid;
   grid-template-rows: 0fr;
-  margin: 2px 0 0 7px;
+  margin: 0 0 0 7px;
   padding-left: 16px;
   opacity: 0;
   transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease-out;
@@ -79,10 +79,10 @@
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 32px;
+  min-height: 28px;
   align-items: center;
   gap: 7px;
-  padding: 4px 6px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
   transition: color 150ms ease-out, background-color 150ms ease-out;
 }
