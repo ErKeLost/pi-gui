@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Select as ShadcnSelect, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWorkspace } from "../lib/store";
 import {
+  persistDefaultModel,
   request,
   report,
   stop,
@@ -313,6 +314,10 @@ export function Chat() {
         30000,
         project,
       );
+      if (command.type === "set_model") {
+        if (next?.model?.provider !== command.provider || next.model.id !== command.modelId) throw new Error("Pi 没有确认模型切换");
+        await persistDefaultModel(command.provider, command.modelId);
+      }
       useWorkspace.getState().set({ state: next });
     } catch (error) {
       report(error);

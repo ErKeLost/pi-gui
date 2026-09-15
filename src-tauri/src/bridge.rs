@@ -280,7 +280,54 @@ pub async fn sync_provider_models(provider: String) -> Result<Value, String> {
     let backup = path.with_extension("json.bak"); let _ = fs::copy(&path, backup);
     let serialized = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())? + "\n";
     fs::write(&path, serialized).map_err(|e| format!("写入 Pi models.json 失败：{e}"))?;
-    Ok(json!({"provider":provider,"count":models.len(),"previous":existing.len()}))
+    let first_model_id = models.first().and_then(|model| model.get("id")).and_then(Value::as_str);
+    Ok(json!({"provider":provider,"count":models.len(),"previous":existing.len(),"firstModelId":first_model_id}))
+}
+
+fn set_default_model_in(dir: &std::path::Path, provider: String, model_id: String) -> Result<Value, String> {
+    if !valid_provider_id(&provider) || model_id.trim().is_empty() { return Err("Provider 和模型 ID 不能为空".into()); }
+    let models = read_json_file(dir.join("models.json"), "Pi models.json")?;
+    let exists = models.get("providers")
+        .and_then(|providers| providers.get(&provider))
+        .and_then(|config| config.get("models"))
+        .and_then(Value::as_array)
+        .is_some_and(|items| items.iter().any(|model| model.get("id").and_then(Value::as_str) == Some(model_id.as_str())));
+    if !exists { return Err(format!("Pi 未配置模型：{provider}/{model_id}")); }
+
+    let path = settings_path(&dir);
+    let mut settings = if path.exists() { read_json_file(path.clone(), "Pi settings.json")? } else { json!({}) };
+    if !settings.is_object() { settings = json!({}); }
+    settings["defaultProvider"] = Value::from(provider.clone());
+    settings["defaultModel"] = Value::from(model_id.clone());
+    fs::write(&path, serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())? + "\n")
+        .map_err(|e| format!("写入 Pi 默认模型失败：{e}"))?;
+    Ok(json!({"provider":provider,"id":model_id}))
+}
+
+#[tauri::command]
+pub fn set_default_model(provider: String, model_id: String) -> Result<Value, String> {
+    set_default_model_in(&agent_dir()?, provider, model_id)
+}
+
+#[cfg(test)]
+mod default_model_tests {
+    use super::*;
+
+    #[test]
+    fn persists_default_model_without_losing_other_settings() {
+        let dir = std::env::temp_dir().join(format!("pi-gui-model-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("models.json"), r#"{"providers":{"llmgate":{"models":[{"id":"codex-auto-review"}]}}}"#).unwrap();
+        fs::write(dir.join("settings.json"), r#"{"theme":"dark","defaultProvider":"jamerly","defaultModel":"old"}"#).unwrap();
+
+        set_default_model_in(&dir, "llmgate".into(), "codex-auto-review".into()).unwrap();
+        let settings = read_json_file(dir.join("settings.json"), "settings").unwrap();
+        assert_eq!(settings["defaultProvider"], "llmgate");
+        assert_eq!(settings["defaultModel"], "codex-auto-review");
+        assert_eq!(settings["theme"], "dark");
+
+        fs::remove_dir_all(dir).unwrap();
+    }
 }
 #[tauri::command]
 pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, state: State<'_, Bridge>) -> Result<Value, String> {

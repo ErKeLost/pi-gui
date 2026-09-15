@@ -10,6 +10,7 @@ import {
   disconnect,
   request,
   refresh,
+  persistDefaultModel,
   type ProviderModel,
   type ProviderProfile,
 } from "../lib/rpc";
@@ -123,22 +124,30 @@ export function ProviderSettings() {
     try {
       const result = await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
       setProvider(result.id); setIsNewProvider(false); setApiKey("");
-      let switched = false;
+      let switchedModel: { provider: string; id: string } | null = null;
       try {
-        try { await syncProviderModels(result.id); } catch { /* Keep the saved provider selectable even when its catalog is offline. */ }
+        const synced = await syncProviderModels(result.id);
         if (online) await disconnect();
         await connect(cwd);
         const available = await request<{ models: { provider: string; id: string }[] }>({ type: "get_available_models" }, 30_000, cwd);
-        const firstModel = available.models.find((model) => model.provider === result.id);
+        const firstModel = available.models.find((model) => model.provider === result.id && model.id === synced.firstModelId)
+          ?? available.models.find((model) => model.provider === result.id);
         if (firstModel) {
           await request({ type: "set_model", provider: firstModel.provider, modelId: firstModel.id }, 30_000, cwd);
-          await refresh(cwd);
-          switched = true;
+          const current = await refresh(cwd);
+          if (current.model?.provider !== firstModel.provider || current.model?.id !== firstModel.id) {
+            throw new Error(`Pi 仍在使用 ${current.model?.provider ?? "未知 Provider"}/${current.model?.id ?? "未知模型"}`);
+          }
+          await persistDefaultModel(firstModel.provider, firstModel.id);
+          switchedModel = firstModel;
+        } else {
+          throw new Error(`Pi 没有加载 ${result.id} 的可用模型`);
         }
       } catch (activationError) {
         gooeyToast.warning("Provider 已保存，但暂时无法切换", { description: activationError instanceof Error ? activationError.message : String(activationError), showTimestamp: false });
       }
-      gooeyToast.success(switched ? `已保存并切换到 ${result.id}` : "Provider 已保存", { showTimestamp: false });
+      if (switchedModel) gooeyToast.success(`已切换到 ${switchedModel.provider}`, { description: switchedModel.id, showTimestamp: false });
+      else gooeyToast.success("Provider 已保存", { showTimestamp: false });
       await queryClient.invalidateQueries({ queryKey: ["pi", "models", cwd] });
       await profiles.refetch();
     } catch (error) { report(error); } finally { setBusy(null); }
@@ -172,7 +181,9 @@ export function ProviderSettings() {
       if (online) await disconnect();
       await connect(cwd);
       await request({ type: "set_model", provider: provider.trim(), modelId: model.id }, 30_000, cwd);
-      await refresh(cwd);
+      const current = await refresh(cwd);
+      if (current.model?.provider !== provider.trim() || current.model?.id !== model.id) throw new Error("Pi 没有确认模型切换");
+      await persistDefaultModel(provider.trim(), model.id);
       setApiKey(""); gooeyToast.success("模型已切换", { description: `${provider.trim()} / ${model.id}`, showTimestamp: false });
       await profiles.refetch();
     } catch (error) { report(error); } finally { setBusy(null); }
