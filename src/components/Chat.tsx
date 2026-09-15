@@ -11,13 +11,13 @@ import {
 } from "../lib/rpc";
 import type { Model, Part, DisplayMessage, Tool, PiMessage } from "../lib/protocol";
 import { Icon } from "./Icon";
-import { Button, Select, Skeleton } from "./UI";
+import { Button, Skeleton } from "./UI";
 import { Thinking } from "./RichMessage";
+import { Beam } from "./Effects";
 import { ToolActivityGroup, ToolCall } from "./ai-elements/tool-call";
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
   useConversationScroll,
 } from "./ai-elements/conversation";
@@ -34,6 +34,7 @@ import {
 } from "./ai-elements/prompt-input";
 import LoadingState from "./ai-elements/loading-state";
 import { modelLabel } from "../lib/model-meta";
+import { ModelLogo } from "./ModelMeta";
 
 type Attachment = { name: string; data: string; mimeType: string };
 const composerCache = new Map<
@@ -330,12 +331,7 @@ export function Chat() {
         className="chat-conversation tessera-conversation"
       >
         <ConversationContent className="tessera-conversation-content">
-          {transcript.messages.length === 0 ? (
-            <ConversationEmptyState
-              title="开始对话"
-              icon={<span className="empty-mark">π</span>}
-            />
-          ) : (
+          {transcript.messages.length === 0 ? null : (
             transcript.messages.map((item, index) => (
               <TranscriptMessage
                 key={item.id}
@@ -354,6 +350,7 @@ export function Chat() {
       </Conversation>
       <div className="composer-container tessera-composer-dock">
         <div className="tessera-composer-form">
+          <Beam className="studio-composer-beam" borderRadius={24} active={transcript.running}>
                 <PromptInput
                   onSubmit={(message) => void submit(message)}
                   className="composer studio-composer"
@@ -374,7 +371,7 @@ export function Chat() {
                   )}
                 </AnimatePresence>
                 <PromptInputTextarea
-                  placeholder="Build anything…"
+                  placeholder="输入消息，发送给助手…"
                   value={draft}
                   onChange={event => setDraft(event.currentTarget.value)}
                   onKeyDown={(event) => {
@@ -399,8 +396,14 @@ export function Chat() {
                     }}
                   />
                   <div className="composer-tool-cluster">
-                    <Button variant="ghost" size="icon" aria-label="上传附件" onClick={() => fileInput.current?.click()}>
-                      <Icon name="plus" />
+                    <Button
+                      variant="ghost"
+                      className="size-8 rounded-full p-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+                      aria-label="上传附件"
+                      title="上传附件"
+                      onClick={() => fileInput.current?.click()}
+                    >
+                      <Icon name="plus" className="size-4" />
                     </Button>
                   </div>
                   <div className="composer-selectors">
@@ -431,60 +434,68 @@ export function Chat() {
                         }}
                       >
                         <SelectTrigger aria-label="模型" className="composer-model-select">
-                          <SelectValue>Standard</SelectValue>
+                          <SelectValue placeholder="选择模型">
+                            {state?.model ? <span className="model-option"><ModelLogo modelId={state.model.id} size={18} /><span className="model-option-label">{composerModelLabel(state.model.id, state.model.name)}</span></span> : "选择模型"}
+                          </SelectValue>
                         </SelectTrigger>
-                        <SelectContent side="top" align="end" sideOffset={10}>
+                        <SelectContent side="top" align="start" sideOffset={10}>
                           <SelectGroup>
-                            <SelectLabel>模型</SelectLabel>
-                            {configuredModels.map((model) => (
-                              <SelectItem
-                            key={`${model.provider}/${model.id}`}
-                            value={`${model.provider}/${model.id}`}
-                          >
-                            {composerModelLabel(model.id, model.name)}
+                          <SelectLabel>模型</SelectLabel>
+                          {configuredModels.map((model) => (
+                            <SelectItem
+                              key={`${model.provider}/${model.id}`}
+                              value={`${model.provider}/${model.id}`}
+                            >
+                              <span className="model-option"><ModelLogo modelId={model.id} size={20} /><span className="model-option-label">{composerModelLabel(model.id, model.name)}</span></span>
                               </SelectItem>
                             ))}
                           </SelectGroup>
                         </SelectContent>
                       </ShadcnSelect>
                     )}
-                    <Select
-                      aria-label="思考强度"
-                      className="composer-thinking-select"
+                    <ShadcnSelect
                       disabled={!online || transcript.running}
                       value={state?.thinkingLevel ?? "off"}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         void choose({
                           type: "set_thinking_level",
-                          level: event.target.value as "high",
+                          level: value as "high",
                         })
                       }
                     >
-                      {(levels.data?.levels ?? ["off"]).map((level) => (
-                        <option key={level} value={level}>
-                          {level === "off" ? "Auto" : level}
-                        </option>
-                      ))}
-                    </Select>
+                      <SelectTrigger aria-label="思考强度" className="composer-thinking-select">
+                        <SelectValue placeholder="思考" />
+                      </SelectTrigger>
+                      <SelectContent side="top" align="start" sideOffset={10}>
+                        <SelectGroup>
+                          <SelectLabel>思考强度</SelectLabel>
+                          {(levels.data?.levels ?? ["off"]).map((level) => (
+                            <SelectItem key={level} value={level}>
+                              {level === "off" ? "Off" : level.toUpperCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </ShadcnSelect>
                     {transcript.running && (
-                      <Select
-                        aria-label="排队方式"
+                      <ShadcnSelect
                         value={delivery}
-                        onChange={(event) =>
-                          setDelivery(event.target.value as typeof delivery)
+                        onValueChange={(value) =>
+                          setDelivery(value as typeof delivery)
                         }
                       >
-                        <option value="steer">引导</option>
-                        <option value="followUp">跟进</option>
-                      </Select>
+                        <SelectTrigger aria-label="排队方式" className="composer-delivery-select">
+                          <SelectValue placeholder="排队方式" />
+                        </SelectTrigger>
+                        <SelectContent side="top" align="start" sideOffset={10}>
+                          <SelectGroup>
+                            <SelectLabel>排队模式</SelectLabel>
+                            <SelectItem value="steer">Steer</SelectItem>
+                            <SelectItem value="followUp">Follow-up</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </ShadcnSelect>
                     )}
-                    <Button variant="ghost" size="default" aria-label="Plan" title="Plan">
-                      <Icon name="lightbulb" />
-                      <span>Plan</span>
-                    </Button>
-                    <Button variant="ghost" size="icon" aria-label="语音输入" title="语音输入">
-                      <Icon name="microphone" />
-                    </Button>
                   </div>
                   {(transcript.queue.steering.length > 0 || transcript.queue.followUp.length > 0) && (
                     <span className="composer-queue-status" aria-live="polite">
@@ -500,6 +511,7 @@ export function Chat() {
                   />
                 </div>
                 </PromptInput>
+          </Beam>
         </div>
       </div>
     </div>

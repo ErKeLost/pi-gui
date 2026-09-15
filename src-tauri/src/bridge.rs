@@ -22,9 +22,21 @@ impl Bridge {
     }
 }
 
+#[cfg(unix)]
 fn executable(name: &str) -> Result<PathBuf, String> {
-    let found = Command::new("/bin/zsh").args(["-lc", &format!("command -v {name}")]).output().map_err(|e| e.to_string())?;
-    String::from_utf8_lossy(&found.stdout).lines().rev().map(PathBuf::from).find(|p| p.is_file()).ok_or_else(|| format!("找不到 {name}，请在终端安装后重试"))
+    let configured = std::env::var_os("SHELL").map(PathBuf::from);
+    let shells = configured.into_iter().chain(["/bin/zsh", "/bin/bash", "/bin/sh"].map(PathBuf::from));
+    for shell in shells {
+        if !shell.is_file() { continue; }
+        let Ok(found) = Command::new(shell).args(["-lc", &format!("command -v {name}")]).output() else { continue };
+        if let Some(path) = String::from_utf8_lossy(&found.stdout).lines().rev().map(PathBuf::from).find(|path| path.is_file()) { return Ok(path); }
+    }
+    Err(format!("找不到 {name}，请在终端安装后重试"))
+}
+#[cfg(windows)]
+fn executable(name: &str) -> Result<PathBuf, String> {
+    let found = Command::new("where.exe").arg(name).output().map_err(|e| e.to_string())?;
+    String::from_utf8_lossy(&found.stdout).lines().map(PathBuf::from).find(|path| path.is_file()).ok_or_else(|| format!("找不到 {name}，请在终端安装后重试"))
 }
 fn pi_path() -> Result<PathBuf, String> { executable("pi").and_then(|p| p.canonicalize().map_err(|e| e.to_string())) }
 fn project(cwd: &str) -> Result<PathBuf, String> {
@@ -420,13 +432,48 @@ pub async fn open_pi_terminal(cwd: String, session: Option<String>, command: Opt
     let path = project(&cwd)?;
     let pi = pi_path()?;
     let node = executable("node")?;
+
+    #[cfg(windows)]
+    {
+        fn powershell_quote(value: &str) -> String { format!("'{}'", value.replace('\'', "''")) }
+        let custom_command = command.is_some();
+        let mut script = command.map(|value| format!("Set-Location -LiteralPath {}; {value}", powershell_quote(&path.to_string_lossy())))
+            .unwrap_or_else(|| format!("Set-Location -LiteralPath {}; & {} {}", powershell_quote(&path.to_string_lossy()), powershell_quote(&node.to_string_lossy()), powershell_quote(&pi.to_string_lossy())));
+        if !custom_command { if let Some(session) = session { script.push_str(&format!(" --session {}", powershell_quote(&session))); } }
+        Command::new("cmd.exe").args(["/C", "start", "", "powershell.exe", "-NoExit", "-Command", &script]).spawn().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(unix)]
+    {
     fn shell_quote(value: &str) -> String { format!("'{}'",value.replace('\'',"'\\''")) }
     let custom_command = command.is_some();
     let mut command = command.map(|value| format!("cd -- {} && {}", shell_quote(&path.to_string_lossy()), value)).unwrap_or_else(|| format!("cd -- {} && {} {}", shell_quote(&path.to_string_lossy()), shell_quote(&node.to_string_lossy()), shell_quote(&pi.to_string_lossy())));
     if !custom_command { if let Some(session) = session { command.push_str(&format!(" --session {}",shell_quote(&session))); } }
+
+    #[cfg(target_os = "macos")]
+    {
     let literal = command.replace('\\',"\\\\").replace('"',"\\\"");
     let status = Command::new("/usr/bin/osascript").args(["-e",&format!("tell application \"Terminal\"\nactivate\ndo script \"{literal}\"\nend tell")]).status().map_err(|e|e.to_string())?;
-    if status.success() { Ok(()) } else { Err("无法打开系统终端".into()) }
+    return if status.success() { Ok(()) } else { Err("无法打开系统终端".into()) };
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let shell = std::env::var_os("SHELL").map(PathBuf::from).filter(|path| path.is_file()).unwrap_or_else(|| PathBuf::from("/bin/sh"));
+        for terminal in ["konsole", "x-terminal-emulator", "gnome-terminal", "kgx", "kitty", "foot"] {
+            let Ok(path) = executable(terminal) else { continue };
+            let mut process = Command::new(path);
+            match terminal {
+                "gnome-terminal" | "kgx" => { process.arg("--").arg(&shell).args(["-lc", &command]); }
+                "kitty" | "foot" => { process.arg(&shell).args(["-lc", &command]); }
+                _ => { process.arg("-e").arg(&shell).args(["-lc", &command]); }
+            }
+            if process.spawn().is_ok() { return Ok(()); }
+        }
+        return Err("找不到可用终端；请安装 Konsole 或其他常用终端".into());
+    }
+    }
 }
 
 #[cfg(test)]

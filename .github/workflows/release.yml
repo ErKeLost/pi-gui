@@ -23,6 +23,9 @@ jobs:
           - name: macOS Intel
             os: macos-14
             args: --target x86_64-apple-darwin
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            args: ""
           - name: Windows
             os: windows-latest
             args: ""
@@ -35,11 +38,17 @@ jobs:
           bun-version: 1.4.2
 
       - uses: dtolnay/rust-toolchain@stable
-        if: runner.os == 'macOS'
+        if: runner.os != 'Windows'
 
       - name: Install Intel macOS target
         if: matrix.name == 'macOS Intel'
         run: rustup target add x86_64-apple-darwin
+
+      - name: Install Linux build dependencies
+        if: matrix.name == 'Linux x86_64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils rpm
 
       - uses: dtolnay/rust-toolchain@stable
         if: runner.os == 'Windows'
@@ -56,7 +65,7 @@ jobs:
           tauriScript: bun run tauri
           tagName: v__VERSION__
           releaseName: Pi GUI v__VERSION__
-          releaseBody: Signed installers for macOS and Windows.
+          releaseBody: Signed installers for macOS, Linux, and Windows. Linux auto-updates use the signed AppImage artifact.
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true

@@ -45,6 +45,8 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 34%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklch, var(--muted-foreground) 58%, transparent);
 }
 
 .dark,
@@ -130,6 +132,31 @@ html[data-theme="dark"] {
   * {
     @apply border-border outline-ring/50;
     box-sizing: border-box;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    min-height: 32px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: padding-box;
   }
 
   html,

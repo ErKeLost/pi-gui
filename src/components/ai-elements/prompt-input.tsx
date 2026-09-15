@@ -1,7 +1,7 @@
 import type { FormEvent, KeyboardEvent, TextareaHTMLAttributes } from "react";
-import { ArrowUp, Square } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { Icon } from "../Icon";
 export type PromptInputMessage = { text: string; files?: File[] };
 export function PromptInput({
   onSubmit,
@@ -72,15 +72,14 @@ export function PromptInputSubmit({
   return (
     <Button
       type={status === "streaming" ? "button" : "submit"}
-      size="icon"
-      variant="secondary"
-      className="ai-prompt-submit"
+      variant={status === "streaming" ? "destructive" : "default"}
+      className="ai-prompt-submit size-8 rounded-full p-0 flex items-center justify-center shrink-0 shadow-sm"
       title={title}
       aria-label={ariaLabel ?? "发送消息"}
       disabled={disabled}
       onClick={onClick}
     >
-      {status === "streaming" ? <Square /> : <ArrowUp />}
+      {status === "streaming" ? <Icon name="stop-fill" className="size-4" /> : <Icon name="arrow-up" className="size-4 stroke-[2.5]" />}
     </Button>
   );
 }

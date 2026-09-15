@@ -6,5 +6,5 @@ import App from './App'
 import './index.css'
 import 'goey-toast/styles.css'
 import {Providers} from './components/Providers'
-document.title = import.meta.env.DEV ? 'Pi GUI · DEV (HMR)' : 'Pi GUI'
+document.title = import.meta.env.DEV ? 'Workspace · DEV (HMR)' : 'Workspace'
 createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={queryClient}><Providers><App/></Providers></QueryClientProvider></StrictMode>)

@@ -33,7 +33,6 @@
 .composer-container.tessera-composer-dock { grid-row: 3; width: 100%; margin-inline: 0; padding: 12px 0 calc(20px + env(safe-area-inset-bottom)); background: var(--background); }
 .tessera-composer-form { width: min(calc(100% - 48px), 680px); min-width: 0; margin-inline: auto; position: relative; left: calc((var(--inspector-width) - var(--sidebar-width)) / 2); }
 .studio-composer-beam { width: 100%; border-radius: var(--radius-lg); }
-.studio-composer-beam [data-border-beam] { display: none !important; }
 .composer.studio-composer { min-height: 102px; padding: 10px !important; border-color: var(--border) !important; border-radius: var(--radius-lg) !important; background: var(--background) !important; }
 .composer.studio-composer:focus-within { border-color: var(--border) !important; }
 .composer.studio-composer .composer-input { min-height: 48px; padding: 4px 7px; }

@@ -1,8 +1,7 @@
-import { ProviderIcon } from '@lobehub/icons'
-import { modelProviderKey } from '../lib/model-meta'
+import { ModelIcon } from '@lobehub/icons'
 
 export function ModelLogo({ modelId, size = 18 }: { modelId: string; size?: number }) {
-  return <ProviderIcon provider={modelProviderKey(modelId)} type="mono" forceMono size={size} />
+  return <span className="model-logo" aria-hidden="true"><ModelIcon model={modelId} type="color" size={size} /></span>
 }
 
 export function ModelModalities({ values, className = '' }: { values?: string[]; className?: string }) {

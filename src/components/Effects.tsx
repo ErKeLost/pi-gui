@@ -5,19 +5,22 @@ export function Beam({
   children,
   active = true,
   className = "",
+  borderRadius = 24,
 }: {
   children: ReactNode;
   active?: boolean;
   className?: string;
+  borderRadius?: number;
 }) {
   return (
     <BorderBeam
       className={className}
       active={active}
       size="md"
-      colorVariant="mono"
-      strength={0.45}
+      colorVariant="colorful"
+      strength={0.85}
       theme="dark"
+      borderRadius={borderRadius}
     >
       {children}
     </BorderBeam>

@@ -1,18 +1,17 @@
-import { BookOpen, Braces, ChevronRight, FilePenLine, FileSearch, Terminal, Wrench } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
-import { FileIcon } from "../Icon";
+import { FileIcon, Icon } from "../Icon";
 import { Button } from "@/components/ui/button";
 import { summarizeToolCalls, toolKind, type ToolKind } from "../../lib/tool-activity";
 import "./tool-call.css";
 
 type JsonRecord = Record<string, unknown>;
 
-const toolKinds: Record<ToolKind, { label: string; icon: typeof BookOpen }> = {
-  read: { label: "读取", icon: BookOpen },
-  search: { label: "搜索", icon: FileSearch },
-  command: { label: "运行", icon: Terminal },
-  edit: { label: "编辑", icon: FilePenLine },
-  other: { label: "调用", icon: Wrench },
+const toolKinds: Record<ToolKind, { label: string; icon: string }> = {
+  read: { label: "读取", icon: "book-open" },
+  search: { label: "搜索", icon: "magnifying-glass" },
+  command: { label: "运行", icon: "terminal-window" },
+  edit: { label: "编辑", icon: "pencil-simple" },
+  other: { label: "调用", icon: "wrench" },
 };
 
 function parseArguments(request: string): JsonRecord | null {
@@ -66,7 +65,7 @@ export function ToolActivityGroup({ toolNames, running, children }: { toolNames:
   const listId = useId();
   return <section className="tool-activity-group" data-open={open}>
     <Button type="button" variant="ghost" className="tool-activity-group-header" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(value => !value)}>
-      <Braces aria-hidden="true" /><span>{summarizeToolCalls(toolNames) || "工具调用"}</span>{running && <span className="tool-activity-group-status">运行中</span>}<ChevronRight className="tool-activity-group-chevron" aria-hidden="true" />
+      <Icon name="code" aria-hidden="true" /><span>{summarizeToolCalls(toolNames) || "工具调用"}</span>{running && <span className="tool-activity-group-status">运行中</span>}<Icon name="caret-right" className="tool-activity-group-chevron" aria-hidden="true" />
     </Button>
     <div id={listId} className="tool-activity-list" aria-hidden={!open} inert={!open}>{children}</div>
   </section>;
@@ -78,14 +77,13 @@ export function ToolCall({ toolName, request, result, usage, running, open: cont
   const detailsId = useId();
   const kind = toolKind(toolName);
   const presentation = toolKinds[kind];
-  const ToolIcon = presentation.icon;
   const target = displayTarget(kind, request);
   const changes = kind === "edit" ? editCounts(request, result) : null;
   const setOpen = (value: boolean) => { setLocalOpen(value); onOpenChange?.(value); };
 
   return <div className={`ai-tool-call tool-activity-item ${className}`} data-running={running} data-open={open}>
     <Button type="button" variant="ghost" className="tool-activity-row" aria-expanded={open} aria-controls={detailsId} onClick={() => setOpen(!open)}>
-      <ToolIcon className="tool-activity-icon" aria-hidden="true" /><span className="tool-activity-action">{presentation.label}</span>{target && (kind === "read" || kind === "edit") && <FileIcon path={target} className="tool-activity-file-icon" />}{target && <code className="tool-activity-target" title={target}>{target}</code>}{changes && <span className="tool-activity-changes"><b>+{changes.additions}</b><i>-{changes.deletions}</i></span>}{running && <span className="tool-activity-running" aria-live="polite">运行中</span>}<ChevronRight className="tool-activity-chevron" aria-hidden="true" />
+      <Icon name={presentation.icon} className="tool-activity-icon" aria-hidden="true" /><span className="tool-activity-action">{presentation.label}</span>{target && (kind === "read" || kind === "edit") && <FileIcon path={target} className="tool-activity-file-icon" />}{target && <code className="tool-activity-target" title={target}>{target}</code>}{changes && <span className="tool-activity-changes"><b>+{changes.additions}</b><i>-{changes.deletions}</i></span>}{running && <span className="tool-activity-running" aria-live="polite">运行中</span>}<Icon name="caret-right" className="tool-activity-chevron" aria-hidden="true" />
     </Button>
     <div id={detailsId} className="tool-activity-details" aria-hidden={!open} inert={!open}><div className="tool-activity-details-inner">
       <section><small>请求</small><pre>{renderedRequest(request)}</pre></section>

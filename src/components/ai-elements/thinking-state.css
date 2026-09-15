@@ -123,6 +123,7 @@
 .thinking-state-row strong { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 500; color: var(--thinking-ink-2); }
 .thinking-state-row p { margin: 0; color: var(--thinking-ink-2); font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-loading-state { width: 100%; padding: 12px 0 20px; }
+.chat-loading-state .loading-state-status { width: 100%; }
 .loading-video-card {
   display: block;
   width: 224px;

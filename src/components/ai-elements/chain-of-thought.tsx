@@ -1,7 +1,7 @@
 // Adapted from Beautiful UI's Reasoning variant. See docs/licenses/beautiful-ui.txt.
-import { ChevronDown } from "lucide-react";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/Icon";
 import { ElapsedTime } from "./elapsed-time";
 import "./thinking-state.css";
 
@@ -20,10 +20,16 @@ export function ReasoningPanel({
   elapsed?: string;
   className?: string;
 }) {
-  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  const expanded = manualExpanded ?? streaming;
+  const [expanded, setExpanded] = useState(streaming);
+  const wasStreaming = useRef(streaming);
   const panelId = useId();
   const visibleSteps = steps.filter(step => step.body.trim());
+
+  useEffect(() => {
+    if (streaming && !wasStreaming.current) setExpanded(true);
+    if (!streaming && wasStreaming.current) setExpanded(false);
+    wasStreaming.current = streaming;
+  }, [streaming]);
 
   return (
     <section className={`thinking-state ${className}`} data-open={expanded} data-working={streaming}>
@@ -33,7 +39,7 @@ export function ReasoningPanel({
         className="thinking-state-header"
         aria-expanded={expanded}
         aria-controls={panelId}
-        onClick={() => setManualExpanded(!expanded)}
+        onClick={() => setExpanded(open => !open)}
       >
         <svg className="thinking-state-star" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
@@ -42,7 +48,7 @@ export function ReasoningPanel({
           {streaming ? "Thinking" : restingLabel}
         </span>
         <ElapsedTime running={streaming} value={elapsed} />
-        <ChevronDown size={14} className="thinking-state-chevron" aria-hidden="true" />
+        <Icon name="caret-down" className="thinking-state-chevron size-3.5" />
       </Button>
       <div id={panelId} className="thinking-state-panel" aria-hidden={!expanded} inert={!expanded}>
         <div className="thinking-state-panel-inner">
