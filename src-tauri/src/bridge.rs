@@ -24,21 +24,54 @@ impl Bridge {
 
 #[cfg(unix)]
 fn executable(name: &str) -> Result<PathBuf, String> {
+    if name.is_empty() || !name.chars().all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')) {
+        return Err("无效的可执行文件名称".into());
+    }
     let configured = std::env::var_os("SHELL").map(PathBuf::from);
     let shells = configured.into_iter().chain(["/bin/zsh", "/bin/bash", "/bin/sh"].map(PathBuf::from));
     for shell in shells {
         if !shell.is_file() { continue; }
-        let Ok(found) = Command::new(shell).args(["-lc", &format!("command -v {name}")]).output() else { continue };
-        if let Some(path) = String::from_utf8_lossy(&found.stdout).lines().rev().map(PathBuf::from).find(|path| path.is_file()) { return Ok(path); }
+        for mode in ["-lc", "-lic"] {
+            let Ok(found) = Command::new(&shell).args([mode, &format!("command -v {name}")]).stdin(Stdio::null()).stderr(Stdio::null()).output() else { continue };
+            if let Some(path) = String::from_utf8_lossy(&found.stdout).lines().rev().map(PathBuf::from).find(|path| path.is_file()) { return Ok(path); }
+        }
     }
     Err(format!("找不到 {name}，请在终端安装后重试"))
 }
 #[cfg(windows)]
 fn executable(name: &str) -> Result<PathBuf, String> {
-    let found = Command::new("where.exe").arg(name).output().map_err(|e| e.to_string())?;
-    String::from_utf8_lossy(&found.stdout).lines().map(PathBuf::from).find(|path| path.is_file()).ok_or_else(|| format!("找不到 {name}，请在终端安装后重试"))
+    if name.is_empty() || !name.chars().all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')) {
+        return Err("无效的可执行文件名称".into());
+    }
+    if let Ok(found) = Command::new("where.exe").arg(name).output() {
+        if let Some(path) = String::from_utf8_lossy(&found.stdout).lines().map(PathBuf::from).find(|path| path.is_file()) { return Ok(path); }
+    }
+    let script = format!("Get-Command {name} -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source");
+    if let Ok(found) = Command::new("powershell.exe").args(["-NoLogo", "-Command", &script]).output() {
+        if let Some(path) = String::from_utf8_lossy(&found.stdout).lines().map(str::trim).map(PathBuf::from).find(|path| path.is_file()) { return Ok(path); }
+    }
+    if name == "pi" {
+        if let Some(app_data) = std::env::var_os("APPDATA") {
+            let candidate = PathBuf::from(app_data).join("npm/pi.cmd");
+            if candidate.is_file() { return Ok(candidate); }
+        }
+    }
+    Err(format!("找不到 {name}，请在终端安装后重试"))
 }
-fn pi_path() -> Result<PathBuf, String> { executable("pi").and_then(|p| p.canonicalize().map_err(|e| e.to_string())) }
+fn pi_path() -> Result<PathBuf, String> {
+    let launcher = executable("pi")?;
+    #[cfg(windows)]
+    if matches!(launcher.extension().and_then(|extension| extension.to_str()), Some("cmd" | "ps1")) {
+        if let Some(parent) = launcher.parent() {
+            let script = parent.join("node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js");
+            if script.is_file() { return script.canonicalize().map_err(|error| error.to_string()); }
+        }
+    }
+    launcher.canonicalize().map_err(|error| error.to_string())
+}
+fn home_dir() -> Result<PathBuf, String> {
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).ok_or_else(|| "找不到用户目录".into())
+}
 fn project(cwd: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(cwd).canonicalize().map_err(|e| format!("工作目录不可用：{e}"))?;
     if !path.is_dir() { return Err("请选择文件夹".into()); }
@@ -121,8 +154,7 @@ fn pi_model_from_catalog(item: &Value) -> Option<Value> {
 }
 
 fn agent_dir() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-    Ok(PathBuf::from(home).join(".pi/agent"))
+    Ok(home_dir()?.join(".pi/agent"))
 }
 
 fn provider_store_path(dir: &std::path::Path) -> PathBuf { dir.join("pi-gui-providers.json") }
@@ -185,8 +217,8 @@ pub async fn discover() -> Result<Value, String> {
         let pi = pi_path()?;
         let node = executable("node")?;
         let output = Command::new(&node).arg(&pi).arg("--version").output().map_err(|e| e.to_string())?;
-        let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-        Ok(json!({"pi":pi,"node":node,"version":String::from_utf8_lossy(&output.stdout).trim(),"cwd":format!("{home}/Desktop/pi-gui")}))
+        let home = home_dir()?;
+        Ok(json!({"pi":pi,"node":node,"version":String::from_utf8_lossy(&output.stdout).trim(),"cwd":home.join("Desktop/pi-gui")}))
     }).await.map_err(|e|e.to_string())?
 }
 /// Query the OpenAI-compatible provider catalog configured in Pi's own files.
@@ -420,8 +452,7 @@ pub async fn list_project_files(cwd: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn delete_session(session_path: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-        let root = PathBuf::from(home).join(".pi/agent/sessions").canonicalize().map_err(|_| "Pi 会话目录不可用".to_string())?;
+        let root = home_dir()?.join(".pi/agent/sessions").canonicalize().map_err(|_| "Pi 会话目录不可用".to_string())?;
         let target = PathBuf::from(&session_path).canonicalize().map_err(|_| "会话文件不存在".to_string())?;
         if target.extension().and_then(|value| value.to_str()) != Some("jsonl") || !target.starts_with(&root) { return Err("只能删除 Pi 会话目录中的 JSONL 文件".into()); }
         fs::remove_file(target).map_err(|e| format!("删除会话失败：{e}"))
