@@ -42,7 +42,7 @@ Rust 工具链下载使用 USTC 镜像解决官方 CDN 低速问题。执行前�
 
 ## 组件、实时观测与多项目更新
 
-- 用户指定的 Markdown 来源：https://ui.lobehub.com/components/markdown 。使用 `@lobehub/ui` 5.40.2 的 `Markdown`，启用流式文字动画、代码高亮、表格、数学公式、GitHub Alert、Mermaid 和图片查看。KaTeX 样式使用已安装的官方 CSS，避免公式出现 MathML/HTML 重复显示。
+- Markdown 统一使用 LobeHub `@lobehub/streamdown` 1.3.1。所有聊天正文与压缩摘要共用同一渲染入口，并按官方组合接入 `remark-gfm`、`remark-math`、`rehype-katex`、`preprocessLaTeX` 和 `latexGuard`；KaTeX 使用官方 CSS。流式正文启用字符级平滑显示，历史正文关闭淡入动画。
 - AI Elements 的 Conversation、Message、PromptInput、Shimmer 与 assistant-ui ToolCall 使用当前 registry/docs 的 props 形状，已经接入真实 Pi transcript、流式状态、工具请求和结果；不是静态示例数据。这里保留的是针对 Pi RPC 数据结构的本地轻量渲染适配，没有引入未使用的 assistant-ui runtime。
 - 同包 `Button / Select / Input / TextArea / Modal / Tooltip / Collapse / Skeleton` 与 `@lobehub/ui/base-ui` 的 Switch 用于交互控件。ConfigProvider 注入 `motion/react`，ThemeProvider 负责主题。
 - Lobe UI 的包声明仍引用 Motion 12；为遵守本项目使用最新 Motion 13.2.0 的要求，Bun overrides 将 Motion 去重到 13.2.0。已验证类型构建、组件运行与交互，不能据此宣称所有未使用的 Lobe UI API 都经过兼容验证。

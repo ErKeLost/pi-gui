@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-15T11:50:41.514Z",
+  "checkedAt": "2026-09-16T01:42:02.965Z",
   "packageManager": "bun@1.4.2",
   "js": [
     {
@@ -67,9 +67,9 @@
     },
     {
       "name": "@lobehub/streamdown",
-      "installed": "1.3.0",
+      "installed": "1.3.1",
       "latest": "1.3.1",
-      "matches": false,
+      "matches": true,
       "source": "https://registry.npmjs.org/%40lobehub%2Fstreamdown/latest"
     },
     {
@@ -159,7 +159,7 @@
     {
       "name": "ai",
       "installed": "7.0.94",
-      "latest": "7.0.101",
+      "latest": "7.0.102",
       "matches": false,
       "source": "https://registry.npmjs.org/ai/latest"
     },
@@ -206,6 +206,13 @@
       "source": "https://registry.npmjs.org/goey-toast/latest"
     },
     {
+      "name": "katex",
+      "installed": "0.18.7",
+      "latest": "0.18.7",
+      "matches": true,
+      "source": "https://registry.npmjs.org/katex/latest"
+    },
+    {
       "name": "lucide-react",
       "installed": "1.43.0",
       "latest": "1.46.0",
@@ -227,6 +234,13 @@
       "source": "https://registry.npmjs.org/nanoid/latest"
     },
     {
+      "name": "next-themes",
+      "installed": "0.4.6",
+      "latest": "0.4.6",
+      "matches": true,
+      "source": "https://registry.npmjs.org/next-themes/latest"
+    },
+    {
       "name": "react",
       "installed": "19.2.8",
       "latest": "19.3.0",
@@ -246,6 +260,27 @@
       "latest": "4.12.4",
       "matches": true,
       "source": "https://registry.npmjs.org/react-resizable-panels/latest"
+    },
+    {
+      "name": "rehype-katex",
+      "installed": "7.0.1",
+      "latest": "7.0.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/rehype-katex/latest"
+    },
+    {
+      "name": "remark-gfm",
+      "installed": "4.0.1",
+      "latest": "4.0.1",
+      "matches": true,
+      "source": "https://registry.npmjs.org/remark-gfm/latest"
+    },
+    {
+      "name": "remark-math",
+      "installed": "6.0.0",
+      "latest": "6.0.0",
+      "matches": true,
+      "source": "https://registry.npmjs.org/remark-math/latest"
     },
     {
       "name": "shadcn",
@@ -292,7 +327,7 @@
     {
       "name": "@types/node",
       "installed": "26.5.0",
-      "latest": "26.5.1",
+      "latest": "22.20.3",
       "matches": false,
       "source": "https://registry.npmjs.org/%40types%2Fnode/latest"
     },

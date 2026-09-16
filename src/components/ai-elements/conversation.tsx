@@ -14,7 +14,7 @@ export function useConversationScroll() {
   const update = (follow = false) => {
    cancelAnimationFrame(frame)
    frame = requestAnimationFrame(() => {
-    const { scrollHeight, scrollTop, clientHeight } = element
+    const { scrollHeight, clientHeight } = element
     const wasAtBottom = atBottomRef.current
     if (follow && wasAtBottom && scrollHeight > heightRef.current) element.scrollTop = scrollHeight
     heightRef.current = element.scrollHeight
