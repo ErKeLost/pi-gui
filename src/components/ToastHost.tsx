@@ -6,8 +6,10 @@ import type { ColorTheme } from './SplitThemeProvider'
 /** Bridges protocol-level notifications into the single app-wide toast surface. */
 export function ToastHost({ theme }: { theme: ColorTheme }) {
   const error = useWorkspace(state => state.error)
+  const transcriptError = useWorkspace(state => state.transcript.error)
   const notices = useWorkspace(state => state.notices)
   const lastError = useRef<string | null>(null)
+  const lastTranscriptError = useRef<string | null>(null)
 
   useEffect(() => {
     if (error && error !== lastError.current) {
@@ -18,6 +20,16 @@ export function ToastHost({ theme }: { theme: ColorTheme }) {
       lastError.current = null
     }
   }, [error])
+
+  useEffect(() => {
+    if (transcriptError && transcriptError !== lastTranscriptError.current) {
+      lastTranscriptError.current = transcriptError
+      gooeyToast.error(transcriptError, { description: '会话异常', duration: 6000, showTimestamp: false })
+      useWorkspace.getState().set({ transcript: { ...useWorkspace.getState().transcript, error: null } })
+    } else if (!transcriptError) {
+      lastTranscriptError.current = null
+    }
+  }, [transcriptError])
 
   useEffect(() => {
     if (!notices.length) return

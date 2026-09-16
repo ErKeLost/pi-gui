@@ -61,7 +61,7 @@ function renderedRequest(request: string) {
 }
 
 export function ToolActivityGroup({ toolNames, running, children }: { toolNames: string[]; running: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const listId = useId();
   return <section className="tool-activity-group" data-open={open}>
     <Button type="button" variant="ghost" className="tool-activity-group-header" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(value => !value)}>

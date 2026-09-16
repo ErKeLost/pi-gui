@@ -21,7 +21,7 @@ import './App.css'
 const navigation:{id:PanelName;label:string;icon:string}[]=[{id:'chat',label:'工作台',icon:'chat-circle-text'},{id:'sessions',label:'所有会话',icon:'chats'},{id:'tree',label:'会话树',icon:'tree-structure'},{id:'commands',label:'技能与命令',icon:'puzzle-piece'},{id:'pi-tools',label:'常用工具',icon:'wrench'},{id:'changes',label:'代码变更',icon:'code'},{id:'console',label:'控制台',icon:'terminal-window'}]
 let started=false
 export default function App(){
- const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),transcriptError=useWorkspace(s=>s.transcript.error),error=useWorkspace(s=>s.error),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector)
+ const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector)
  const online=connection==='online'
  const [deletingSession,setDeletingSession]=useState<Session|null>(null)
  const discovery=useQuery({queryKey:['discovery'],queryFn:()=>invoke<{pi:string;node:string;version:string;cwd:string}>('discover'),enabled:native})
@@ -74,7 +74,7 @@ export default function App(){
    <ResizableHandle />
    <ResizablePanel id="workspace" minSize="420px" groupResizeBehavior="preserve-relative-size">
    <section className="workspace">
-    <MetricsSync/>{(error||transcriptError)&&<div className="error-banner" role="alert" aria-live="assertive"><Icon name="warning-circle"/><span>{error||transcriptError}</span><Button title="关闭错误提示" aria-label="关闭错误提示" onClick={()=>useWorkspace.getState().set({error:null,transcript:{...useWorkspace.getState().transcript,error:null}})}><Icon name="x"/></Button></div>}<div className="work-content"><div className="main-content"><div className="chat-host" hidden={panel!=='chat'}><Chat key={cwd}/></div><AnimatePresence mode="wait">{panel!=='chat'&&<Panel key={panel}/>}</AnimatePresence></div></div>
+    <MetricsSync/><div className="work-content"><div className="main-content"><div className="chat-host" hidden={panel!=='chat'}><Chat key={cwd}/></div><AnimatePresence mode="wait">{panel!=='chat'&&<Panel key={panel}/>}</AnimatePresence></div></div>
     {Object.entries(statuses).flatMap(([key,value])=>!key.startsWith('gui-')&&value?[<div key={key} className="extension-status">{key}: {value}</div>]:[])}
    </section>
    </ResizablePanel>
