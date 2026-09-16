@@ -59,8 +59,8 @@ export function PromptProvider({ children }: { children: ReactNode }) {
   </PromptContext.Provider>
 }
 
-export function Modal({ open, title, children, onCancel, onOk, footer, okText = '确认', cancelText = '取消' }: { open: boolean; title?: ReactNode; children?: ReactNode; onCancel?: () => void; onOk?: () => void; footer?: ReactNode; okText?: string; cancelText?: string }) {
-  return <Dialog open={open} onOpenChange={next => { if (!next) onCancel?.() }}><DialogContent><DialogHeader>{title && <DialogTitle>{title}</DialogTitle>}</DialogHeader><div className="modal-body">{children}</div>{footer ?? <DialogFooter><Button variant="outline" onClick={onCancel}>{cancelText}</Button><Button onClick={onOk}>{okText}</Button></DialogFooter>}</DialogContent></Dialog>
+export function Modal({ open, title, children, onCancel, onOk, footer, okText = '确认', cancelText = '取消', destructive = false }: { open: boolean; title?: ReactNode; children?: ReactNode; onCancel?: () => void; onOk?: () => void; footer?: ReactNode; okText?: string; cancelText?: string; destructive?: boolean }) {
+  return <Dialog open={open} onOpenChange={next => { if (!next) onCancel?.() }}><DialogContent><DialogHeader>{title && <DialogTitle>{title}</DialogTitle>}</DialogHeader><div className="modal-body">{children}</div>{footer ?? <DialogFooter><Button variant="outline" onClick={onCancel}>{cancelText}</Button><Button variant={destructive?'destructive':'default'} onClick={onOk}>{okText}</Button></DialogFooter>}</DialogContent></Dialog>
 }
 
 export function Tooltip({ children }: { children: ReactNode }) {

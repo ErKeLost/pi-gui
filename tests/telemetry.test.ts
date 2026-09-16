@@ -1,7 +1,7 @@
 import {test,expect} from 'bun:test'
 import {observe,emptyTelemetry} from '../src/lib/telemetry'
 import {getChange} from '../src/lib/changes'
-import {mergeProjects} from '../src/lib/projects'
+import {mergeProjects,removeProject} from '../src/lib/projects'
 test('compaction keeps actual status and estimates, never invents progress percentages',()=>{
  let state=observe(emptyTelemetry(),{type:'compaction_start',reason:'threshold'},1000)
  expect(state.compaction?.status).toBe('running')
@@ -23,4 +23,8 @@ test('Pi full patch is preferred over its display diff; write is not falsely mar
 test('multiple project directories deduplicate by path, not by display name',()=>{
  const projects=mergeProjects([] ,['/a/app/','/b/app','/a/app'])
  expect(projects).toEqual([{path:'/a/app',name:'app'},{path:'/b/app',name:'app'}])
+})
+test('removing a project only removes the exact workspace path',()=>{
+ const projects=mergeProjects([] ,['/a/app','/b/app'])
+ expect(removeProject(projects,'/a/app')).toEqual([{path:'/b/app',name:'app'}])
 })

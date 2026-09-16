@@ -39,7 +39,14 @@ export default function App(){
  }
  useEffect(()=>{
    if(!discovery.data||started)return
-   started=true;const path=localStorage.getItem('pi-gui.cwd')||discovery.data.cwd
+   started=true
+   const storedPath=localStorage.getItem('pi-gui.cwd')
+   const savedProjects=useProjects.getState().projects
+   if(!storedPath&&localStorage.getItem('pi-gui.projects')!==null&&savedProjects.length===0){
+    useWorkspace.getState().set({cwd:'',piVersion:discovery.data.version})
+    return
+   }
+   const path=storedPath||savedProjects[0]?.path||discovery.data.cwd
    useProjects.getState().add([path])
    useWorkspace.getState().set({cwd:path,piVersion:discovery.data.version})
    void connect(path).catch(report)

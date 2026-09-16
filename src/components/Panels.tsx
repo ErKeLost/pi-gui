@@ -15,6 +15,7 @@ import { useTheme } from 'next-themes'
 import { ModeToggle } from './mode-toggle'
 import { open } from '@tauri-apps/plugin-dialog'
 import { gooeyToast } from 'goey-toast'
+import {commandSourceLabel,getCommandVisual} from '../lib/command-visual'
 const format=(value:unknown)=>typeof value==='string'?value:JSON.stringify(value,null,2)
 async function applySetting(command:RpcCommand){await request(command);await refresh();gooeyToast.success('设置已更新',{showTimestamp:false})}
 export function Panel(){
@@ -46,9 +47,9 @@ function Commands(){
  const online=useWorkspace(s=>s.connection==='online')
  const data=useQuery({queryKey:['pi','commands',useWorkspace(s=>s.cwd)],queryFn:()=>request<{commands:{name:string;description?:string;source:string;sourceInfo?:{path?:string;origin?:string}}[]}>({type:'get_commands'}),enabled:online})
  const [search,setSearch]=useState('')
- const visibleCommands=data.data?.commands.flatMap(c=>!c.name.startsWith('gui-')&&`${c.name} ${c.description}`.toLowerCase().includes(search.toLowerCase())?[c]:[])??[]
+ const visibleCommands=data.data?.commands.flatMap(c=>!c.name.startsWith('gui-')&&`${c.name} ${c.description} ${c.sourceInfo?.path??''} ${c.sourceInfo?.origin??''}`.toLowerCase().includes(search.toLowerCase())?[c]:[])??[]
  const hasCommands=data.data?.commands.some(c=>!c.name.startsWith('gui-'))
- return <><div className="panel-heading"><div><h1>技能与命令</h1><p>Pi 当前加载的技能、提示模板和扩展命令。</p></div></div><Input className="search-input" placeholder="查找命令或技能" value={search} onChange={e=>setSearch(e.target.value)}/>{data.error&&<p className="error-inline">{String(data.error)}</p>}<div className="command-list">{visibleCommands.map(command=><Button key={command.name} onClick={()=>useWorkspace.getState().set({draft:`/${command.name} `,panel:'chat'})}><Icon name={command.source==='skill'?'sparkle':command.source==='extension'?'puzzle-piece':'text-align-left'}/><div><strong>/{command.name}</strong><p>{command.description||command.source}</p></div><small>{command.sourceInfo?.path||command.sourceInfo?.origin||command.source}</small><Icon name="arrow-right"/></Button>)}</div>{!hasCommands&&<div className="empty-panel"><Icon name="puzzle-piece"/><h3>还没有加载扩展或技能</h3><p>在 Pi 中安装后重新连接，就能从这里使用。</p></div>}</>
+ return <><div className="panel-heading"><div><h1>技能与命令</h1><p>Pi 当前加载的技能、提示模板和扩展命令。</p></div></div><Input className="search-input" placeholder="查找命令或技能" value={search} onChange={e=>setSearch(e.target.value)}/>{data.isLoading&&<Skeleton active paragraph={{rows:5}}/>}{data.error&&<p className="error-inline">{String(data.error)}</p>}<div className="command-list">{visibleCommands.map(command=>{const visual=getCommandVisual(command.name,command.source),location=command.sourceInfo?.path||command.sourceInfo?.origin;return <Button className="command-row" key={command.name} onClick={()=>useWorkspace.getState().set({draft:`/${command.name} `,panel:'chat'})}><span className={`command-icon command-icon-${visual.tone}`}><Icon name={visual.icon}/></span><span className="command-copy"><span className="command-title"><strong>/{command.name}</strong><span className={`command-source command-source-${command.source}`}>{commandSourceLabel(command.source)}</span></span><span className="command-description">{command.description||'没有提供说明'}</span>{location&&<span className="command-location" title={location}>{location}</span>}</span><Icon className="command-arrow" name="arrow-right"/></Button>})}</div>{data.data&&!hasCommands&&<div className="empty-panel"><Icon name="puzzle-piece"/><h3>还没有加载扩展或技能</h3><p>在 Pi 中安装后重新连接，就能从这里使用。</p></div>}</>
 }
 function PiTools(){
  const cwd=useWorkspace(s=>s.cwd), online=useWorkspace(s=>s.connection==='online'), running=useWorkspace(s=>s.transcript.running), ask=usePrompt(), [packageName,setPackageName]=useState('')
