@@ -1571,12 +1571,6 @@ body,
 @media (max-width: 720px) {
 }
 
-/* Provider editor: a centered shadcn-style form instead of a full-width
-   spreadsheet. Inputs stay readable while the model catalog can scroll. */
-.panel-view:has(.provider-settings) {
-  padding: 28px clamp(18px, 5vw, 72px) 48px !important;
-}
-
 .provider-settings {
   width: min(1080px, 100%) !important;
   margin: 0 auto !important;
@@ -1721,10 +1715,6 @@ body,
 }
 
 @media (max-width: 760px) {
-  .panel-view:has(.provider-settings) {
-    padding: 14px 12px 28px !important;
-  }
-
   .provider-settings {
     padding: 16px !important;
     border-radius: var(--radius-xl) !important;
