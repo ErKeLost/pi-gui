@@ -464,3 +464,7 @@ html[data-theme="dark"] .markdown-renderer .shiki span {
   overflow-x: auto;
   padding: 4px 0;
 }
+
+.chat-root .transcript-message + .transcript-message.user {
+  margin-top: 18px;
+}
