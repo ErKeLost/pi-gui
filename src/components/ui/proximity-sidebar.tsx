@@ -50,32 +50,32 @@ type ProximitySidebarProps = {
   side?: Side
 }
 
-const RADIUS = 40
-const MAX_DASH_WIDTH = 110
+const RADIUS = 34
+const MAX_DASH_WIDTH = 78
 const SCROLL_IDLE_RESET_DELAY = 80
 
 const DASH_PRESETS: Record<SectionKind, DashPreset> = {
   title: {
-    base: 40,
-    bump: 70,
+    base: 34,
+    bump: 44,
     thickness: 1,
     className: "bg-foreground",
   },
   subtitle: {
-    base: 36,
-    bump: 64,
+    base: 30,
+    bump: 40,
     thickness: 1,
     className: "bg-foreground",
   },
   section: {
-    base: 30,
-    bump: 56,
+    base: 24,
+    bump: 36,
     thickness: 1,
     className: "bg-muted-foreground/40",
   },
   body: {
-    base: 24,
-    bump: 50,
+    base: 18,
+    bump: 32,
     thickness: 1,
     className: "bg-muted-foreground/40",
   },
@@ -166,7 +166,7 @@ const Dash = ({
       aria-current={active ? "location" : undefined}
       aria-label={`Go to ${section.label}`}
       title={section.label}
-      className="group flex h-px w-[110px] items-center border-0 bg-transparent p-0 outline-none"
+      className="group flex h-px w-[78px] items-center border-0 bg-transparent p-0 outline-none"
       onClick={() => onSelect(section.id)}
     >
       <motion.span
@@ -368,7 +368,7 @@ const ProximitySidebar = ({
         className={`new-home_minimap__dDggR mx-8 flex flex-col ${
           side === "right" ? "items-end" : "items-start"
         }`}
-        style={{ gap: 8 }}
+        style={{ gap: sections.length > 64 ? 3 : sections.length > 40 ? 4 : 6 }}
         onPointerMove={(event) => {
           clearPendingReset()
           pointerInside.current = true

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,6 +36,7 @@ import {
   type PromptInputMessage,
 } from "./ai-elements/prompt-input";
 import LoadingState from "./ai-elements/loading-state";
+import ProximitySidebar, { type ProximitySection } from "./ui/proximity-sidebar";
 import { modelLabel } from "../lib/model-meta";
 import { ModelLogo } from "./ModelMeta";
 import { readTurnDurations, saveTurnDurations, turnDurationId } from "../lib/turn-duration";
@@ -59,6 +60,11 @@ function composerModelLabel(id: string, fallback?: string) {
 function effortLabel(level?: string) {
   if (!level || level === "off") return "Off";
   return level === "xhigh" ? "XHigh" : level.charAt(0).toUpperCase() + level.slice(1);
+}
+function messageKind(element: HTMLElement): "title" | "section" | "body" {
+  if (element.closest(".transcript-message.user")) return "title";
+  if (element.matches(".turn-activity, .transcript-error, .transcript-compaction, .bash-execution-card")) return "section";
+  return "body";
 }
 function imageAttachments(files: Iterable<File>) {
   return Promise.all(
@@ -326,6 +332,8 @@ export function Chat() {
     return () => window.removeEventListener("paste", pasteImage);
   }, []);
   const { ref, atBottom, scrollToBottom } = useConversationScroll();
+  const proximityId = useId().replace(/[^a-zA-Z0-9_-]/g, "") || "conversation";
+  const [proximitySections, setProximitySections] = useState<ProximitySection[]>([]);
   const models = useQuery({
     queryKey: ["pi", "models", project],
     queryFn: () =>
@@ -390,6 +398,49 @@ export function Chat() {
   const compactionDetail = compacting
     ? ({ manual: "手动", threshold: "达到阈值", overflow: "上下文溢出" }[compactionReason ?? ""] ?? compactionReason)
     : undefined;
+  useEffect(() => {
+    const conversation = ref.current;
+    if (!conversation) return;
+    let frame = 0;
+    const scanSections = () => {
+      frame = 0;
+      const blocks = Array.from(conversation.querySelectorAll<HTMLElement>(".transcript-message")).flatMap(message => {
+        if (message.classList.contains("user")) {
+          return [message.querySelector<HTMLElement>(".ai-message-content") ?? message];
+        }
+        const children = Array.from(message.querySelectorAll<HTMLElement>(
+          ".turn-activity, .message-image, .transcript-error, .transcript-compaction, .bash-execution-card, .ai-message-response.markdown-static .streamdown-animated > *",
+        )).filter(element => !element.matches("style, script") && (element.textContent?.trim() || element.matches("img") || element.querySelector("img, svg, pre, table")));
+        return children.length > 0 ? children : [message];
+      });
+      const sections = blocks.map<ProximitySection>((block, index) => {
+        const id = `${proximityId}-section-${index + 1}`;
+        const heading = block.matches("h1, h2, h3") ? block : block.querySelector<HTMLElement>("h1, h2, h3");
+        const level = heading?.tagName === "H1" ? 1 : heading?.tagName === "H2" ? 2 : heading?.tagName === "H3" ? 3 : undefined;
+        block.id = id;
+        return {
+          id,
+          label: block.textContent?.replace(/\s+/g, " ").trim().slice(0, 72) || `Section ${index + 1}`,
+          ...(level ? { level: level as 1 | 2 | 3 } : { kind: messageKind(block) }),
+        };
+      });
+      setProximitySections(current => {
+        const unchanged = current.length === sections.length && current.every((section, index) => section.id === sections[index]?.id && section.label === sections[index]?.label);
+        return unchanged ? current : sections;
+      });
+    };
+    const scheduleScan = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(scanSections);
+    };
+    const observer = new MutationObserver(scheduleScan);
+    observer.observe(conversation, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    scheduleScan();
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [proximityId, ref]);
   useEffect(() => {
     if (!sessionFile || transcript.running) return;
     const completed = Object.fromEntries(messageGroups.flatMap(group => {
@@ -456,6 +507,19 @@ export function Chat() {
   }
   return (
     <div className="chat-root tessera-thread-root">
+      {proximitySections.length > 0 && (
+        <ProximitySidebar
+          sections={proximitySections}
+          side="left"
+          className="conversation-proximity-sidebar"
+          onSelectSection={id => {
+            const disclosure = document.getElementById(id)?.closest<HTMLElement>(".message-response-disclosure");
+            if (disclosure?.dataset.collapsible === "true" && disclosure.dataset.open === "false") {
+              disclosure.querySelector<HTMLButtonElement>(".message-response-toggle")?.click();
+            }
+          }}
+        />
+      )}
       <Conversation
         ref={ref}
         className="chat-conversation tessera-conversation"

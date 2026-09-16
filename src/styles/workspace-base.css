@@ -140,28 +140,33 @@
 .message-response-toggle-chevron path { vector-effect: non-scaling-stroke; }
 .message-response-disclosure[data-open="true"] .message-response-toggle-chevron { transform: scaleY(-1); }
 
-.message-proximity-sidebar {
+.conversation-proximity-sidebar {
   position: absolute;
-  top: 0;
-  left: -132px;
-  bottom: 0;
-  z-index: 2;
-  width: 120px;
+  top: 50%;
+  left: calc((100% - var(--chat-content-width)) / 2 - 100px);
+  z-index: 4;
+  width: 88px;
+  height: min(46vh, 340px);
+  transform: translateY(-50%);
 }
 
-.message-proximity-sidebar .new-home_minimap__dDggR {
+.chat-root.tessera-thread-root {
+  position: relative;
+}
+
+.conversation-proximity-sidebar .new-home_minimap__dDggR {
   margin-inline: 0;
 }
 
 @media (max-width: 1099px) {
-  .message-proximity-sidebar {
-    left: -92px;
-    width: 82px;
+  .conversation-proximity-sidebar {
+    left: 12px;
+    width: 68px;
   }
 }
 
 @media (max-width: 899px) {
-  .message-proximity-sidebar { display: none; }
+  .conversation-proximity-sidebar { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
