@@ -88,6 +88,7 @@
 
 .message-response-disclosure {
   --message-preview-height: 32rem;
+  position: relative;
   min-width: 0;
 }
 
@@ -138,6 +139,23 @@
 
 .message-response-toggle-chevron path { vector-effect: non-scaling-stroke; }
 .message-response-disclosure[data-open="true"] .message-response-toggle-chevron { transform: scaleY(-1); }
+
+.message-proximity-sidebar {
+  position: absolute;
+  top: 0;
+  right: -132px;
+  bottom: 0;
+  z-index: 2;
+  width: 120px;
+}
+
+.message-proximity-sidebar .new-home_minimap__dDggR {
+  margin-inline: 0;
+}
+
+@media (max-width: 1299px) {
+  .message-proximity-sidebar { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .message-response-toggle-chevron { transition: none !important; }

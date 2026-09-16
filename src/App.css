@@ -956,9 +956,9 @@ body,
 
 .chat-root .transcript-message.user .ai-message-content {
   padding: 9px 13px !important;
-  border: 1px solid var(--border) !important;
+  border: 1px solid color-mix(in oklch, var(--border) 58%, transparent) !important;
   border-radius: var(--radius-xl) !important;
-  background: var(--secondary) !important;
+  background: color-mix(in oklch, var(--secondary) 56%, var(--background)) !important;
   color: var(--foreground) !important;
 }
 

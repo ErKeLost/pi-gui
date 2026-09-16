@@ -1,8 +1,9 @@
-import { useId, useState, type HTMLAttributes } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { Markdown } from "../Markdown";
 import { Icon } from "../Icon";
 import { Button } from "../ui/button";
-import { shouldCollapseMessage } from "../../lib/message-layout";
+import ProximitySidebar from "../ui/proximity-sidebar";
+import { markdownHeadingSections, shouldCollapseMessage } from "../../lib/message-layout";
 
 export function Message({
   from,
@@ -28,13 +29,27 @@ export function MessageContent({ className = "", children, ...props }: HTMLAttri
 export function MessageResponse({ children, animated = false }: { children: string; animated?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
+  const viewportRef = useRef<HTMLDivElement>(null);
   const collapsible = !animated && shouldCollapseMessage(children);
+  const headingSections = useMemo(
+    () => markdownHeadingSections(children, contentId.replace(/[^a-zA-Z0-9_-]/g, "") || "message"),
+    [children, contentId],
+  );
+
+  useEffect(() => {
+    const headings = viewportRef.current?.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6");
+    if (!headings) return;
+    headingSections.forEach((section, index) => headings[index]?.setAttribute("id", section.id));
+  }, [headingSections]);
 
   return (
     <section className="message-response-disclosure" data-collapsible={collapsible} data-open={expanded}>
-      <div id={contentId} className="message-response-viewport">
+      <div ref={viewportRef} id={contentId} className="message-response-viewport">
         <Markdown content={children} animated={animated} className="ai-message-response" />
       </div>
+      {!animated && expanded && headingSections.length >= 3 && (
+        <ProximitySidebar sections={headingSections} side="right" className="message-proximity-sidebar" />
+      )}
       {collapsible && (
         <div className="message-response-more">
           {!expanded && <span className="message-response-ellipsis" aria-hidden="true">...</span>}
