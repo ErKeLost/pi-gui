@@ -3,12 +3,25 @@ export type { RpcSessionState, RpcCommand, RpcExtensionUIRequest } from '@earend
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
 export type Part = { type: string; text?: string; thinking?: string; thinkingComplete?: boolean; data?: string; mimeType?: string; id?: string; name?: string; arguments?: Record<string, Json>; argsText?: string }
 export type PiMessage = { role: string; content?: string | Part[]; command?: string; output?: string; summary?: string; display?: boolean; timestamp?: number; toolCallId?: string; toolName?: string; isError?: boolean; details?: unknown; usage?: ToolUsage; errorMessage?: string; stopReason?: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string }
-export type DisplayMessage = { id: string; message: PiMessage }
+export type DisplayMessage = { id: string; message: PiMessage; startedAt?: number; elapsedMs?: number }
+export type DisplayMessageGroup = { id: string; items: DisplayMessage[]; indexes: number[] }
 export type ToolUsage = { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost?: { total?: number } }
 export type Tool = { name: string; args?: Record<string, Json>; result?: unknown; running: boolean; isError?: boolean; usage?: ToolUsage }
 export type Event = { type: string; message?: PiMessage; toolCallId?: string; toolName?: string; args?: Record<string, Json>; result?: unknown; partialResult?: unknown; isError?: boolean; details?: unknown; errorMessage?: string; assistantMessageEvent?: { type: string; contentIndex: number; delta?: string; content?: string; id?: string; toolName?: string; toolCall?: Part }; steering?: string[]; followUp?: string[]; [key: string]: unknown }
-export type Transcript = { messages: DisplayMessage[]; active: number; running: boolean; compacting: boolean; phase: string; tools: Record<string, Tool>; error: string | null; queue: { steering: string[]; followUp: string[] }; bash: { id?: string; command?: string; output: string; running: boolean } | null }
-export const emptyTranscript = (): Transcript => ({ messages: [], active: -1, running: false, compacting: false, phase: '就绪', tools: {}, error: null, queue: { steering: [], followUp: [] }, bash: null })
+export type Transcript = { messages: DisplayMessage[]; active: number; running: boolean; compacting: boolean; phase: string; tools: Record<string, Tool>; error: string | null; queue: { steering: string[]; followUp: string[] }; bash: { id?: string; command?: string; output: string; running: boolean } | null; turnStartedAt: number | null }
+export const emptyTranscript = (): Transcript => ({ messages: [], active: -1, running: false, compacting: false, phase: '就绪', tools: {}, error: null, queue: { steering: [], followUp: [] }, bash: null, turnStartedAt: null })
+export function groupDisplayMessages(messages: DisplayMessage[]): DisplayMessageGroup[] {
+  return messages.reduce<DisplayMessageGroup[]>((groups, item, index) => {
+    const previous = groups.at(-1)
+    if (item.message.role === 'assistant' && previous?.items.every(entry => entry.message.role === 'assistant')) {
+      previous.items.push(item)
+      previous.indexes.push(index)
+      return groups
+    }
+    groups.push({ id: item.id, items: [item], indexes: [index] })
+    return groups
+  }, [])
+}
 export function formatTranscriptError(raw: string): string {
   const text = raw.trim()
   if (!text) return '会话异常'
@@ -52,8 +65,20 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
   switch (event.type) {
     case 'prompt_submitted': return { ...state, error: null, messages: state.messages.map(item => item.message.errorMessage ? {...item,message:{...item.message,errorMessage:undefined}} : item) }
     case 'bash_execution_update': return { ...state, bash: { id: typeof event.id === 'string' ? event.id : undefined, command: typeof event.command === 'string' ? event.command : state.bash?.command, output: `${state.bash?.output ?? ''}${String(event.delta ?? '')}`, running: true } }
-    case 'agent_start': return { ...state, active: -1, running: true, phase: '正在思考', error: null }
-    case 'agent_settled': return { ...state, running: false, phase: '就绪', bash: state.bash ? { ...state.bash, running: false } : null }
+    case 'agent_start': return { ...state, active: -1, running: true, phase: '正在思考', error: null, turnStartedAt: Date.now() }
+    case 'agent_settled': {
+      const elapsedMs = state.turnStartedAt == null ? undefined : Math.max(0, Date.now() - state.turnStartedAt)
+      return {
+        ...state,
+        running: false,
+        phase: '就绪',
+        bash: state.bash ? { ...state.bash, running: false } : null,
+        turnStartedAt: null,
+        messages: elapsedMs == null ? state.messages : state.messages.map(item =>
+          item.startedAt === state.turnStartedAt ? { ...item, elapsedMs } : item,
+        ),
+      }
+    }
     case 'agent_end': return state
     case 'compaction_start': return { ...state, compacting: true, phase: '正在压缩上下文' }
     case 'compaction_end': return { ...state, compacting: false, phase: state.running ? '正在运行' : '就绪' }
@@ -62,7 +87,11 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
     case 'queue_update': return { ...state, queue: { steering: event.steering ?? [], followUp: event.followUp ?? [] } }
     case 'message_start': {
       if (!event.message || event.message.role === 'toolResult' || (event.message.role==='custom'&&event.message.display===false)) return state
-      state.messages = [...state.messages, {id: `live-${state.messages.length}-${event.message.timestamp ?? 0}`, message: normalizeMessage(event.message)}]
+      state.messages = [...state.messages, {
+        id: `live-${state.messages.length}-${event.message.timestamp ?? 0}`,
+        message: normalizeMessage(event.message),
+        ...(event.message.role === 'assistant' ? { startedAt: state.turnStartedAt ?? Date.now() } : {}),
+      }]
       if (event.message.role === 'assistant') state.active = state.messages.length - 1
       return state
     }

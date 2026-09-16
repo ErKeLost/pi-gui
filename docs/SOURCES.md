@@ -42,7 +42,7 @@ Rust 工具链下载使用 USTC 镜像解决官方 CDN 低速问题。执行前�
 
 ## 组件、实时观测与多项目更新
 
-- Markdown 统一使用 LobeHub `@lobehub/streamdown` 1.3.1。所有聊天正文与压缩摘要共用同一渲染入口，并按官方组合接入 `remark-gfm`、`remark-math`、`rehype-katex`、`preprocessLaTeX` 和 `latexGuard`；KaTeX 使用官方 CSS。流式正文启用字符级平滑显示，历史正文关闭淡入动画。
+- Markdown 统一使用 LobeHub `@lobehub/streamdown` 1.3.1。所有聊天正文与压缩摘要共用同一渲染入口，并按官方组合接入 `remark-gfm`、`remark-math`、`rehype-katex`、`preprocessLaTeX`、`latexGuard` 和 KaTeX `mhchem`；KaTeX 使用官方 CSS。流式正文启用字符级平滑显示，历史正文关闭淡入动画。代码围栏与 Mermaid 按官方 Playground（`site/src/components/CodeBlock.tsx`）在源码稳定后升级：Shiki 使用 `vitesse-dark` / `vitesse-light`，图表使用 `beautiful-mermaid` 1.1.3；流式期间保持纯文本以免每帧重高亮。
 - 设置采用独立双栏工作区；会话树、常用工具、代码变更和控制台从日常导航收拢到设置分类。Provider 编辑器按标识、接口和凭据分区，保存会直接写入并同步 Pi 模型配置，然后重连当前项目。
 - AI Elements 的 Conversation、Message、PromptInput、Shimmer 与 assistant-ui ToolCall 使用当前 registry/docs 的 props 形状，已经接入真实 Pi transcript、流式状态、工具请求和结果；不是静态示例数据。这里保留的是针对 Pi RPC 数据结构的本地轻量渲染适配，没有引入未使用的 assistant-ui runtime。
 - 同包 `Button / Select / Input / TextArea / Modal / Tooltip / Collapse / Skeleton` 与 `@lobehub/ui/base-ui` 的 Switch 用于交互控件。ConfigProvider 注入 `motion/react`，ThemeProvider 负责主题。

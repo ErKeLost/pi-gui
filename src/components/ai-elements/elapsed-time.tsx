@@ -1,26 +1,59 @@
 import { useEffect, useRef, useState } from "react";
+import { StableShimmer } from "./stable-shimmer";
 
-export function ElapsedTime({ running = true, value }: { running?: boolean; value?: string }) {
+function formatDuration(elapsedMs: number, locale: "compact" | "zh") {
+  if (locale === "zh") {
+    const seconds = Math.max(0, Math.round(elapsedMs / 1000));
+    return seconds < 60 ? `${seconds}秒` : `${Math.floor(seconds / 60)}分钟 ${seconds % 60}秒`;
+  }
+  const seconds = Math.round(elapsedMs / 100) / 10;
+  return seconds < 60
+    ? `${seconds.toFixed(1)}s`
+    : `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(1)}s`;
+}
+
+export function ElapsedTime({
+  running = true,
+  value,
+  startedAt,
+  durationMs,
+  locale = "compact",
+  prefix = "",
+  shimmer = false,
+}: {
+  running?: boolean;
+  value?: string;
+  startedAt?: number;
+  durationMs?: number;
+  locale?: "compact" | "zh";
+  prefix?: string;
+  shimmer?: boolean;
+}) {
   const [elapsedMs, setElapsedMs] = useState(0);
-  const startedAt = useRef(0);
+  const startRef = useRef(0);
 
   useEffect(() => {
-    if (!running || value !== undefined) { startedAt.current = 0; return; }
-    if (startedAt.current === 0) startedAt.current = performance.now();
-    const update = () => setElapsedMs(performance.now() - startedAt.current);
+    if (!running || value !== undefined) { startRef.current = 0; return; }
+    if (startedAt !== undefined) startRef.current = startedAt;
+    else if (startRef.current === 0) startRef.current = Date.now();
+    const update = () => {
+      const next = Math.max(0, Date.now() - startRef.current);
+      setElapsedMs(locale === "zh" ? Math.round(next / 1000) * 1000 : next);
+    };
     let timer:number|undefined;
     const stop=()=>{if(timer!==undefined){window.clearInterval(timer);timer=undefined;}};
     const sync=()=>{if(document.hidden){stop();return}update();if(timer===undefined)timer=window.setInterval(update,250);};
     sync();document.addEventListener('visibilitychange',sync);
     return()=>{stop();document.removeEventListener('visibilitychange',sync)};
-  }, [running, value]);
+  }, [locale, running, startedAt, value]);
 
-  if (!running && elapsedMs === 0 && value === undefined) return null;
-  // Round before splitting minutes so 59.96 seconds becomes 1m 0.0s.
-  const seconds = Math.round(elapsedMs / 100) / 10;
-  const elapsed = value ?? (seconds < 60
-    ? `${seconds.toFixed(1)}s`
-    : `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(1)}s`);
+  if (!running && durationMs === undefined && elapsedMs === 0 && value === undefined) {
+    return prefix ? <span className="ai-elapsed-time"><span className="ai-elapsed-time-label">{prefix.trim()}</span></span> : null;
+  }
+  const duration = value ?? formatDuration(durationMs ?? elapsedMs, locale);
+  const elapsed = `${prefix}${duration}`;
 
-  return <span className="ai-elapsed-time" aria-hidden="true">{elapsed}</span>;
+  return shimmer
+    ? <StableShimmer text={elapsed} className="ai-elapsed-time processing-time-shimmer" />
+    : <span className="ai-elapsed-time"><span className="ai-elapsed-time-label">{prefix.trim()}</span><span className="ai-elapsed-time-value">{duration}</span></span>;
 }

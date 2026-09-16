@@ -874,6 +874,10 @@ body,
   color: var(--foreground);
 }
 
+.app-shell .shiki span {
+  color: inherit;
+}
+
 .app-shell .context-meter,
 .app-shell .context-meter > div,
 .app-shell .running-indicator,
@@ -1987,6 +1991,7 @@ body,
 .theme-settings-controls { display: flex; align-items: center; gap: 8px; }
 .app-shell ::selection { background: transparent !important; color: inherit !important; }
 .app-shell svg:not(.tool-activity-file-icon):not(.iconify--vscode-icons):not(.iconify--catppuccin) { color: var(--muted-foreground); }
+.app-shell .mermaid svg { color: unset; }
 .app-shell .nav-item.selected > svg,
 .app-shell .nav-item:hover > svg,
 .app-shell .project-icon > svg { color: var(--accent-foreground) !important; }

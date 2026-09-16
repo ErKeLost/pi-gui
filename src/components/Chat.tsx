@@ -1,18 +1,21 @@
-import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useWorkspace } from "../lib/store";
 import {
   persistDefaultModel,
+  getSessionTurnDurations,
+  native,
+  persistedSessionFile,
   request,
   report,
   stop,
 } from "../lib/rpc";
-import { formatTranscriptError, type Model, type Part, type DisplayMessage, type Tool, type PiMessage } from "../lib/protocol";
+import { formatTranscriptError, groupDisplayMessages, type Model, type Part, type DisplayMessage, type Tool, type PiMessage } from "../lib/protocol";
 import { Icon } from "./Icon";
 import { Button, Skeleton } from "./UI";
-import { Thinking } from "./RichMessage";
+import { ProcessingPanel, Thinking } from "./RichMessage";
 import { Beam } from "./Effects";
 import { ToolActivityGroup, ToolCall } from "./ai-elements/tool-call";
 import {
@@ -35,6 +38,7 @@ import {
 import LoadingState from "./ai-elements/loading-state";
 import { modelLabel } from "../lib/model-meta";
 import { ModelLogo } from "./ModelMeta";
+import { readTurnDurations, saveTurnDurations, turnDurationId } from "../lib/turn-duration";
 
 type Attachment = { name: string; data: string; mimeType: string };
 const composerCache = new Map<
@@ -139,72 +143,88 @@ function ErrorOutput({ error }: { error: string }) {
 }
 const TranscriptMessage = memo(
   function TranscriptMessage({
-    item,
+    items,
     tools,
     streaming,
     thinking,
+    savedDuration,
   }: {
-    item: DisplayMessage;
+    items: DisplayMessage[];
     tools: Record<string, Tool>;
     streaming: boolean;
     thinking: boolean;
+    savedDuration?: number;
   }) {
+    const item = items[0];
     const role = item.message.role === "user" ? "user" : "assistant";
     if (item.message.role === "bashExecution") return <m.div className="transcript-message assistant"><BashExecutionView message={item.message} /></m.div>;
     if (item.message.role === "compactionSummary") {
       const summary = item.message.summary || (typeof item.message.content === "string" ? item.message.content : "");
       return <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}><div className="transcript-compaction"><div className="transcript-compaction-heading"><Icon name="arrows-clockwise" /><span>上下文已压缩</span></div>{summary.trim() ? <pre>{summary.trim()}</pre> : null}</div></m.div>;
     }
-    const content = Array.isArray(item.message.content)
-      ? item.message.content
-      : [{ type: "text", text: item.message.content ?? "" }];
+    const content = items.flatMap((entry, itemIndex) => {
+      const parts = Array.isArray(entry.message.content)
+        ? entry.message.content
+        : [{ type: "text", text: entry.message.content ?? "" }];
+      return parts.map((part, partIndex) => ({
+        part: part as Part,
+        key: `${entry.id}-${partIndex}`,
+        active: streaming && itemIndex === items.length - 1,
+      }));
+    });
+    const thinkingParts = content.filter(({ part }) =>
+      part.type === "thinking" && (part.thinking?.trim() || (thinking && !part.thinkingComplete)),
+    );
+    const toolCalls = content.filter(({ part }) => part.type === "toolCall");
+    const progressNodes: ReactNode[] = [];
     const contentNodes: ReactNode[] = [];
-    for (let index = 0; index < content.length; index += 1) {
-      const part = content[index] as Part;
-      if (part.type !== "toolCall") {
-        if (part.type === "text" && !part.text) continue;
-        if (part.type === "thinking" && !part.thinking?.trim() && !(thinking && !part.thinkingComplete)) continue;
-        contentNodes.push(
-          <PartView
-            key={item.id + "-" + index}
-            part={part}
-            tools={tools}
-            running={streaming}
-            thinking={thinking && index === content.length - 1}
-          />,
-        );
-        continue;
-      }
-      const calls: Part[] = [];
-      while (index < content.length && content[index]?.type === "toolCall") {
-        calls.push(content[index] as Part);
-        index += 1;
-      }
-      index -= 1;
-      contentNodes.push(
+    const latestThinking = thinkingParts.at(-1);
+    if (latestThinking) {
+      progressNodes.push(
+        <Thinking
+          key={`${item.id}-reasoning`}
+          text={latestThinking.part.thinking ?? ""}
+          running={streaming}
+        />,
+      );
+    }
+    if (toolCalls.length > 0) {
+      progressNodes.push(
         <ToolActivityGroup
-          key={item.id + "-" + index}
-          toolNames={calls.map(call => call.name ?? tools[call.id ?? ""]?.name ?? "工具")}
-          running={calls.some(call => tools[call.id ?? ""]?.running)}
+          key={`${item.id}-tools`}
+          toolNames={toolCalls.map(({ part: call }) => call.name ?? tools[call.id ?? ""]?.name ?? "工具")}
+          running={streaming || toolCalls.some(({ part: call }) => tools[call.id ?? ""]?.running)}
         >
-          {calls.map((call, callIndex) => (
+          {toolCalls.map(({ part: call, key: callKey, active: isActive }) => (
             <PartView
-              key={item.id + "-" + (index + callIndex)}
+              key={callKey}
               part={call}
               tools={tools}
-              running={streaming}
+              running={isActive}
               thinking={false}
             />
           ))}
         </ToolActivityGroup>,
       );
     }
-    if (item.message.errorMessage) {
+    for (const { part, key, active } of content) {
+      if (part.type === "thinking" || part.type === "toolCall" || (part.type === "text" && !part.text)) continue;
       contentNodes.push(
-        <ErrorOutput key={item.id + "-error"} error={item.message.errorMessage} />,
+        <PartView
+          key={key}
+          part={part}
+          tools={tools}
+          running={active}
+          thinking={false}
+        />,
       );
     }
-    if (contentNodes.length === 0) return null;
+    items.forEach(entry => {
+      if (entry.message.errorMessage) contentNodes.push(<ErrorOutput key={`${entry.id}-error`} error={entry.message.errorMessage} />);
+    });
+    if (progressNodes.length === 0 && contentNodes.length === 0) return null;
+    const startedAt = items.find(entry => entry.startedAt !== undefined)?.startedAt;
+    const elapsedMs = [...items].reverse().find(entry => entry.elapsedMs !== undefined)?.elapsedMs ?? savedDuration;
     return (
       <m.div
         className={`transcript-message ${role}`}
@@ -214,6 +234,11 @@ const TranscriptMessage = memo(
       >
         <Message from={role}>
           <MessageContent>
+            {progressNodes.length > 0 && (
+              <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} startedAt={startedAt} durationMs={elapsedMs}>
+                {progressNodes}
+              </ProcessingPanel>
+            )}
             {contentNodes}
           </MessageContent>
         </Message>
@@ -222,14 +247,14 @@ const TranscriptMessage = memo(
   },
   (previous, next) => {
     if (
-      previous.item !== next.item ||
       previous.streaming !== next.streaming ||
-      previous.thinking !== next.thinking
+      previous.thinking !== next.thinking ||
+      previous.savedDuration !== next.savedDuration ||
+      previous.items.length !== next.items.length ||
+      previous.items.some((item, index) => item !== next.items[index])
     )
       return false;
-    const content = Array.isArray(previous.item.message.content)
-      ? previous.item.message.content
-      : [];
+    const content = previous.items.flatMap(item => Array.isArray(item.message.content) ? item.message.content : []);
     return content.every(
       (part) =>
         part.type !== "toolCall" ||
@@ -310,6 +335,18 @@ export function Chat() {
   const effortIndex = Math.max(0, availableLevels.indexOf(state?.thinkingLevel ?? "off"));
   const effortProgress = availableLevels.length > 1 ? effortIndex / (availableLevels.length - 1) * 100 : 0;
   const retry = telemetry.retry;
+  const messageGroups = useMemo(() => groupDisplayMessages(transcript.messages), [transcript.messages]);
+  const sessionFile = state?.sessionFile ?? persistedSessionFile(project);
+  const historicalDurations = useQuery({
+    queryKey: ["pi", "turn-durations", sessionFile],
+    queryFn: () => getSessionTurnDurations(sessionFile),
+    enabled: native && Boolean(sessionFile),
+    staleTime: Infinity,
+  });
+  const savedDurations = useMemo(() => ({
+    ...(historicalDurations.data ?? {}),
+    ...readTurnDurations(sessionFile),
+  }), [historicalDurations.data, sessionFile]);
   const retrying = retry?.status === "waiting" || retry?.status === "running";
   const retryDetail = retrying && retry
     ? `第 ${Number.isFinite(retry.attempt) ? retry.attempt : "?"}${retry.maxAttempts && Number.isFinite(retry.maxAttempts) ? ` / ${retry.maxAttempts}` : ""} 次${retry.delayMs && Number.isFinite(retry.delayMs) ? ` · 等待 ${retry.delayMs} ms` : ""} · ${retry.error || "原因未提供"}`
@@ -319,6 +356,15 @@ export function Chat() {
   const compactionDetail = compacting
     ? ({ manual: "手动", threshold: "达到阈值", overflow: "上下文溢出" }[compactionReason ?? ""] ?? compactionReason)
     : undefined;
+  useEffect(() => {
+    if (!sessionFile || transcript.running) return;
+    const completed = Object.fromEntries(messageGroups.flatMap(group => {
+      const id = turnDurationId(group.items);
+      const elapsed = [...group.items].reverse().find(item => item.elapsedMs !== undefined)?.elapsedMs;
+      return id && elapsed !== undefined ? [[id, elapsed]] : [];
+    }));
+    saveTurnDurations(sessionFile, completed);
+  }, [messageGroups, sessionFile, transcript.running]);
   useEffect(() => {
     const timer = setTimeout(
       () =>
@@ -382,13 +428,14 @@ export function Chat() {
       >
         <ConversationContent className="tessera-conversation-content">
           {transcript.messages.length === 0 ? null : (
-            transcript.messages.map((item, index) => (
+            messageGroups.map((group) => (
               <TranscriptMessage
-                key={item.id}
-                item={item}
+                key={group.id}
+                items={group.items}
                 tools={transcript.tools}
-                streaming={transcript.running && index === transcript.active}
-                thinking={transcript.running && index === transcript.active && !item.message.stopReason}
+                streaming={transcript.running && group.indexes.includes(transcript.active)}
+                thinking={transcript.running && group.indexes.includes(transcript.active) && !group.items.at(-1)?.message.stopReason}
+                savedDuration={savedDurations[turnDurationId(group.items) ?? ""]}
               />
             ))
           )}
@@ -417,7 +464,7 @@ export function Chat() {
                       {attachments.map((a) => (
                         <div className="attachment-preview" key={`${a.name}-${a.data.slice(0, 16)}`}>
                           <img src={`data:${a.mimeType};base64,${a.data}`} alt={a.name} />
-                          <Button className="attachment-remove" title={`移除 ${a.name}`} aria-label={`移除 ${a.name}`} onClick={() => setAttachments((current) => current.filter((item) => item !== a))}>
+                          <Button type="button" className="attachment-remove" title={`移除 ${a.name}`} aria-label={`移除 ${a.name}`} onClick={() => setAttachments((current) => current.filter((item) => item !== a))}>
                             <Icon name="x" />
                           </Button>
                         </div>

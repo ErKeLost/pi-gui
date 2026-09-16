@@ -1,6 +1,7 @@
 import {describe,test,expect} from 'bun:test'
-import {emptyTranscript,reduceEvent,hydrate} from '../src/lib/protocol'
+import {emptyTranscript,groupDisplayMessages,reduceEvent,hydrate} from '../src/lib/protocol'
 import { summarizeToolCalls } from '../src/lib/tool-activity'
+import { turnDurationId } from '../src/lib/turn-duration'
 describe('Pi 0.85.1 JSONL event projection',()=>{
  test('assembling indexed text and thinking deltas, ending with the authoritative snapshot',()=>{
   let state=reduceEvent(emptyTranscript(),{type:'message_start',message:{role:'assistant',content:[],timestamp:1}})
@@ -59,4 +60,24 @@ test('bash and compaction records normalize without exposing hidden custom messa
 })
 test('tool activity summaries use the actual Pi tool names',()=>{
  expect(summarizeToolCalls(['read','rg','bash','edit','write'])).toBe('读取 1 次 · 搜索 1 次 · 运行 1 次 · 编辑 2 次')
+})
+test('consecutive assistant fragments render as one logical turn',()=>{
+ const messages=[
+  {id:'user',message:{role:'user',content:'inspect'}},
+  {id:'thought-1',message:{role:'assistant',content:[{type:'thinking',thinking:'first'},{type:'toolCall',id:'read-1',name:'read'}]}},
+  {id:'thought-2',message:{role:'assistant',content:[{type:'thinking',thinking:'second'},{type:'toolCall',id:'run-1',name:'bash'}]}},
+  {id:'answer',message:{role:'assistant',content:[{type:'text',text:'done'}]}},
+  {id:'next-user',message:{role:'user',content:'next'}},
+ ]
+ const groups=groupDisplayMessages(messages)
+ expect(groups).toHaveLength(3)
+ expect(groups[1].items.map(item=>item.id)).toEqual(['thought-1','thought-2','answer'])
+ expect(groups[1].indexes).toEqual([1,2,3])
+ expect(turnDurationId(groups[1].items)).toBe('tool:read-1')
+})
+test('turn duration ids survive live-to-history message id changes',()=>{
+ const live={id:'live-4-1',message:{role:'assistant',timestamp:1789546873294,content:[{type:'thinking',thinking:'work'}]}}
+ const history={...live,id:'history-4-1789546873294'}
+ expect(turnDurationId([live])).toBe('timestamp:1789546873294')
+ expect(turnDurationId([history])).toBe(turnDurationId([live]))
 })

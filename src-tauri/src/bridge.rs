@@ -518,6 +518,18 @@ pub async fn delete_session(session_path: String) -> Result<(), String> {
     }).await.map_err(|e| e.to_string())?
 }
 #[tauri::command]
+pub async fn session_turn_durations(session_path: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = home_dir()?.join(".pi/agent/sessions").canonicalize().map_err(|_| "Pi 会话目录不可用".to_string())?;
+        let target = PathBuf::from(&session_path).canonicalize().map_err(|_| "会话文件不存在".to_string())?;
+        if target.extension().and_then(|value| value.to_str()) != Some("jsonl") || !target.starts_with(&root) { return Err("只能读取 Pi 会话目录中的 JSONL 文件".into()); }
+        let code = r#"const fs=require('node:fs');const out={};let turn=null;const flush=()=>{if(turn?.id&&Number.isFinite(turn.start)&&Number.isFinite(turn.end)&&turn.end>=turn.start)out[turn.id]=turn.end-turn.start;turn=null};for(const line of fs.readFileSync(process.argv[1],'utf8').split('\n')){if(!line.trim())continue;let entry;try{entry=JSON.parse(line)}catch{continue}if(entry.type!=='message'||!entry.message)continue;const role=entry.message.role;const at=Date.parse(entry.timestamp);if(role==='user'){flush();turn={start:at,end:null,id:null};continue}if(role!=='assistant'||!turn)continue;if(!turn.id){const stamp=entry.message.timestamp;if(Number.isFinite(stamp))turn.id=`timestamp:${stamp}`;else{const call=Array.isArray(entry.message.content)&&entry.message.content.find(part=>part?.type==='toolCall'&&part.id);if(call)turn.id=`tool:${call.id}`}}if(Number.isFinite(at))turn.end=at}flush();process.stdout.write(JSON.stringify(out));"#;
+        let output = Command::new(executable("node")?).args(["-e", code]).arg(&target).output().map_err(|error| error.to_string())?;
+        if !output.status.success() { return Err("Pi 会话耗时读取失败".into()); }
+        serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())
+    }).await.map_err(|error| error.to_string())?
+}
+#[tauri::command]
 pub async fn open_pi_terminal(cwd: String, session: Option<String>, command: Option<String>) -> Result<(), String> {
     let path = project(&cwd)?;
     let pi = pi_path()?;

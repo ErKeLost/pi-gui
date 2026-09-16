@@ -1,7 +1,7 @@
 .tool-activity-group {
   --tool-ink: var(--foreground);
-  --tool-muted: var(--muted-foreground);
-  --tool-faint: var(--muted-foreground);
+  --tool-muted: color-mix(in oklch, var(--muted-foreground) 76%, transparent);
+  --tool-faint: color-mix(in oklch, var(--muted-foreground) 66%, transparent);
   --tool-line: var(--border);
   --tool-hover: var(--accent);
   margin: 2px 0 5px;
@@ -36,6 +36,7 @@
 }
 
 .tool-activity-group-header svg { width: 16px; height: 16px; flex: none; }
+.tool-activity-group-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-activity-group-header:hover { color: var(--tool-ink); background: var(--tool-hover); }
 .tool-activity-group-header:focus-visible,
 .tool-activity-row:focus-visible { outline: 2px solid var(--tool-muted); outline-offset: 2px; }

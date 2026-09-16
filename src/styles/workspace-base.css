@@ -189,25 +189,32 @@
 
 .ai-message-response :not(pre) > code,
 .markdown-renderer :not(pre) > code {
-  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
   background: var(--muted);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 1px 5px;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
   overflow-wrap: anywhere;
 }
 
 .ai-message-response pre,
-.markdown-renderer pre {
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  margin: 10px 0;
-  font-size: 11px;
+.markdown-renderer pre,
+.ai-message-response .highlighted pre,
+.markdown-renderer .highlighted pre,
+.ai-message-response .shiki,
+.markdown-renderer .shiki {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
   line-height: 1.7;
+  color: var(--muted-foreground);
+  background: var(--muted) !important;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 10px 0 16px;
   white-space: pre;
-  overflow: auto;
+  overflow-x: auto;
   max-width: 100%;
 }
 
@@ -220,44 +227,81 @@
   white-space: pre;
 }
 
+/* Shiki dual-theme tokens: light uses inline colors, dark swaps via CSS vars. */
+.dark .ai-message-response .shiki,
+.dark .ai-message-response .shiki span,
+.dark .markdown-renderer .shiki,
+.dark .markdown-renderer .shiki span,
+html[data-theme="dark"] .ai-message-response .shiki,
+html[data-theme="dark"] .ai-message-response .shiki span,
+html[data-theme="dark"] .markdown-renderer .shiki,
+html[data-theme="dark"] .markdown-renderer .shiki span {
+  color: var(--shiki-dark) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
 .ai-message-response table,
 .markdown-renderer table {
   display: block;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 12px;
-  margin: 10px 0;
+  font-size: 13px;
+  margin: 10px 0 16px;
 }
 
 .ai-message-response th,
 .markdown-renderer th,
 .ai-message-response td,
 .markdown-renderer td {
-  border: 1px solid var(--border);
-  padding: 5px 9px;
-  text-align: left;
+  padding: 8px 12px;
+  text-align: start;
   vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.ai-message-response th[align="center"],
+.markdown-renderer th[align="center"],
+.ai-message-response td[align="center"],
+.markdown-renderer td[align="center"] {
+  text-align: center;
+}
+
+.ai-message-response th[align="right"],
+.markdown-renderer th[align="right"],
+.ai-message-response td[align="right"],
+.markdown-renderer td[align="right"] {
+  text-align: right;
 }
 
 .ai-message-response th,
 .markdown-renderer th {
-  background: var(--muted);
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 
 .ai-message-response blockquote,
 .markdown-renderer blockquote {
   margin: 8px 0 10px;
-  padding: 2px 12px;
-  border-left: 3px solid var(--border);
+  margin-inline: 0;
+  padding-inline-start: 14px;
+  border-inline-start: 2px solid var(--border);
   color: var(--muted-foreground);
 }
 
 .ai-message-response blockquote > p,
 .markdown-renderer blockquote > p {
   margin: 4px 0;
+}
+
+.ai-message-response blockquote blockquote,
+.markdown-renderer blockquote blockquote {
+  margin-top: 8px;
 }
 
 .ai-message-response hr,
@@ -269,7 +313,7 @@
 
 .ai-message-response a,
 .markdown-renderer a {
-  color: var(--primary);
+  color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -278,4 +322,55 @@
 .markdown-renderer img {
   max-width: 100%;
   border-radius: var(--radius-md);
+}
+
+.ai-message-response del,
+.markdown-renderer del,
+.ai-message-response s,
+.markdown-renderer s {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+.ai-message-response ul.contains-task-list,
+.markdown-renderer ul.contains-task-list {
+  list-style: none;
+  padding-left: 4px;
+}
+
+.ai-message-response .task-list-item,
+.markdown-renderer .task-list-item {
+  list-style: none;
+}
+
+.ai-message-response .task-list-item > input,
+.markdown-renderer .task-list-item > input {
+  margin: 0 8px 0 0;
+  accent-color: var(--foreground);
+  vertical-align: middle;
+}
+
+.ai-message-response .mermaid,
+.markdown-renderer .mermaid {
+  margin: 10px 0 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  overflow-x: auto;
+}
+
+.ai-message-response .mermaid svg,
+.markdown-renderer .mermaid svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  color: unset;
+}
+
+.ai-message-response .katex-display,
+.markdown-renderer .katex-display {
+  overflow-x: auto;
+  padding: 4px 0;
 }

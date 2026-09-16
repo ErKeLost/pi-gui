@@ -10,5 +10,5 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   clearScreen: false,
-  server: { port: 5173, strictPort: true, host: '127.0.0.1', watch: { ignored: ['**/src-tauri/**', '**/work/**'] } },
+  server: { port: 5173, strictPort: true, host: '127.0.0.1', watch: { ignored: ['**/src-tauri/**', path.join(import.meta.dirname, 'work', '**')] } },
 })

@@ -55,7 +55,10 @@ function applyEvent(event:Event,project:string){
  }
  patch(project,{transcript:reduceEvent(s.transcript,event),telemetry:observe(s.telemetry,event)})
  if(['compaction_end','message_end','agent_settled'].includes(event.type))void queryClient.invalidateQueries({queryKey:['pi','live-stats',project]})
- if(event.type==='agent_settled')void refresh(project).catch(error=>patch(project,{error:String(error)}))
+ if(event.type==='agent_settled'){
+  if(s.state?.sessionFile)void queryClient.invalidateQueries({queryKey:['pi','turn-durations',s.state.sessionFile]})
+  void refresh(project).catch(error=>patch(project,{error:String(error)}))
+ }
 }
 const burstEvents=new Set(['message_update','tool_execution_update'])
 function flushEvents(project:string){
@@ -77,6 +80,9 @@ export function request<T=unknown>(command:RpcCommand,timeoutMs=30000,project=us
  })
 }
 export function report(error:unknown){useWorkspace.getState().set({error:String(error instanceof Error?error.message:error)})}
+export function persistedSessionFile(project:string):string {
+ try { const value=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')[project]; return typeof value==='string'?value:'' } catch { return '' }
+}
 export async function refresh(project=useWorkspace.getState().cwd){const state=await request<RpcSessionState>({type:'get_state'},30000,project);patch(project,{state});if(state.sessionFile){let files:Record<string,string>={};try{files=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')}catch{};files[project]=state.sessionFile;localStorage.setItem('pi-gui.sessionFiles',JSON.stringify(files))}await queryClient.invalidateQueries({queryKey:['pi','live-stats',project]});return state}
 export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
 export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(!native) throw new Error('文件索引需要桌面应用'); return invoke<string[]>('list_project_files',{cwd:project}) }
@@ -84,6 +90,7 @@ export async function listProviderProfiles():Promise<ProviderProfile[]> { if(!na
 export async function probeProviderModels(provider:string,baseUrl:string,api:string,apiKey?:string,authHeader=true,modelsUrl?:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('probe_provider_models',{provider,baseUrl,api,apiKey:apiKey||null,authHeader,modelsUrl:modelsUrl||null}) }
 export async function saveProvider(input:{provider:string;name?:string;baseUrl:string;modelsUrl?:string;api:string;apiKey?:string;authHeader:boolean}):Promise<{id:string;hasApiKey:boolean}> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<{id:string;hasApiKey:boolean}>('save_provider',{provider:input.provider,name:input.name||null,baseUrl:input.baseUrl,modelsUrl:input.modelsUrl||null,api:input.api,apiKey:input.apiKey||null,authHeader:input.authHeader}) }
 export async function deleteSession(sessionPath:string):Promise<void> { if(!native) throw new Error('删除会话需要桌面应用'); return invoke<void>('delete_session',{sessionPath}) }
+export async function getSessionTurnDurations(sessionPath:string):Promise<Record<string,number>> { if(!native) return {}; return invoke<Record<string,number>>('session_turn_durations',{sessionPath}) }
 export async function syncProviderModels(provider:string):Promise<{provider:string;count:number;previous:number;firstModelId?:string}> { if(!native) throw new Error('同步模型需要桌面应用'); return invoke<{provider:string;count:number;previous:number;firstModelId?:string}>('sync_provider_models',{provider}) }
 export async function persistDefaultModel(provider:string,modelId:string):Promise<{provider:string;id:string}> { if(!native) throw new Error('设置默认模型需要桌面应用'); return invoke<{provider:string;id:string}>('set_default_model',{provider,modelId}) }
 export type ProjectTrustMode = 'ask' | 'always' | 'never'
@@ -110,7 +117,7 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
   const state=await request<RpcSessionState>({type:'get_state'},45000,cwd)
   if(connections.get(cwd)!==token)return
   patch(cwd,{connection:'online',state})
-  let previousFile:string|undefined;try{previousFile=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')[cwd]}catch{}
+  const previousFile=persistedSessionFile(cwd)||undefined
   if(previousFile&&previousFile!==state.sessionFile){try{await request({type:'switch_session',sessionPath:previousFile},45000,cwd)}catch{patch(cwd,{notices:['上次会话无法读取，已打开新会话']})}}
   await loadMessages(cwd)
  }catch(error){connections.delete(cwd);failPending(cwd,'连接失败');await invoke('pi_disconnect',{project:cwd}).catch(()=>{});patch(cwd,{connection:'offline'});throw error}

@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from "react";
 import { FileIcon, Icon } from "../Icon";
 import { Button } from "@/components/ui/button";
 import { summarizeToolCalls, toolKind, type ToolKind } from "../../lib/tool-activity";
+import { StableShimmer } from "./stable-shimmer";
 import "./tool-call.css";
 
 type JsonRecord = Record<string, unknown>;
@@ -63,9 +64,10 @@ function renderedRequest(request: string) {
 export function ToolActivityGroup({ toolNames, running, children }: { toolNames: string[]; running: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
+  const summary = summarizeToolCalls(toolNames) || "工具调用";
   return <section className="tool-activity-group" data-open={open}>
     <Button type="button" variant="ghost" className="tool-activity-group-header" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(value => !value)}>
-      <Icon name="code" aria-hidden="true" /><span>{summarizeToolCalls(toolNames) || "工具调用"}</span>{running && <span className="tool-activity-group-status">运行中</span>}<Icon name="caret-right" className="tool-activity-group-chevron" aria-hidden="true" />
+      <Icon name="code" aria-hidden="true" />{running ? <StableShimmer text={summary} className="tool-activity-group-summary" /> : <span className="tool-activity-group-summary">{summary}</span>}<Icon name="caret-right" className="tool-activity-group-chevron" aria-hidden="true" />
     </Button>
     <div id={listId} className="tool-activity-list" aria-hidden={!open} inert={!open}><div className="tool-activity-list-inner">{children}</div></div>
   </section>;
