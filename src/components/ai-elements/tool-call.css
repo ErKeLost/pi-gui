@@ -49,6 +49,7 @@
   grid-template-rows: 0fr;
   margin: 0 0 0 7px;
   padding-left: 16px;
+  overflow: hidden;
   opacity: 0;
   transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease-out;
 }
@@ -63,8 +64,9 @@
   background: var(--tool-line);
 }
 
-.tool-activity-group[data-open="true"] .tool-activity-list { grid-template-rows: 1fr; opacity: 1; }
-.tool-activity-list > * { min-height: 0; overflow: hidden; }
+.tool-activity-group[data-open="true"] .tool-activity-list { grid-template-rows: 1fr; overflow: visible; opacity: 1; }
+.tool-activity-list-inner { min-height: 0; overflow: hidden; }
+.tool-activity-group[data-open="true"] .tool-activity-list-inner { overflow: visible; }
 
 .tool-activity-group .ai-tool-call {
   min-width: 0;

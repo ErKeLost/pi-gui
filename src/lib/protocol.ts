@@ -9,6 +9,28 @@ export type Tool = { name: string; args?: Record<string, Json>; result?: unknown
 export type Event = { type: string; message?: PiMessage; toolCallId?: string; toolName?: string; args?: Record<string, Json>; result?: unknown; partialResult?: unknown; isError?: boolean; details?: unknown; errorMessage?: string; assistantMessageEvent?: { type: string; contentIndex: number; delta?: string; content?: string; id?: string; toolName?: string; toolCall?: Part }; steering?: string[]; followUp?: string[]; [key: string]: unknown }
 export type Transcript = { messages: DisplayMessage[]; active: number; running: boolean; compacting: boolean; phase: string; tools: Record<string, Tool>; error: string | null; queue: { steering: string[]; followUp: string[] }; bash: { id?: string; command?: string; output: string; running: boolean } | null }
 export const emptyTranscript = (): Transcript => ({ messages: [], active: -1, running: false, compacting: false, phase: '就绪', tools: {}, error: null, queue: { steering: [], followUp: [] }, bash: null })
+export function formatTranscriptError(raw: string): string {
+  const text = raw.trim()
+  if (!text) return '会话异常'
+  const start = text.indexOf('{')
+  if (start >= 0) {
+    try {
+      const parsed = JSON.parse(text.slice(start)) as { message?: unknown; error?: { message?: unknown; type?: unknown } | string }
+      if (typeof parsed.error === 'string' && parsed.error.trim()) return parsed.error.trim()
+      if (parsed.error && typeof parsed.error === 'object') {
+        if (typeof parsed.error.message === 'string' && parsed.error.message.trim()) return parsed.error.message.trim()
+      }
+      if (typeof parsed.message === 'string' && parsed.message.trim()) return parsed.message.trim()
+      const kind = parsed.error && typeof parsed.error === 'object' && typeof parsed.error.type === 'string' ? parsed.error.type : ''
+      const prefix = text.slice(0, start).trim()
+      const fallback = [prefix, kind].filter(Boolean).join(' · ')
+      if (fallback) return fallback
+    } catch {
+      /* keep the original provider string */
+    }
+  }
+  return text
+}
 export function normalizeMessage(message: PiMessage): PiMessage {
   if(message.content !== undefined)return message
   if(message.role==='bashExecution')return {...message,content:`Bash: ${message.command ?? ''}\n\n${message.output ?? ''}`}

@@ -12,7 +12,7 @@
 .main-content,.chat-host{min-width:0;min-height:0;display:flex;flex:1;flex-direction:column;overflow:hidden}
 .chat-root.tessera-thread-root{display:grid!important;grid-template-rows:auto minmax(0,1fr) auto!important;height:100%!important;min-height:0;min-width:0;overflow:hidden;background:var(--background)!important}
 .chat-root .tessera-conversation{grid-row:2;min-width:0;min-height:0;height:auto!important;overflow-y:auto;overflow-x:hidden}
-.chat-root .tessera-conversation>.ai-conversation-content{width:min(920px,calc(100% - 48px));min-height:100%;margin:0 auto;padding:42px 0 28px}
+.chat-root .tessera-conversation>.ai-conversation-content{width:min(920px,calc(100% - 48px));min-height:0;margin:0 auto;padding:42px 0 28px}
 .composer-container.tessera-composer-dock{grid-row:3;display:block!important;position:relative!important;width:100%!important;min-height:0;flex:none!important;margin:0!important;padding:12px 0 calc(20px + env(safe-area-inset-bottom))!important;background:var(--background)!important;z-index:5}
 .tessera-composer-form{width:min(920px,calc(100% - 48px))!important;min-width:0;margin:0 auto!important;position:relative!important;left:0!important}
 .studio-composer-beam{width:100%;border-radius: var(--radius-3xl)}
@@ -230,7 +230,7 @@ body,
 .chat-root .tessera-conversation > .ai-conversation-content {
   width: var(--chat-content-width) !important;
   min-width: 0 !important;
-  min-height: 100% !important;
+  min-height: 0 !important;
   height: max-content !important;
   flex: 0 0 auto !important;
   margin-inline: auto !important;
@@ -2024,10 +2024,26 @@ body,
    Refined Sidebar Styles (Modern, Clean & Balanced)
    ======================================================== */
 .sidebar {
-  padding: 16px 12px 14px !important;
+  position: relative;
+  padding: 52px 12px 14px !important;
   background: var(--sidebar) !important;
   border-right: 1px solid var(--sidebar-border) !important;
   gap: 2px;
+}
+.sidebar-drag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 52px;
+}
+.window-drag-strip {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 40;
+  height: 12px;
 }
 
 .sidebar .brand {
@@ -2342,10 +2358,74 @@ body,
   border: 1px solid var(--sidebar-border) !important;
 }
 
-.split-theme-fallback{position:fixed;inset:0;z-index:99999;pointer-events:none;background:var(--background);animation:split-theme-reveal 220ms ease-out forwards}
-.split-theme-fallback.horizontal{clip-path:inset(0 50% 0 50%)}
-.split-theme-fallback.vertical{clip-path:inset(50% 0 50% 0)}
-@keyframes split-theme-reveal{to{clip-path:inset(0)}}
+.transcript-error {
+  width: 100%;
+  max-width: min(100%, 68ch);
+  margin: 6px 0 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--destructive) 32%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--destructive) 7%, var(--background));
+  color: var(--foreground);
+}
+.transcript-error-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in oklch, var(--destructive) 22%, var(--border));
+  color: var(--destructive);
+  font-size: 12px;
+  font-weight: 550;
+}
+.transcript-error-heading svg {
+  width: 15px;
+  height: 15px;
+  color: var(--destructive) !important;
+}
+.transcript-error p {
+  margin: 0;
+  padding: 12px;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.transcript-compaction {
+  width: 100%;
+  max-width: min(100%, 68ch);
+  margin: 6px 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--foreground);
+}
+.transcript-compaction-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 550;
+}
+.transcript-compaction-heading svg {
+  width: 15px;
+  height: 15px;
+}
+.transcript-compaction pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  color: var(--muted-foreground);
+  font: 12px/1.7 inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Final workspace proportions: keep the conversation rail at 70% of the
    available middle pane while leaving the sidebar and inspector intact. */

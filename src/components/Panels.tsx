@@ -11,7 +11,8 @@ import { request, report, refresh, changeSession, connect, disconnect, native, l
 import type { Session, UiRequest } from '../lib/protocol'
 import { Icon } from './Icon'
 import { ProviderSettings } from './ProviderSettings'
-import { useSplitTheme, type ThemePreference } from './SplitThemeProvider'
+import { useTheme } from 'next-themes'
+import { ModeToggle } from './mode-toggle'
 import { open } from '@tauri-apps/plugin-dialog'
 import { gooeyToast } from 'goey-toast'
 const format=(value:unknown)=>typeof value==='string'?value:JSON.stringify(value,null,2)
@@ -74,11 +75,13 @@ function Settings(){
  let tools:{tools:{name:string;description:string}[];active:string[]}={tools:[],active:[]};try{if(toolStatus)tools=JSON.parse(toolStatus)}catch{/* Older extension output remains in diagnostics. */}
  const stats=useQuery({queryKey:['pi','stats',useWorkspace(s=>s.cwd)],queryFn:()=>request<{tokens:{total:number};cost:number;contextUsage?:{percent:number|null;contextWindow:number}}>({type:'get_session_stats'}),enabled:status==='online'})
  const activeTools=new Set(tools.active)
- const {theme, preference, setPreference, triggerTransition, isAnimating}=useSplitTheme()
+ const {theme, setTheme, resolvedTheme}=useTheme()
+ const themePreference=theme??'system'
+ const themeLabel=themePreference==='system'?'跟随系统':resolvedTheme==='dark'?'深色主题':'浅色主题'
  async function reconnect(){setBusy(true);try{await connect(path);gooeyToast.success('项目已连接',{description:path,showTimestamp:false})}catch(e){report(e)}finally{setBusy(false)}}
  async function changeTrustMode(mode:ProjectTrustMode){setTrustBusy(true);try{await setProjectTrustMode(mode);setTrustMode(mode);if(status==='online'){await disconnect();await connect(cwd)}gooeyToast.success('项目权限已更新',{showTimestamp:false})}catch(e){report(e)}finally{setTrustBusy(false)}}
  return <><div className="panel-heading"><div><h1>工作区设置</h1><p>连接、工具与当前会话的运行方式。</p></div></div>
-  <section className="settings-section theme-settings"><h2>主题</h2><div className="setting-row"><div><strong>{preference==='system'?'跟随系统':theme==='dark'?'深色主题':'浅色主题'}</strong><p>默认跟随系统设置，也可以在这里固定使用浅色或深色。</p></div><div className="theme-settings-controls"><Select aria-label="主题" disabled={isAnimating} value={preference} onChange={event=>setPreference(event.target.value as ThemePreference)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select><Button className="secondary" disabled={isAnimating} onClick={()=>triggerTransition('horizontal','in-to-out')}>{theme==='dark'?'切换到浅色':'切换到深色'}</Button></div></div></section>
+  <section className="settings-section theme-settings"><h2>主题</h2><div className="setting-row"><div><strong>{themeLabel}</strong><p>默认跟随系统设置，也可以在这里固定使用浅色或深色。</p></div><div className="theme-settings-controls"><Select aria-label="主题" value={themePreference} onChange={event=>setTheme(event.target.value)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select><ModeToggle/></div></div></section>
   <ProviderSettings/>
   <section className="settings-section"><h2>项目目录</h2><div className="input-row"><Input value={path} onChange={e=>setPath(e.target.value)} aria-label="工作目录"/><Button className="primary" disabled={busy||running||!native} onClick={()=>void reconnect()}>{busy?'连接中…':'连接此目录'}</Button></div><p className="field-note">Pi 以此目录为工作区，沿用你现有的模型与凭据配置。</p><Button className="secondary" disabled={status!=='online'} onClick={()=>void disconnect().catch(report)}>断开连接</Button></section>
   <section className="settings-section"><h2>项目权限</h2><div className="setting-row"><div><strong>项目资源信任</strong><p>Pi 没有内置沙箱或逐工具授权弹窗，工具会继承当前用户权限。此设置只控制是否加载项目本地的设置、扩展、技能和主题。</p></div><Select aria-label="项目资源信任" disabled={trustBusy||!native} value={trustMode} onChange={event=>void changeTrustMode(event.target.value as ProjectTrustMode)}><option value="always">完全访问项目资源</option><option value="ask">每次询问</option><option value="never">禁止项目资源</option></Select></div><p className="field-note">切换后会重启当前 Pi 连接；“完全访问”不等于绕过 macOS 文件权限。</p></section>

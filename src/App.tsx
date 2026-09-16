@@ -55,6 +55,7 @@ export default function App(){
    };window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler)
  },[online,running])
  return <main className="app-shell">
+   <div className="window-drag-strip" data-tauri-drag-region />
    <ResizablePanelGroup
     key="workspace-layout-v4"
     id="workspace-layout"
@@ -62,6 +63,7 @@ export default function App(){
    >
    <ResizablePanel id="sidebar" defaultSize="240px" minSize="200px" maxSize="280px" groupResizeBehavior="preserve-pixel-size">
    <aside className="sidebar">
+    <div className="sidebar-drag" data-tauri-drag-region />
     <div className="brand"><Icon name="sparkle" className="size-5 text-foreground" /><strong>Workspace</strong></div>
     <ProjectPicker/>
     <Button className="new-session" disabled={!online||running} onClick={()=>void changeSession({type:'new_session'}).catch(report)}><Icon name="plus"/>新建会话<kbd>⌘ N</kbd></Button>

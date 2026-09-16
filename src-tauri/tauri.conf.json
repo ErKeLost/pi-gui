@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Pi GUI",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "identifier": "ai.pi.gui",
   "build": {
     "frontendDist": "../dist",
@@ -18,7 +18,13 @@
         "resizable": true,
         "fullscreen": false,
         "minWidth": 900,
-        "minHeight": 640
+        "minHeight": 640,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 18
+        }
       }
     ],
     "security": {

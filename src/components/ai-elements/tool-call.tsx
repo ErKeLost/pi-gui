@@ -67,7 +67,7 @@ export function ToolActivityGroup({ toolNames, running, children }: { toolNames:
     <Button type="button" variant="ghost" className="tool-activity-group-header" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(value => !value)}>
       <Icon name="code" aria-hidden="true" /><span>{summarizeToolCalls(toolNames) || "工具调用"}</span>{running && <span className="tool-activity-group-status">运行中</span>}<Icon name="caret-right" className="tool-activity-group-chevron" aria-hidden="true" />
     </Button>
-    <div id={listId} className="tool-activity-list" aria-hidden={!open} inert={!open}>{children}</div>
+    <div id={listId} className="tool-activity-list" aria-hidden={!open} inert={!open}><div className="tool-activity-list-inner">{children}</div></div>
   </section>;
 }
 

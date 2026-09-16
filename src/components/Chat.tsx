@@ -9,7 +9,7 @@ import {
   report,
   stop,
 } from "../lib/rpc";
-import type { Model, Part, DisplayMessage, Tool, PiMessage } from "../lib/protocol";
+import { formatTranscriptError, type Model, type Part, type DisplayMessage, type Tool, type PiMessage } from "../lib/protocol";
 import { Icon } from "./Icon";
 import { Button, Skeleton } from "./UI";
 import { Thinking } from "./RichMessage";
@@ -79,12 +79,16 @@ function PartView({
   running: boolean;
   thinking: boolean;
 }) {
-  if (part.type === "text")
+  if (part.type === "text") {
+    if (!part.text) return null;
     return (
-      <MessageResponse animated={running}>{part.text ?? ""}</MessageResponse>
+      <MessageResponse animated={running}>{part.text}</MessageResponse>
     );
-  if (part.type === "thinking")
+  }
+  if (part.type === "thinking") {
+    if (!part.thinking?.trim() && !(thinking && !part.thinkingComplete)) return null;
     return <Thinking text={part.thinking ?? ""} running={thinking && !part.thinkingComplete} />;
+  }
   if (part.type === "image")
     return (
       <img
@@ -117,6 +121,17 @@ function PartView({
 function BashExecutionView({message}:{message:PiMessage}) {
   return <div className="bash-execution-card"><div className="bash-execution-heading"><span>Bash</span><code>{message.command ?? ""}</code><small>{message.cancelled ? "已取消" : message.exitCode === 0 ? "完成" : message.exitCode == null ? "运行中" : `退出 ${message.exitCode}`}</small></div><pre>{message.output ?? ""}</pre>{message.truncated && message.fullOutputPath && <small className="metric-note">完整输出：{message.fullOutputPath}</small>}</div>
 }
+function ErrorOutput({ error }: { error: string }) {
+  return (
+    <div className="transcript-error" role="alert">
+      <div className="transcript-error-heading">
+        <Icon name="warning-circle" />
+        <span>会话异常</span>
+      </div>
+      <p>{formatTranscriptError(error)}</p>
+    </div>
+  );
+}
 const TranscriptMessage = memo(
   function TranscriptMessage({
     item,
@@ -131,6 +146,10 @@ const TranscriptMessage = memo(
   }) {
     const role = item.message.role === "user" ? "user" : "assistant";
     if (item.message.role === "bashExecution") return <m.div className="transcript-message assistant"><BashExecutionView message={item.message} /></m.div>;
+    if (item.message.role === "compactionSummary") {
+      const summary = item.message.summary || (typeof item.message.content === "string" ? item.message.content : "");
+      return <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}><div className="transcript-compaction"><div className="transcript-compaction-heading"><Icon name="arrows-clockwise" /><span>上下文已压缩</span></div>{summary.trim() ? <pre>{summary.trim()}</pre> : null}</div></m.div>;
+    }
     const content = Array.isArray(item.message.content)
       ? item.message.content
       : [{ type: "text", text: item.message.content ?? "" }];
@@ -138,6 +157,8 @@ const TranscriptMessage = memo(
     for (let index = 0; index < content.length; index += 1) {
       const part = content[index] as Part;
       if (part.type !== "toolCall") {
+        if (part.type === "text" && !part.text) continue;
+        if (part.type === "thinking" && !part.thinking?.trim() && !(thinking && !part.thinkingComplete)) continue;
         contentNodes.push(
           <PartView
             key={item.id + "-" + index}
@@ -173,10 +194,16 @@ const TranscriptMessage = memo(
         </ToolActivityGroup>,
       );
     }
+    if (item.message.errorMessage) {
+      contentNodes.push(
+        <ErrorOutput key={item.id + "-error"} error={item.message.errorMessage} />,
+      );
+    }
+    if (contentNodes.length === 0) return null;
     return (
       <m.div
         className={`transcript-message ${role}`}
-        initial={{ opacity: 0, y: 6 }}
+        initial={streaming ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.16 }}
       >
@@ -265,7 +292,8 @@ export function Chat() {
           part.type === "toolCall" ||
           part.type === "image" ||
           Boolean(part.text?.trim()) ||
-          Boolean(part.thinking?.trim()),
+          Boolean(part.thinking?.trim()) ||
+          (transcript.running && part.type === "thinking"),
         )
       : typeof activeMessage?.content === "string" && activeMessage.content.trim(),
   ) || Object.values(transcript.tools).some(tool => tool.running);
@@ -280,6 +308,11 @@ export function Chat() {
   const retrying = retry?.status === "waiting" || retry?.status === "running";
   const retryDetail = retrying && retry
     ? `第 ${Number.isFinite(retry.attempt) ? retry.attempt : "?"}${retry.maxAttempts && Number.isFinite(retry.maxAttempts) ? ` / ${retry.maxAttempts}` : ""} 次${retry.delayMs && Number.isFinite(retry.delayMs) ? ` · 等待 ${retry.delayMs} ms` : ""} · ${retry.error || "原因未提供"}`
+    : undefined;
+  const compacting = transcript.compacting || telemetry.compaction?.status === "running";
+  const compactionReason = telemetry.compaction?.reason;
+  const compactionDetail = compacting
+    ? ({ manual: "手动", threshold: "达到阈值", overflow: "上下文溢出" }[compactionReason ?? ""] ?? compactionReason)
     : undefined;
   useEffect(() => {
     const timer = setTimeout(
@@ -353,15 +386,20 @@ export function Chat() {
               />
             ))
           )}
-          {transcript.running && !activeHasOutput && (
-            <LoadingState className="chat-loading-state" label={transcript.phase || "正在处理"} detail={retryDetail} />
+          {transcript.error && !transcript.messages.some(item => item.message.errorMessage === transcript.error) && (
+            <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>
+              <ErrorOutput error={transcript.error} />
+            </m.div>
+          )}
+          {(compacting || (transcript.running && !activeHasOutput)) && (
+            <LoadingState className="chat-loading-state" label={compacting ? "正在压缩上下文" : (transcript.phase || "正在处理")} detail={compacting ? compactionDetail : retryDetail} />
           )}
         </ConversationContent>
         {!atBottom && <ConversationScrollButton onClick={scrollToBottom} />}
       </Conversation>
       <div className="composer-container tessera-composer-dock">
         <div className="tessera-composer-form">
-          <Beam className="studio-composer-beam" borderRadius={24} active={transcript.running}>
+          <Beam className="studio-composer-beam" borderRadius={24} active={transcript.running || compacting}>
                 <PromptInput
                   onSubmit={(message) => void submit(message)}
                   className="composer studio-composer"
