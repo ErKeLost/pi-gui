@@ -1,6 +1,6 @@
 [package]
 name = "pi-gui"
-version = "0.1.14"
+version = "0.1.15"
 description = "A local desktop workspace for Pi"
 authors = ["you"]
 license = ""

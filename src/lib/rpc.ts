@@ -4,7 +4,7 @@ import {QueryClient} from '@tanstack/react-query'
 import type {RpcCommand,RpcResponse} from '@earendil-works/pi-coding-agent'
 import {useWorkspace,type Workspace} from './store'
 import {emptyTranscript,hydrate,reduceEvent,type Event,type PiMessage,type RpcSessionState,type UiRequest} from './protocol'
-export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000}}})
+export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000,gcTime:120000}}})
 export const native=isTauri()
 export type ProviderModel={
   id:string
@@ -115,6 +115,14 @@ export async function connect(cwd:string){
  }catch(error){connections.delete(cwd);failPending(cwd,'连接失败');await invoke('pi_disconnect',{project:cwd}).catch(()=>{});patch(cwd,{connection:'offline'});throw error}
 }
 export async function disconnect(){const project=useWorkspace.getState().cwd,s=current(project);if(s.transcript.running){await request({type:'clear_queue'},30000,project);await request({type:'abort'},60000,project)}clearEvents(project);connections.delete(project);failPending(project,'项目已断开');await invoke('pi_disconnect',{project});patch(project,{connection:'offline',state:null,transcript:{...s.transcript,running:false}})}
+export async function forgetProject(project:string){
+ clearEvents(project);connections.delete(project);failPending(project,'项目已移除');snapshots.delete(project)
+ queryClient.removeQueries({predicate:query=>query.queryKey.includes(project)})
+ await invoke('pi_disconnect',{project})
+ let files:Record<string,string>={};try{files=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')}catch{}
+ delete files[project];localStorage.setItem('pi-gui.sessionFiles',JSON.stringify(files))
+ if(useWorkspace.getState().cwd===project)useWorkspace.getState().set({...fresh(),cwd:''})
+}
 export async function stop(){const project=useWorkspace.getState().cwd,cleared=await request<{steering:string[];followUp:string[]}>({type:'clear_queue'},30000,project);await request({type:'abort'},60000,project);patch(project,{draft:[current(project).draft,...cleared.steering,...cleared.followUp].filter(Boolean).join('\n')});await refresh(project)}
 export async function changeSession(command:RpcCommand){const project=useWorkspace.getState().cwd,result=await request<{cancelled?:boolean;text?:string}>(command,60000,project);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(project,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{}});if(useWorkspace.getState().cwd===project)useWorkspace.getState().set({panel:'chat'});await loadMessages(project);await queryClient.invalidateQueries({queryKey:['pi','sessions',project]})}
 export async function answerDialog(request:UiRequest,answer:{value?:string;confirmed?:boolean;cancelled?:boolean}){const project=useWorkspace.getState().cwd;await invoke('pi_send',{project,command:{type:'extension_ui_response',id:request.id,...answer}});patch(project,{dialogs:current(project).dialogs.filter(item=>item.id!==request.id)})}

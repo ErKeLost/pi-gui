@@ -1,10 +1,20 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import { ThemeProvider } from "./theme-provider";
 import { PromptProvider } from "./UI";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastHost } from "./ToastHost";
 import { UpdateChecker } from "./UpdateChecker";
+
+function PageVisibilitySync() {
+  useEffect(() => {
+    const update = () => { document.documentElement.dataset.pageVisible = String(!document.hidden); };
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+  return null;
+}
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -20,6 +30,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <MotionConfig reducedMotion="user">
           <TooltipProvider>
             <PromptProvider>
+              <PageVisibilitySync />
               <UpdateChecker />
               <ToastHost />
               {children}

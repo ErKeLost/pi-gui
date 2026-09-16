@@ -2,7 +2,12 @@ mod bridge;
 use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    let builder = builder.on_web_content_process_terminate(|webview| {
+        let _ = webview.reload();
+    });
+    builder
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             #[cfg(desktop)]

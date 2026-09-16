@@ -3,7 +3,7 @@ import {Popover,PopoverContent,PopoverTrigger} from '@/components/ui/popover'
 import {open} from '@tauri-apps/plugin-dialog'
 import {useProjects,type Project} from '../lib/projects'
 import {useWorkspace} from '../lib/store'
-import {connect,disconnect,native,report} from '../lib/rpc'
+import {connect,forgetProject,native,report} from '../lib/rpc'
 import {Button,Input,Modal} from './UI'
 import {Icon} from './Icon'
 import {gooeyToast} from 'goey-toast'
@@ -18,8 +18,8 @@ export function ProjectPicker({compact=false}:{compact?:boolean}){
   const fallback=projects.find(project=>project.path!==target.path)
   setBusy(true)
   try{
+   await forgetProject(target.path)
    if(target.path===cwd){
-    await disconnect()
     if(fallback)await connect(fallback.path)
     else {localStorage.removeItem('pi-gui.cwd');useWorkspace.getState().set({cwd:'',panel:'chat'})}
    }

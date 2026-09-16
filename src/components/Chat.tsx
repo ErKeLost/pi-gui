@@ -41,6 +41,11 @@ const composerCache = new Map<
   string,
   { text: string; attachments: Attachment[] }
 >();
+function cacheComposer(project:string,value:{text:string;attachments:Attachment[]}){
+  composerCache.delete(project);
+  composerCache.set(project,value);
+  while(composerCache.size>4)composerCache.delete(composerCache.keys().next().value!);
+}
 function composerModelLabel(id: string, fallback?: string) {
   return modelLabel(id, fallback)
     .replace(/^gpt-/i, "")
@@ -317,7 +322,7 @@ export function Chat() {
   useEffect(() => {
     const timer = setTimeout(
       () =>
-        composerCache.set(project, {
+        cacheComposer(project, {
           text: composerCache.get(project)?.text ?? "",
           attachments,
         }),
@@ -325,7 +330,7 @@ export function Chat() {
     );
     return () => clearTimeout(timer);
   }, [attachments, project]);
-  useEffect(() => { composerCache.set(project, {text: draft, attachments: composerCache.get(project)?.attachments ?? attachments}); }, [draft, attachments, project]);
+  useEffect(() => { cacheComposer(project, {text: draft, attachments: composerCache.get(project)?.attachments ?? attachments}); }, [draft, attachments, project]);
   async function submit(message: PromptInputMessage) {
     const streamingBehavior = deliveryOverride.current ?? "steer";
     deliveryOverride.current = null;

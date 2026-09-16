@@ -49,6 +49,10 @@
   --scrollbar-thumb-hover: color-mix(in oklch, var(--muted-foreground) 58%, transparent);
 }
 
+html[data-page-visible="false"] * {
+  animation-play-state: paused !important;
+}
+
 .dark,
 html[data-theme="dark"] {
   color-scheme: dark;
