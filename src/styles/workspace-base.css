@@ -143,7 +143,7 @@
 .message-proximity-sidebar {
   position: absolute;
   top: 0;
-  right: -132px;
+  left: -132px;
   bottom: 0;
   z-index: 2;
   width: 120px;
@@ -153,7 +153,14 @@
   margin-inline: 0;
 }
 
-@media (max-width: 1299px) {
+@media (max-width: 1099px) {
+  .message-proximity-sidebar {
+    left: -92px;
+    width: 82px;
+  }
+}
+
+@media (max-width: 899px) {
   .message-proximity-sidebar { display: none; }
 }
 
@@ -177,8 +184,8 @@
 }
 
 .message-response-copy[data-slot="button"] {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   background: transparent;
   color: inherit;
@@ -190,8 +197,8 @@
 }
 
 .message-response-copy[data-slot="button"] svg {
-  width: 14px;
-  height: 14px;
+  width: 17px;
+  height: 17px;
 }
 
 .ai-message-response .streamdown-animated > :first-child,

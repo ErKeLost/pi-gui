@@ -45,6 +45,7 @@ type DashProps = {
 type ProximitySidebarProps = {
   activeOffset?: number
   className?: string
+  onSelectSection?: (id: string) => void
   sections: ProximitySection[]
   side?: Side
 }
@@ -184,6 +185,7 @@ const Dash = ({
 const ProximitySidebar = ({
   activeOffset = 0.4,
   className = "",
+  onSelectSection,
   side = "left",
   sections,
 }: ProximitySidebarProps) => {
@@ -254,19 +256,21 @@ const ProximitySidebar = ({
 
   const selectSection = useCallback(
     (id: string) => {
-      const element = getSectionElement(id)
-      if (!element) return
-
-      element.scrollIntoView({
-        behavior: shouldReduceMotion ? "auto" : "smooth",
-        block: "start",
-      })
-
-      window.history.replaceState(null, "", `#${id}`)
+      onSelectSection?.(id)
       setActiveId(id)
       pulseDash(id)
+
+      window.requestAnimationFrame(() => {
+        const element = getSectionElement(id)
+        if (!element) return
+        element.scrollIntoView({
+          behavior: shouldReduceMotion ? "auto" : "smooth",
+          block: "start",
+        })
+        window.history.replaceState(null, "", `#${id}`)
+      })
     },
-    [pulseDash, shouldReduceMotion]
+    [onSelectSection, pulseDash, shouldReduceMotion]
   )
 
   useEffect(() => () => clearPendingReset(), [clearPendingReset])

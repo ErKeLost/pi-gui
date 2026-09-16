@@ -956,9 +956,9 @@ body,
 
 .chat-root .transcript-message.user .ai-message-content {
   padding: 9px 13px !important;
-  border: 1px solid color-mix(in oklch, var(--border) 58%, transparent) !important;
+  border: 1px solid color-mix(in oklch, var(--border) 38%, transparent) !important;
   border-radius: var(--radius-xl) !important;
-  background: color-mix(in oklch, var(--secondary) 56%, var(--background)) !important;
+  background: color-mix(in oklch, var(--secondary) 32%, var(--background)) !important;
   color: var(--foreground) !important;
 }
 
@@ -3154,5 +3154,105 @@ body,
   }
   .provider-actions > div:last-child {
     justify-content: flex-start;
+  }
+}
+
+/* Persistent Codex-style titlebar. Only the navigation panel below it
+   collapses; the titlebar and its sidebar toggle always remain available. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+}
+.app-header {
+  position: relative;
+  z-index: 45;
+  display: flex;
+  flex: 0 0 52px;
+  width: 100%;
+  min-width: 0;
+  height: 52px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px 0 76px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  user-select: none;
+}
+.titlebar-navigation {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+.app-shell [data-slot="button"].titlebar-button {
+  display: inline-grid;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.app-shell [data-slot="button"].titlebar-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.app-shell [data-slot="button"].titlebar-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.app-shell [data-slot="button"].titlebar-button:disabled {
+  opacity: 0.34;
+}
+.titlebar-button svg {
+  width: 16px;
+  height: 16px;
+}
+.titlebar-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 8px;
+  background: var(--border);
+}
+.app-header-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-header-more {
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+.app-shell > [data-slot="resizable-panel-group"] {
+  flex: 1 1 0 !important;
+  height: auto !important;
+}
+.sidebar {
+  padding: 12px 12px 14px !important;
+}
+.settings-root {
+  flex: 1 1 0;
+  height: auto;
+}
+.settings-sidebar {
+  padding-top: 18px;
+}
+@media (max-width: 720px) {
+  .app-header {
+    padding-right: 8px;
+  }
+  .titlebar-navigation {
+    gap: 0;
+  }
+  .titlebar-divider {
+    margin-inline: 5px;
   }
 }

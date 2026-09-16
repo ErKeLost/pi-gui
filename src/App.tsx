@@ -24,6 +24,7 @@ export default function App(){
  const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector)
  const online=connection==='online'
  const [deletingSession,setDeletingSession]=useState<Session|null>(null)
+ const [sidebarOpen,setSidebarOpen]=useState(()=>localStorage.getItem('pi-gui.sidebarOpen')!=='false')
  const discovery=useQuery({queryKey:['discovery'],queryFn:()=>invoke<{pi:string;node:string;version:string;cwd:string;home:string}>('discover'),enabled:native})
  const sessions=useQuery({queryKey:['pi','sessions',cwd],queryFn:()=>invoke<Session[]>('list_sessions',{cwd}),enabled:native&&Boolean(cwd)})
  async function removeRecentSession(){
@@ -63,18 +64,31 @@ export default function App(){
     if(!(event.metaKey||event.ctrlKey))return
     if(event.key==='n'){event.preventDefault();if(online&&!running)void changeSession({type:'new_session'}).catch(report)}
     if(event.key===','){event.preventDefault();useWorkspace.getState().set({panel:'settings',settingsPage:'general'})}
+    if(event.key.toLowerCase()==='b'){event.preventDefault();setSidebarOpen(value=>!value)}
    };window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler)
  },[online,running])
- return <main className="app-shell">
-   <div className="window-drag-strip" data-tauri-drag-region />
+ useEffect(()=>{localStorage.setItem('pi-gui.sidebarOpen',String(sidebarOpen))},[sidebarOpen])
+ const currentSession=sessions.data?.find(session=>session.path===state?.sessionFile)
+ const headerTitle=panel==='chat'?(currentSession?.name||currentSession?.firstMessage||'新会话'):panel==='settings'?'设置':navigation.find(item=>item.id===panel)?.label||'Pi GUI'
+ const titlebarNavigation=<div className="titlebar-navigation">
+  <Button className="titlebar-button" title={sidebarOpen?'收起侧栏':'展开侧栏'} onClick={()=>setSidebarOpen(value=>!value)}><Icon name="sidebar-simple"/></Button>
+  <Button className="titlebar-button" title="后退" disabled><Icon name="arrow-left"/></Button>
+  <Button className="titlebar-button" title="前进" disabled><Icon name="arrow-right"/></Button>
+ </div>
+ return <main className={`app-shell ${sidebarOpen?'':'sidebar-collapsed'}`}>
+   <header className="app-header" data-tauri-drag-region>
+    {titlebarNavigation}
+    <span className="titlebar-divider" aria-hidden />
+    <strong className="app-header-title">{headerTitle}</strong>
+    {panel==='chat'&&<Button className="titlebar-button app-header-more" title="会话管理" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'sessions'})}><Icon name="dots-three"/></Button>}
+   </header>
    {panel==='settings'?<section className="settings-root"><MetricsSync/><Panel/></section>:<ResizablePanelGroup
     key="workspace-layout-v4"
     id="workspace-layout"
     orientation="horizontal"
    >
-   <ResizablePanel id="sidebar" defaultSize="240px" minSize="200px" maxSize="280px" groupResizeBehavior="preserve-pixel-size">
+   {sidebarOpen&&<><ResizablePanel id="sidebar" defaultSize="240px" minSize="200px" maxSize="280px" groupResizeBehavior="preserve-pixel-size">
    <aside className="sidebar">
-    <div className="sidebar-drag" data-tauri-drag-region />
     <ProjectPicker/>
     <Button variant="outline" className="new-session" disabled={!online||running} onClick={()=>void changeSession({type:'new_session'}).catch(report)}><Icon name="plus"/>新建会话<kbd>⌘ N</kbd></Button>
     <nav aria-label="主导航">{navigation.map(item=><Button key={item.id} className={`nav-item ${panel===item.id?'selected':''}`} onClick={()=>useWorkspace.getState().set({panel:item.id})}><Icon name={item.icon}/><span>{item.label}</span>{item.id==='commands'&&<Icon name="arrow-up-right"/>}</Button>)}</nav>
@@ -83,7 +97,7 @@ export default function App(){
     <div className="sidebar-bottom"><Button className="nav-item" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'general'})}><Icon name="gear-six"/>设置<kbd>⌘ ,</kbd></Button></div>
    </aside>
    </ResizablePanel>
-   <ResizableHandle />
+   <ResizableHandle /></>}
    <ResizablePanel id="workspace" minSize="420px" groupResizeBehavior="preserve-relative-size">
    <section className="workspace">
     <MetricsSync/><div className="work-content"><div className="main-content"><div className="chat-host" hidden={panel!=='chat'}><Chat key={cwd}/></div><AnimatePresence mode="wait">{panel!=='chat'&&<Panel key={panel}/>}</AnimatePresence></div></div>
