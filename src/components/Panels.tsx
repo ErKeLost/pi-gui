@@ -6,7 +6,7 @@ import { useEffect, useState,lazy,Suspense,useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useQuery } from '@tanstack/react-query'
 import type { RpcCommand, SessionTreeNode } from '@earendil-works/pi-coding-agent'
-import { useWorkspace } from '../lib/store'
+import { useWorkspace, type SettingsPage } from '../lib/store'
 import { request, report, refresh, changeSession, connect, disconnect, native, loadMessages, answerDialog, deleteSession, getProjectTrustMode, setProjectTrustMode, type ProjectTrustMode } from '../lib/rpc'
 import type { Session, UiRequest } from '../lib/protocol'
 import { Icon } from './Icon'
@@ -19,7 +19,7 @@ const format=(value:unknown)=>typeof value==='string'?value:JSON.stringify(value
 async function applySetting(command:RpcCommand){await request(command);await refresh();gooeyToast.success('设置已更新',{showTimestamp:false})}
 export function Panel(){
  const panel=useWorkspace(s=>s.panel)
- return <m.section className="panel-view" initial={{opacity:0,y:7}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:0.16}}>{panel==='sessions'?<Sessions/>:panel==='tree'?<Tree/>:panel==='commands'?<Commands/>:panel==='settings'?<Settings/>:panel==='changes'?<Changes/>:panel==='pi-tools'?<PiTools/>:<Console/>}</m.section>
+ return <m.section className={`panel-view ${panel==='settings'?'settings-panel-view':''}`} initial={{opacity:0,y:7}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:0.16}}>{panel==='sessions'?<Sessions/>:panel==='tree'?<Tree/>:panel==='commands'?<Commands/>:panel==='settings'?<Settings/>:panel==='changes'?<Changes/>:panel==='pi-tools'?<PiTools/>:<Console/>}</m.section>
 }
 export function Sessions(){
  const cwd=useWorkspace(s=>s.cwd),online=useWorkspace(s=>s.connection==='online'),running=useWorkspace(s=>s.transcript.running),currentSession=useWorkspace(s=>s.state?.sessionFile)
@@ -65,7 +65,28 @@ function PiTools(){
   <section className="settings-section"><h2>资源来源</h2><p>技能与命令面板会显示 Pi 返回的 source 信息；扩展的状态、Widget、通知和交互请求会实时同步到当前项目。</p><Button disabled={!online} onClick={()=>void command('/reload').then(()=>gooeyToast.success('技能、模板与扩展已刷新',{showTimestamp:false})).catch(report)}><Icon name="arrows-clockwise"/>刷新技能、模板与扩展</Button></section>
  </>
 }
+const settingsGroups: { label: string; items: { id: SettingsPage; label: string; icon: string }[] }[] = [
+ {label:'个人',items:[{id:'general',label:'常规',icon:'gear-six'},{id:'providers',label:'Provider 与模型',icon:'database'}]},
+ {label:'会话',items:[{id:'sessions',label:'所有会话',icon:'chats'},{id:'tree',label:'会话树',icon:'tree-structure'}]},
+ {label:'高级',items:[{id:'pi-tools',label:'常用工具',icon:'wrench'},{id:'changes',label:'代码变更',icon:'code'},{id:'console',label:'控制台',icon:'terminal-window'}]},
+]
+
 function Settings(){
+ const page=useWorkspace(s=>s.settingsPage),[search,setSearch]=useState('')
+ const query=search.trim().toLowerCase()
+ const visibleGroups=settingsGroups.map(group=>({...group,items:group.items.filter(item=>item.label.toLowerCase().includes(query))})).filter(group=>group.items.length)
+ const content=page==='general'?<GeneralSettings/>:page==='providers'?<><div className="panel-heading"><div><h1>Provider 与模型</h1><p>管理端点、凭据和 Pi 可用的模型目录。</p></div></div><ProviderSettings/></>:page==='sessions'?<Sessions/>:page==='tree'?<Tree/>:page==='pi-tools'?<PiTools/>:page==='changes'?<Changes/>:<Console/>
+ return <div className="settings-workspace">
+  <aside className="settings-sidebar">
+   <Button className="settings-back" onClick={()=>useWorkspace.getState().set({panel:'chat'})}><Icon name="arrow-left"/><span>返回应用</span></Button>
+   <label className="settings-search"><Icon name="magnifying-glass"/><Input aria-label="搜索设置" placeholder="搜索设置…" value={search} onChange={event=>setSearch(event.target.value)}/></label>
+   <nav aria-label="设置分类">{visibleGroups.map(group=><section key={group.label}><h2>{group.label}</h2>{group.items.map(item=><Button key={item.id} className={`settings-nav-item ${page===item.id?'selected':''}`} aria-current={page===item.id?'page':undefined} onClick={()=>useWorkspace.getState().set({settingsPage:item.id})}><Icon name={item.icon}/><span>{item.label}</span></Button>)}</section>)}{!visibleGroups.length&&<p className="settings-search-empty">没有匹配的设置</p>}</nav>
+  </aside>
+  <main className="settings-main"><div key={page} className={`settings-content settings-${page}-page`}>{content}</div></main>
+ </div>
+}
+
+function GeneralSettings(){
  const ask=usePrompt()
  async function manualCompact(){const instructions=await ask({title:'压缩说明（可以留空）',multiline:true});if(instructions!==null)await request({type:'compact',customInstructions:instructions},180000).then(()=>loadMessages(cwd))}
  const cwd=useWorkspace(s=>s.cwd),status=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),toolStatus=useWorkspace(s=>s.statuses['gui-tools'])
@@ -80,9 +101,8 @@ function Settings(){
  const themeLabel=themePreference==='system'?'跟随系统':resolvedTheme==='dark'?'深色主题':'浅色主题'
  async function reconnect(){setBusy(true);try{await connect(path);gooeyToast.success('项目已连接',{description:path,showTimestamp:false})}catch(e){report(e)}finally{setBusy(false)}}
  async function changeTrustMode(mode:ProjectTrustMode){setTrustBusy(true);try{await setProjectTrustMode(mode);setTrustMode(mode);if(status==='online'){await disconnect();await connect(cwd)}gooeyToast.success('项目权限已更新',{showTimestamp:false})}catch(e){report(e)}finally{setTrustBusy(false)}}
- return <><div className="panel-heading"><div><h1>工作区设置</h1><p>连接、工具与当前会话的运行方式。</p></div></div>
+ return <><div className="panel-heading"><div><h1>常规</h1><p>连接、外观与当前会话的运行方式。</p></div></div>
   <section className="settings-section theme-settings"><h2>主题</h2><div className="setting-row"><div><strong>{themeLabel}</strong><p>默认跟随系统设置，也可以在这里固定使用浅色或深色。</p></div><div className="theme-settings-controls"><Select aria-label="主题" value={themePreference} onChange={event=>setTheme(event.target.value)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select><ModeToggle/></div></div></section>
-  <ProviderSettings/>
   <section className="settings-section"><h2>项目目录</h2><div className="input-row"><Input value={path} onChange={e=>setPath(e.target.value)} aria-label="工作目录"/><Button className="primary" disabled={busy||running||!native} onClick={()=>void reconnect()}>{busy?'连接中…':'连接此目录'}</Button></div><p className="field-note">Pi 以此目录为工作区，沿用你现有的模型与凭据配置。</p><Button className="secondary" disabled={status!=='online'} onClick={()=>void disconnect().catch(report)}>断开连接</Button></section>
   <section className="settings-section"><h2>项目权限</h2><div className="setting-row"><div><strong>项目资源信任</strong><p>Pi 没有内置沙箱或逐工具授权弹窗，工具会继承当前用户权限。此设置只控制是否加载项目本地的设置、扩展、技能和主题。</p></div><Select aria-label="项目资源信任" disabled={trustBusy||!native} value={trustMode} onChange={event=>void changeTrustMode(event.target.value as ProjectTrustMode)}><option value="always">完全访问项目资源</option><option value="ask">每次询问</option><option value="never">禁止项目资源</option></Select></div><p className="field-note">切换后会重启当前 Pi 连接；“完全访问”不等于绕过 macOS 文件权限。</p></section>
   <section className="settings-section"><h2>上下文</h2><div className="setting-row"><div><strong>自动压缩</strong><p>接近上下文容量时，让 Pi 整理较早的内容。</p></div><Switch aria-label="自动压缩" checked={state?.autoCompactionEnabled??false} disabled={status!=='online'||running} onChange={checked=>void applySetting({type:'set_auto_compaction',enabled:checked}).catch(report)}/></div><div className="setting-row"><div><strong>立即压缩</strong><p>可以补充这次摘要需要保留的重点。</p></div><Button className="secondary" disabled={status!=='online'||running} onClick={()=>void manualCompact().catch(report)}>压缩</Button></div><div className="stat-strip"><div><span>累计 tokens</span><strong>{stats.data?.tokens.total.toLocaleString()??'—'}</strong></div><div><span>上下文占用</span><strong>{stats.data?.contextUsage?.percent==null?'—':`${stats.data.contextUsage.percent.toFixed(1)}%`}</strong></div><div><span>Pi 报告费用</span><strong>{stats.data?`$${stats.data.cost.toFixed(4)}`:'—'}</strong></div></div><p className="field-note">自定义模型未配置价格时，Pi 的费用统计不代表服务商实际账单。</p></section>

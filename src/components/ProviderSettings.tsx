@@ -20,6 +20,7 @@ import { useWorkspace } from "../lib/store";
 import { ModelLogo, ModelModalities } from "./ModelMeta";
 import { formatContextLength, modelDisplayName, modelModalities } from "../lib/model-meta";
 import { gooeyToast } from "goey-toast";
+import { Icon } from "./Icon";
 
 const apiTypes = [
   "openai-completions",
@@ -82,7 +83,7 @@ export function ProviderSettings() {
   const [authHeader, setAuthHeader] = useState(true);
   const [models, setModels] = useState<ProviderModel[]>([]);
   const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState<"save" | "probe" | "sync" | "use" | null>(null);
+  const [busy, setBusy] = useState<"save" | "probe" | "use" | null>(null);
   const [isNewProvider, setIsNewProvider] = useState(false);
 
   const selected = profiles.data?.find((item) => item.id === provider);
@@ -124,9 +125,14 @@ export function ProviderSettings() {
     try {
       const result = await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
       setProvider(result.id); setIsNewProvider(false); setApiKey("");
+      let synced: Awaited<ReturnType<typeof syncProviderModels>>;
+      try {
+        synced = await syncProviderModels(result.id);
+      } catch (syncError) {
+        throw new Error(`Provider 已保存，但同步到 Pi 失败：${syncError instanceof Error ? syncError.message : String(syncError)}`);
+      }
       let switchedModel: { provider: string; id: string } | null = null;
       try {
-        const synced = await syncProviderModels(result.id);
         if (online) await disconnect();
         await connect(cwd);
         const available = await request<{ models: { provider: string; id: string }[] }>({ type: "get_available_models" }, 30_000, cwd);
@@ -144,10 +150,9 @@ export function ProviderSettings() {
           throw new Error(`Pi 没有加载 ${result.id} 的可用模型`);
         }
       } catch (activationError) {
-        gooeyToast.warning("Provider 已保存，但暂时无法切换", { description: activationError instanceof Error ? activationError.message : String(activationError), showTimestamp: false });
+        gooeyToast.warning("模型已同步，但暂时无法切换", { description: activationError instanceof Error ? activationError.message : String(activationError), showTimestamp: false });
       }
-      if (switchedModel) gooeyToast.success(`已切换到 ${switchedModel.provider}`, { description: switchedModel.id, showTimestamp: false });
-      else gooeyToast.success("Provider 已保存", { showTimestamp: false });
+      gooeyToast.success("已保存并同步到 Pi", { description: switchedModel ? `${synced.count} 个模型 · 已切换到 ${switchedModel.id}` : `${synced.count} 个模型已写入 Pi`, showTimestamp: false });
       await queryClient.invalidateQueries({ queryKey: ["pi", "models", cwd] });
       await profiles.refetch();
     } catch (error) { report(error); } finally { setBusy(null); }
@@ -159,17 +164,6 @@ export function ProviderSettings() {
       const catalog = await probeProviderModels(provider.trim(), baseUrl.trim(), api, apiKey.trim() || undefined, authHeader, modelsUrl.trim() || undefined);
       const next = Array.isArray(catalog.data) ? catalog.data : [];
       setModels(next); gooeyToast.success(`已加载 ${next.length} 个模型`, { description: "模型目录已更新", showTimestamp: false });
-    } catch (error) { report(error); } finally { setBusy(null); }
-  }
-
-  async function sync() {
-    setBusy("sync");
-    try {
-      await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
-      const result = await syncProviderModels(provider.trim());
-      gooeyToast.success(`已同步 ${result.count} 个模型`, { description: "缺失字段交给 Pi 默认值", showTimestamp: false });
-      await queryClient.invalidateQueries({ queryKey: ["pi", "models"] });
-      await profiles.refetch();
     } catch (error) { report(error); } finally { setBusy(null); }
   }
 
@@ -192,25 +186,35 @@ export function ProviderSettings() {
   const visibleModels = useMemo(() => models.filter((model) => `${model.id} ${modelDisplayName(model)}`.toLowerCase().includes(search.toLowerCase())), [models, search]);
   return (
     <section className="settings-section provider-settings">
-      <div className="provider-settings-heading"><div><h2>Provider 与模型目录</h2><p>URL、协议和凭据保存在 Pi 配置中。模型能力只展示接口返回的元数据。</p></div><div className="provider-preset-row">{presets.map((preset) => <Button key={preset.id} className="secondary" onClick={() => applyPreset(preset)}>{preset.name}</Button>)}</div></div>
-      <div className="provider-toolbar">
-        <Select aria-label="已保存 Provider" value={provider} onChange={(event) => selectProvider(event.target.value)}>
-          <option value="">新 Provider</option>
-          {(profiles.data ?? []).map((item: ProviderProfile) => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
-        </Select>
-        <Button className="secondary" onClick={newProvider}>新建</Button>
+      <header className="provider-settings-heading">
+        <div className="provider-heading-copy"><span className="provider-heading-icon"><Icon name="plugs-connected" /></span><div><h2>Provider 配置</h2><p>连接模型服务，并把模型目录直接写入 Pi。</p></div></div>
+        <span className={`provider-config-state ${selected ? "saved" : "draft"}`}><i />{selected ? "已保存配置" : "新配置"}</span>
+      </header>
+      <div className="provider-profile-bar">
+        <div className="provider-profile-picker"><span>当前配置</span><Select aria-label="已保存 Provider" value={provider} onChange={(event) => selectProvider(event.target.value)}>
+         <option value="">新 Provider</option>
+         {(profiles.data ?? []).map((item: ProviderProfile) => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
+        </Select></div>
+        <Button className="secondary provider-new-button" onClick={newProvider}><Icon name="plus" />新建 Provider</Button>
       </div>
       {profiles.isLoading && <Skeleton active paragraph={{ rows: 2 }} />}
-      <div className="provider-form-grid">
+      <div className="provider-preset-strip"><span>快速填充</span><div className="provider-preset-row">{presets.map((preset) => <Button key={preset.id} className="secondary" onClick={() => applyPreset(preset)}>{preset.name}<Icon name="arrow-down-right" /></Button>)}</div></div>
+      <div className="provider-editor">
+       <section className="provider-form-section"><header><span>01</span><div><h3>标识</h3><p>用于 Pi 配置和模型选择器。</p></div></header><div className="provider-form-grid">
         <label>Provider ID<Input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 my-gateway" /></label>
-        <label>显示名称<Input value={name} onChange={(event) => setName(event.target.value)} placeholder="可选" /></label>
+        <label>显示名称<Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如 Team Gateway" /></label>
+       </div></section>
+       <section className="provider-form-section"><header><span>02</span><div><h3>接口</h3><p>填写兼容协议和模型目录地址。</p></div></header><div className="provider-form-grid">
         <label>Base URL<Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com/v1" /></label>
         <label>模型列表接口<Input value={modelsUrl} onChange={(event) => setModelsUrl(event.target.value)} placeholder="留空则使用 Base URL/models" /></label>
-        <label>API 类型<Select value={api} onChange={(event) => setApi(event.target.value as (typeof apiTypes)[number])}>{apiTypes.map((item) => <option key={item} value={item}>{item}</option>)}</Select></label>
-        <label>API Key<Input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={selected?.hasApiKey ? "已保存，留空保持不变" : "不会显示在前端"} autoComplete="off" /></label>
+        <label className="provider-form-wide">API 类型<Select value={api} onChange={(event) => setApi(event.target.value as (typeof apiTypes)[number])}>{apiTypes.map((item) => <option key={item} value={item}>{item}</option>)}</Select></label>
+       </div></section>
+       <section className="provider-form-section"><header><span>03</span><div><h3>凭据</h3><p>API Key 只写入本机 Pi 配置，不会回显。</p></div></header><div className="provider-credentials">
+        <label>API Key<Input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={selected?.hasApiKey ? "已保存，留空保持不变" : "输入服务商 API Key"} autoComplete="off" /></label>
+        <div className="provider-auth-row"><div><strong>发送认证请求头</strong><p>关闭后，模型服务请求不会附带 API Key。</p></div><Switch aria-label="发送 API 认证请求头" checked={authHeader} onChange={setAuthHeader} /><span className="provider-secret-state">{selected?.hasApiKey ? "凭据已保存" : "尚未保存凭据"}</span></div>
+       </div></section>
+       <footer className="provider-actions"><div className="provider-save-note"><Icon name="arrows-clockwise"/><span>保存会更新 Pi 模型配置并重新连接当前项目。</span></div><div><Button className="secondary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void probe()}>{busy === "probe" ? "正在查询…" : "测试连接"}</Button><Button className="primary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void save()}>{busy === "save" ? "正在保存并同步…" : "保存并同步到 Pi"}</Button></div></footer>
       </div>
-      <div className="provider-auth-row"><span>发送 API 认证请求头</span><Switch aria-label="发送 API 认证请求头" checked={authHeader} onChange={setAuthHeader} /><span className="provider-secret-state">{selected?.hasApiKey ? "已保存凭据" : "未保存凭据"}</span></div>
-      <div className="provider-actions"><Button className="primary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void save()}>{busy === "save" ? "保存中…" : "保存"}</Button><Button className="secondary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void probe()}>{busy === "probe" ? "查询中…" : "测试并加载模型"}</Button><Button className="secondary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void sync()}>{busy === "sync" ? "同步中…" : "同步到 Pi"}</Button></div>
       {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong>接口返回的模型（{visibleModels.length}/{models.length}）</strong><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="筛选模型" /></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelDisplayName(model)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_length ?? model.context_window)}{typeof (model.context_length ?? model.context_window) === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
     </section>
   );

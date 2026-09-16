@@ -18,7 +18,7 @@ import { Trash2 } from 'lucide-react'
 import { gooeyToast } from 'goey-toast'
 import './styles/workspace-base.css'
 import './App.css'
-const navigation:{id:PanelName;label:string;icon:string}[]=[{id:'chat',label:'工作台',icon:'chat-circle-text'},{id:'sessions',label:'所有会话',icon:'chats'},{id:'tree',label:'会话树',icon:'tree-structure'},{id:'commands',label:'技能与命令',icon:'puzzle-piece'},{id:'pi-tools',label:'常用工具',icon:'wrench'},{id:'changes',label:'代码变更',icon:'code'},{id:'console',label:'控制台',icon:'terminal-window'}]
+const navigation:{id:PanelName;label:string;icon:string}[]=[{id:'chat',label:'工作台',icon:'chat-circle-text'},{id:'commands',label:'技能与命令',icon:'puzzle-piece'}]
 let started=false
 export default function App(){
  const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector)
@@ -51,12 +51,12 @@ export default function App(){
    const handler=(event:KeyboardEvent)=>{
     if(!(event.metaKey||event.ctrlKey))return
     if(event.key==='n'){event.preventDefault();if(online&&!running)void changeSession({type:'new_session'}).catch(report)}
-    if(event.key===','){event.preventDefault();useWorkspace.getState().set({panel:'settings'})}
+    if(event.key===','){event.preventDefault();useWorkspace.getState().set({panel:'settings',settingsPage:'general'})}
    };window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler)
  },[online,running])
  return <main className="app-shell">
    <div className="window-drag-strip" data-tauri-drag-region />
-   <ResizablePanelGroup
+   {panel==='settings'?<section className="settings-root"><MetricsSync/><Panel/></section>:<ResizablePanelGroup
     key="workspace-layout-v4"
     id="workspace-layout"
     orientation="horizontal"
@@ -68,9 +68,9 @@ export default function App(){
     <ProjectPicker/>
     <Button className="new-session" disabled={!online||running} onClick={()=>void changeSession({type:'new_session'}).catch(report)}><Icon name="plus"/>新建会话<kbd>⌘ N</kbd></Button>
     <nav aria-label="主导航">{navigation.map(item=><Button key={item.id} className={`nav-item ${panel===item.id?'selected':''}`} onClick={()=>useWorkspace.getState().set({panel:item.id})}><Icon name={item.icon}/><span>{item.label}</span>{item.id==='commands'&&<Icon name="arrow-up-right"/>}</Button>)}</nav>
-    <div className="sidebar-section-title"><span>最近会话</span><Button title="查看所有会话" onClick={()=>useWorkspace.getState().set({panel:'sessions'})}><Icon name="dots-three"/></Button></div>
+    <div className="sidebar-section-title"><span>最近会话</span><Button title="查看所有会话" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'sessions'})}><Icon name="dots-three"/></Button></div>
     <div className="recent-sessions">{sessions.data?.slice(0,8).map(session=><div className={`recent-session-row ${session.path===state?.sessionFile?'active':''}`} key={session.id}><button type="button" className="recent-session-main" disabled={!online||running} onClick={()=>void changeSession({type:'switch_session',sessionPath:session.path}).catch(report)}><Icon name="chat-circle"/><span>{session.name||session.firstMessage||'未命名会话'}</span></button><button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${session.name||session.firstMessage||'未命名会话'}`} disabled={!online||running} onClick={(event)=>{event.stopPropagation();setDeletingSession(session)}}><Trash2/></button></div>)}{!sessions.data?.length&&<p>你的会话会保存在这里。</p>}</div>
-    <div className="sidebar-bottom"><Button className={`nav-item ${panel==='settings'?'selected':''}`} onClick={()=>useWorkspace.getState().set({panel:'settings'})}><Icon name="gear-six"/>设置<kbd>⌘ ,</kbd></Button></div>
+    <div className="sidebar-bottom"><Button className="nav-item" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'general'})}><Icon name="gear-six"/>设置<kbd>⌘ ,</kbd></Button></div>
    </aside>
    </ResizablePanel>
    <ResizableHandle />
@@ -86,7 +86,7 @@ export default function App(){
      <Inspector/>
     </ResizablePanel>
    </>}
-   </ResizablePanelGroup>
+   </ResizablePanelGroup>}
    <Modal open={!!deletingSession} title="删除会话" onCancel={()=>setDeletingSession(null)} onOk={()=>void removeRecentSession()} okText="删除" cancelText="取消">删除后无法恢复：{deletingSession?.name||deletingSession?.firstMessage||'未命名会话'}</Modal>
    {dialogs[0]&&<ExtensionDialog key={dialogs[0].id} dialog={dialogs[0]}/>}
   </main>
