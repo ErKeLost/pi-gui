@@ -24,7 +24,7 @@ export default function App(){
  const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),running=useWorkspace(s=>s.transcript.running),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector)
  const online=connection==='online'
  const [deletingSession,setDeletingSession]=useState<Session|null>(null)
- const discovery=useQuery({queryKey:['discovery'],queryFn:()=>invoke<{pi:string;node:string;version:string;cwd:string}>('discover'),enabled:native})
+ const discovery=useQuery({queryKey:['discovery'],queryFn:()=>invoke<{pi:string;node:string;version:string;cwd:string;home:string}>('discover'),enabled:native})
  const sessions=useQuery({queryKey:['pi','sessions',cwd],queryFn:()=>invoke<Session[]>('list_sessions',{cwd}),enabled:native&&Boolean(cwd)})
  async function removeRecentSession(){
    if(!deletingSession)return
@@ -40,16 +40,20 @@ export default function App(){
  useEffect(()=>{
    if(!discovery.data||started)return
    started=true
+   useWorkspace.getState().set({homeDir:discovery.data.home,piVersion:discovery.data.version})
+   if(localStorage.getItem('pi-gui.workspaceMode')==='home'){
+    void connect(discovery.data.home,'home').catch(report)
+    return
+   }
    const storedPath=localStorage.getItem('pi-gui.cwd')
    const savedProjects=useProjects.getState().projects
    if(!storedPath&&localStorage.getItem('pi-gui.projects')!==null&&savedProjects.length===0){
-    useWorkspace.getState().set({cwd:'',piVersion:discovery.data.version})
+    useWorkspace.getState().set({cwd:'',workspaceMode:'project'})
     return
    }
    const path=storedPath||savedProjects[0]?.path||discovery.data.cwd
    useProjects.getState().add([path])
-   useWorkspace.getState().set({cwd:path,piVersion:discovery.data.version})
-   void connect(path).catch(report)
+   void connect(path,'project').catch(report)
  },[discovery.data])
  useEffect(()=>{
    if(discovery.error)useWorkspace.getState().set({error:String(discovery.error)})

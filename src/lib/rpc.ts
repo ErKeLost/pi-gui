@@ -2,7 +2,7 @@ import {emptyTelemetry,observe} from './telemetry'
 import {Channel,invoke,isTauri} from '@tauri-apps/api/core'
 import {QueryClient} from '@tanstack/react-query'
 import type {RpcCommand,RpcResponse} from '@earendil-works/pi-coding-agent'
-import {useWorkspace,type Workspace} from './store'
+import {useWorkspace,type Workspace,type WorkspaceMode} from './store'
 import {emptyTranscript,hydrate,reduceEvent,type Event,type PiMessage,type RpcSessionState,type UiRequest} from './protocol'
 export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000,gcTime:120000}}})
 export const native=isTauri()
@@ -90,11 +90,12 @@ export type ProjectTrustMode = 'ask' | 'always' | 'never'
 export async function getProjectTrustMode():Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('get_project_trust_mode') }
 export async function setProjectTrustMode(mode:ProjectTrustMode):Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('set_project_trust_mode',{mode}) }
 export async function loadMessages(project=useWorkspace.getState().cwd){const data=await request<{messages:PiMessage[]}>({type:'get_messages'},30000,project);patch(project,{transcript:hydrate(data.messages)});await refresh(project)}
-export async function connect(cwd:string){
+export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspace.getState().workspaceMode){
  if(!native)throw new Error('请在桌面应用中选择项目')
  const previous=useWorkspace.getState();if(previous.cwd)snapshots.set(previous.cwd,snapshot())
- const saved=snapshots.get(cwd)??fresh();useWorkspace.getState().set({...saved,cwd})
+ const saved=snapshots.get(cwd)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode})
  localStorage.setItem('pi-gui.cwd',cwd)
+ localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
  if(connections.has(cwd)&&saved.connection==='online'){await refresh(cwd);return}
  const token=Symbol(cwd);connections.set(cwd,token);patch(cwd,{connection:'connecting',error:null})
  const onEvent=new Channel<{kind:string;payload?:Event;message?:string;code?:number}>()

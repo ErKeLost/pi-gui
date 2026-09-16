@@ -252,7 +252,7 @@ pub async fn discover() -> Result<Value, String> {
         let node = executable("node")?;
         let output = Command::new(&node).arg(&pi).arg("--version").output().map_err(|e| e.to_string())?;
         let home = home_dir()?;
-        Ok(json!({"pi":pi,"node":node,"version":String::from_utf8_lossy(&output.stdout).trim(),"cwd":home.join("Desktop/pi-gui")}))
+        Ok(json!({"pi":pi,"node":node,"version":String::from_utf8_lossy(&output.stdout).trim(),"cwd":home.join("Desktop/pi-gui"),"home":home}))
     }).await.map_err(|e|e.to_string())?
 }
 /// Query the OpenAI-compatible provider catalog configured in Pi's own files.

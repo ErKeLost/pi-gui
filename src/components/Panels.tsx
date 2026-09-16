@@ -100,7 +100,7 @@ function GeneralSettings(){
  const {theme, setTheme, resolvedTheme}=useTheme()
  const themePreference=theme??'system'
  const themeLabel=themePreference==='system'?'跟随系统':resolvedTheme==='dark'?'深色主题':'浅色主题'
- async function reconnect(){setBusy(true);try{await connect(path);gooeyToast.success('项目已连接',{description:path,showTimestamp:false})}catch(e){report(e)}finally{setBusy(false)}}
+ async function reconnect(){setBusy(true);try{await connect(path,'project');gooeyToast.success('项目已连接',{description:path,showTimestamp:false})}catch(e){report(e)}finally{setBusy(false)}}
  async function changeTrustMode(mode:ProjectTrustMode){setTrustBusy(true);try{await setProjectTrustMode(mode);setTrustMode(mode);if(status==='online'){await disconnect();await connect(cwd)}gooeyToast.success('项目权限已更新',{showTimestamp:false})}catch(e){report(e)}finally{setTrustBusy(false)}}
  return <><div className="panel-heading"><div><h1>常规</h1><p>连接、外观与当前会话的运行方式。</p></div></div>
   <section className="settings-section theme-settings"><h2>主题</h2><div className="setting-row"><div><strong>{themeLabel}</strong><p>默认跟随系统设置，也可以在这里固定使用浅色或深色。</p></div><div className="theme-settings-controls"><Select aria-label="主题" value={themePreference} onChange={event=>setTheme(event.target.value)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select><ModeToggle/></div></div></section>
