@@ -50,34 +50,34 @@ type ProximitySidebarProps = {
   side?: Side
 }
 
-const RADIUS = 34
-const MAX_DASH_WIDTH = 78
+const RADIUS = 28
+const MAX_DASH_WIDTH = 36
 const SCROLL_IDLE_RESET_DELAY = 80
 
 const DASH_PRESETS: Record<SectionKind, DashPreset> = {
   title: {
-    base: 34,
-    bump: 44,
+    base: 18,
+    bump: 10,
     thickness: 1,
-    className: "bg-foreground",
+    className: "bg-foreground/80",
   },
   subtitle: {
-    base: 30,
-    bump: 40,
+    base: 16,
+    bump: 10,
     thickness: 1,
-    className: "bg-foreground",
+    className: "bg-foreground/70",
   },
   section: {
-    base: 24,
-    bump: 36,
+    base: 12,
+    bump: 10,
     thickness: 1,
-    className: "bg-muted-foreground/40",
+    className: "bg-muted-foreground/45",
   },
   body: {
-    base: 18,
-    bump: 32,
+    base: 9,
+    bump: 9,
     thickness: 1,
-    className: "bg-muted-foreground/40",
+    className: "bg-muted-foreground/35",
   },
 }
 
@@ -129,6 +129,7 @@ const Dash = ({
 }: DashProps) => {
   const ref = useRef<HTMLButtonElement>(null)
   const preset = DASH_PRESETS[sectionKind]
+  const restWidth = active ? preset.base + Math.round(preset.bump * 0.7) : preset.base
   const activeWidth = preset.base + preset.bump
 
   useEffect(() => {
@@ -146,9 +147,9 @@ const Dash = ({
     distance,
     [-RADIUS, 0, RADIUS],
     [
-      preset.base / MAX_DASH_WIDTH,
+      restWidth / MAX_DASH_WIDTH,
       activeWidth / MAX_DASH_WIDTH,
-      preset.base / MAX_DASH_WIDTH,
+      restWidth / MAX_DASH_WIDTH,
     ],
     { clamp: true }
   )
@@ -166,11 +167,11 @@ const Dash = ({
       aria-current={active ? "location" : undefined}
       aria-label={`Go to ${section.label}`}
       title={section.label}
-      className="group flex h-px w-[78px] items-center border-0 bg-transparent p-0 outline-none"
+      className="group flex h-2.5 w-9 items-center border-0 bg-transparent p-0 outline-none"
       onClick={() => onSelect(section.id)}
     >
       <motion.span
-        className={`block transition-colors duration-150 ease-out group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 ${preset.className}`}
+        className={`block transition-colors duration-150 ease-out group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 ${active ? "bg-foreground" : preset.className}`}
         style={{
           height: preset.thickness,
           scaleX,
@@ -365,7 +366,7 @@ const ProximitySidebar = ({
       } ${className}`}
     >
       <div
-        className={`new-home_minimap__dDggR mx-8 flex flex-col ${
+        className={`new-home_minimap__dDggR flex flex-col ${
           side === "right" ? "items-end" : "items-start"
         }`}
         style={{ gap: sections.length > 64 ? 3 : sections.length > 40 ? 4 : 6 }}
