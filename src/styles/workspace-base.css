@@ -143,6 +143,39 @@
   .message-response-toggle-chevron { transition: none !important; }
 }
 
+.message-response-footer {
+  display: flex;
+  min-height: 27px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+  color: color-mix(in oklch, var(--muted-foreground) 72%, transparent);
+}
+
+.message-response-footer time {
+  font: 10.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.message-response-copy[data-slot="button"] {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.message-response-copy[data-slot="button"]:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.message-response-copy[data-slot="button"] svg {
+  width: 14px;
+  height: 14px;
+}
+
 .ai-message-response .streamdown-animated > :first-child,
 .markdown-renderer .streamdown-animated > :first-child {
   margin-top: 0;

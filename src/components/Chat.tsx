@@ -141,6 +141,16 @@ function ErrorOutput({ error }: { error: string }) {
     </div>
   );
 }
+function turnTime(items: DisplayMessage[]) {
+  const timestamp = [...items].reverse().find(entry => typeof entry.message.timestamp === "number")?.message.timestamp;
+  if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) return null;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    dateTime: date.toISOString(),
+    label: new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }).format(date),
+  };
+}
 const TranscriptMessage = memo(
   function TranscriptMessage({
     items,
@@ -157,6 +167,7 @@ const TranscriptMessage = memo(
   }) {
     const item = items[0];
     const role = item.message.role === "user" ? "user" : "assistant";
+    const [copied, setCopied] = useState(false);
     if (item.message.role === "bashExecution") return <m.div className="transcript-message assistant"><BashExecutionView message={item.message} /></m.div>;
     if (item.message.role === "compactionSummary") {
       const summary = item.message.summary || (typeof item.message.content === "string" ? item.message.content : "");
@@ -176,6 +187,8 @@ const TranscriptMessage = memo(
       part.type === "thinking" && (part.thinking?.trim() || (thinking && !part.thinkingComplete)),
     );
     const toolCalls = content.filter(({ part }) => part.type === "toolCall");
+    const responseText = content.flatMap(({ part }) => part.type === "text" && part.text?.trim() ? [part.text] : []).join("\n\n");
+    const responseTime = turnTime(items);
     const progressNodes: ReactNode[] = [];
     const contentNodes: ReactNode[] = [];
     const latestThinking = thinkingParts.at(-1);
@@ -240,6 +253,27 @@ const TranscriptMessage = memo(
               </ProcessingPanel>
             )}
             {contentNodes}
+            {role === "assistant" && !streaming && responseText && (
+              <footer className="message-response-footer">
+                {responseTime && <time dateTime={responseTime.dateTime}>{responseTime.label}</time>}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="message-response-copy"
+                  aria-label={copied ? "已复制" : "复制回复"}
+                  title={copied ? "已复制" : "复制回复"}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(responseText).then(() => {
+                      setCopied(true);
+                      window.setTimeout(() => setCopied(false), 1600);
+                    }).catch(() => undefined);
+                  }}
+                >
+                  <Icon name={copied ? "check" : "copy"} />
+                </Button>
+              </footer>
+            )}
           </MessageContent>
         </Message>
       </m.div>
