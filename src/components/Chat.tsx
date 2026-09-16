@@ -329,6 +329,7 @@ export function Chat() {
   async function submit(message: PromptInputMessage) {
     const streamingBehavior = deliveryOverride.current ?? "steer";
     deliveryOverride.current = null;
+    useWorkspace.getState().event({ type: "prompt_submitted" });
     try {
       await request(
         {

@@ -21,4 +21,19 @@ describe('Pi error projection', () => {
   test('keeps plain session errors readable', () => {
     expect(formatTranscriptError('provider rejected image input')).toBe('provider rejected image input')
   })
+
+  test('hides the previous turn error as soon as a new prompt is submitted', () => {
+    const failed = reduceEvent(emptyTranscript(), {
+      type: 'message_start',
+      message: { role: 'assistant', content: [] },
+    })
+    const ended = reduceEvent(failed, {
+      type: 'message_end',
+      message: { role: 'assistant', content: [], errorMessage: 'old provider error' },
+    })
+    const next = reduceEvent(ended, { type: 'prompt_submitted' })
+
+    expect(next.error).toBeNull()
+    expect(next.messages[0].message.errorMessage).toBeUndefined()
+  })
 })

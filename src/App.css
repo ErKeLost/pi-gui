@@ -1750,7 +1750,7 @@ body,
 [data-slot="dialog-content"],
 [data-slot="tooltip-content"] { }
 .composer.studio-composer {
-  border: 1px solid var(--border) !important;
+  border: 1px solid transparent !important;
   outline: none !important;
   border-radius: var(--radius-2xl) !important;
   background: var(--card) !important;
@@ -1758,7 +1758,7 @@ body,
   box-shadow: none !important;
 }
 .composer.studio-composer:focus-within {
-  border-color: var(--ring) !important;
+  border-color: transparent !important;
   outline: none !important;
   box-shadow: none !important;
 }

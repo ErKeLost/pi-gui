@@ -50,6 +50,7 @@ export function hydrate(messages: PiMessage[]): Transcript {
 export function reduceEvent(previous: Transcript, event: Event): Transcript {
   const state = { ...previous }
   switch (event.type) {
+    case 'prompt_submitted': return { ...state, error: null, messages: state.messages.map(item => item.message.errorMessage ? {...item,message:{...item.message,errorMessage:undefined}} : item) }
     case 'bash_execution_update': return { ...state, bash: { id: typeof event.id === 'string' ? event.id : undefined, command: typeof event.command === 'string' ? event.command : state.bash?.command, output: `${state.bash?.output ?? ''}${String(event.delta ?? '')}`, running: true } }
     case 'agent_start': return { ...state, active: -1, running: true, phase: '正在思考', error: null }
     case 'agent_settled': return { ...state, running: false, phase: '就绪', bash: state.bash ? { ...state.bash, running: false } : null }
