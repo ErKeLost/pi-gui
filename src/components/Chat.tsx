@@ -399,7 +399,7 @@ export function Chat() {
       </Conversation>
       <div className="composer-container tessera-composer-dock">
         <div className="tessera-composer-form">
-          <Beam className="studio-composer-beam" borderRadius={24} active={transcript.running || compacting}>
+          <Beam className="studio-composer-beam" borderRadius={14} active={transcript.running || compacting}>
                 <PromptInput
                   onSubmit={(message) => void submit(message)}
                   className="composer studio-composer"

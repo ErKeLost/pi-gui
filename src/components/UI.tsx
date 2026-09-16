@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 
 type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, 'className'> & { className?: string; title?: string; type?: 'button' | 'submit' | 'reset' }
 export function Button({ type = 'button', title, className = '', variant, size, ...props }: ButtonProps) {
-  const inferredVariant = variant ?? (className.includes('secondary') ? 'secondary' : className.includes('primary') || className.includes('new-session') ? 'default' : 'ghost')
+  const inferredVariant = variant ?? (className.includes('secondary') ? 'secondary' : className.includes('primary') ? 'default' : 'ghost')
   const element = <ShadcnButton {...props} type={type} variant={inferredVariant} size={size ?? (className.includes('icon-button') ? 'icon' : 'default')} aria-label={props['aria-label'] ?? title} className={className} />
   return title ? <Tooltip><TooltipTrigger render={element} /><TooltipContent>{title}</TooltipContent></Tooltip> : element
 }

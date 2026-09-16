@@ -1,5 +1,6 @@
 import { BorderBeam } from "border-beam";
 import { type ReactNode } from "react";
+import { useTheme } from "next-themes";
 
 export function Beam({
   children,
@@ -12,6 +13,7 @@ export function Beam({
   className?: string;
   borderRadius?: number;
 }) {
+  const { resolvedTheme } = useTheme();
   return (
     <BorderBeam
       className={className}
@@ -19,7 +21,7 @@ export function Beam({
       size="md"
       colorVariant="colorful"
       strength={0.85}
-      theme="dark"
+      theme={resolvedTheme === "light" ? "light" : resolvedTheme === "dark" ? "dark" : "auto"}
       borderRadius={borderRadius}
     >
       {children}
