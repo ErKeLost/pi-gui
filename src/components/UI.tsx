@@ -20,14 +20,15 @@ export function Button({ type = 'button', title, className = '', variant, size, 
 
 export function Select({ children, onChange, value, disabled, 'aria-label': ariaLabel, className }: { children: ReactNode; onChange?: (event: { target: { value: string } }) => void; value?: string; disabled?: boolean; 'aria-label'?: string; className?: string }) {
   const options = Children.toArray(children).reduce<{value:string;label:ReactNode}[]>((result, child) => { if (isValidElement<ComponentProps<'option'>>(child)) result.push({ value: String(child.props.value ?? child.props.children ?? ''), label: child.props.children }); return result }, [])
+  const selected = options.find(option => option.value === (value ?? ''))
   return <SelectRoot value={value ?? ''} onValueChange={next => onChange?.({ target: { value: String(next) } })} disabled={disabled}>
-    <SelectTrigger aria-label={ariaLabel} className={cn('h-7', className)}><SelectValue /></SelectTrigger>
+    <SelectTrigger aria-label={ariaLabel} className={cn('h-8 min-w-28 px-2.5', className)}><SelectValue>{selected?.label ?? value}</SelectValue></SelectTrigger>
     <SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
   </SelectRoot>
 }
 
 export function Switch({ checked, onChange, disabled, 'aria-label': ariaLabel }: { checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean; 'aria-label'?: string }) {
-  return <ShadcnSwitch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={ariaLabel} size="sm" />
+  return <ShadcnSwitch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={ariaLabel} />
 }
 
 export { Input, Textarea as TextArea }

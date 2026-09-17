@@ -1,12 +1,11 @@
 import { lazy, Suspense } from "react";
 import { m } from "motion/react";
 import { useWorkspace, type Panel as PanelName } from "../lib/store";
-import { Skeleton } from "./UI";
+import { SettingsPanel } from "./panels/SettingsPanel";
 
 const SessionsPanel = lazy(() => import("./panels/SessionsPanel").then(module => ({ default: module.SessionsPanel })));
 const TreePanel = lazy(() => import("./panels/TreePanel").then(module => ({ default: module.TreePanel })));
 const CommandsPanel = lazy(() => import("./panels/CommandsPanel").then(module => ({ default: module.CommandsPanel })));
-const SettingsPanel = lazy(() => import("./panels/SettingsPanel").then(module => ({ default: module.SettingsPanel })));
 const ChangesPanel = lazy(() => import("./panels/ChangesPanel").then(module => ({ default: module.ChangesPanel })));
 const PiToolsPanel = lazy(() => import("./panels/PiToolsPanel").then(module => ({ default: module.PiToolsPanel })));
 const ConsolePanel = lazy(() => import("./panels/ConsolePanel").then(module => ({ default: module.ConsolePanel })));
@@ -24,7 +23,7 @@ function panelComponent(panel: PanelName) {
 export function Panel() {
   const panel = useWorkspace(state => state.panel);
   return <m.section className={`panel-view ${panel === "settings" ? "settings-panel-view" : ""}`} initial={{ opacity: 0, y: 7 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.16 }}>
-    <Suspense fallback={<Skeleton active paragraph={{ rows: 5 }} />}>{panelComponent(panel)}</Suspense>
+    <Suspense fallback={null}>{panelComponent(panel)}</Suspense>
   </m.section>;
 }
 

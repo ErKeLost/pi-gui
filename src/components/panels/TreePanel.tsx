@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { SessionTreeNode } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
 import { changeSession, loadMessages, refresh, report, request } from "../../lib/rpc";
-import { Button, Skeleton } from "../UI";
+import { Button } from "../UI";
 import { usePrompt } from "../../lib/prompt";
 import { Icon } from "../Icon";
 import { gooeyToast } from "goey-toast";
@@ -31,10 +31,9 @@ export function TreePanel() {
   const running = useWorkspace(state => state.transcript.running);
   const tree = useQuery({ queryKey: ["pi", "tree", cwd], queryFn: () => request<{ tree: SessionTreeNode[]; leafId: string | null }>({ type: "get_tree" }), enabled: online });
   return <>
-    <div className="panel-heading"><div><h1>会话树</h1><p>查看历史节点、切换分支，或从一条消息重新开始。</p></div><Button className="secondary" disabled={!online || running} onClick={() => void changeSession({ type: "clone" }).catch(report)}><Icon name="copy" />克隆当前分支</Button></div>
+    <div className="panel-heading"><div><h1><Icon name="tree-structure" />会话树</h1><p>查看历史节点、切换分支，或从一条消息重新开始。</p></div><Button className="secondary" disabled={!online || running} onClick={() => void changeSession({ type: "clone" }).catch(report)}><Icon name="copy" />克隆当前分支</Button></div>
     {tree.error && <p className="error-inline">{String(tree.error)}</p>}
-    {tree.isLoading && <Skeleton active paragraph={{ rows: 5 }} />}
-    {tree.data?.tree.map(node => <TreeNode key={node.entry.id} node={node} leafId={tree.data!.leafId} disabled={!online || running} />)}
+    {!!tree.data?.tree.length && <div className="tree-list">{tree.data.tree.map(node => <TreeNode key={node.entry.id} node={node} leafId={tree.data!.leafId} disabled={!online || running} />)}</div>}
     {!tree.data?.tree.length && <div className="empty-panel"><Icon name="tree-structure" /><p>消息与分支会出现在这里。</p></div>}
   </>;
 }

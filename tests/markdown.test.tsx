@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../src/components/Markdown";
-import { externalLinkIcon } from "../src/lib/link-visual";
+import { deviconFromHref, externalLinkIcon } from "../src/lib/link-visual";
 
 describe("shared Markdown renderer", () => {
   test("renders GFM tables and KaTeX through LobeHub Streamdown", () => {
@@ -85,6 +85,7 @@ describe("shared Markdown renderer", () => {
 
     expect(html).toContain("md-autolink");
     expect(html).toContain("href=\"https://lobehub.com/icons/skill.md\"");
+    expect(html).toContain('data-link-icon="file:skill.md"');
     expect(html).toContain("md-chip is-mention");
   });
 
@@ -92,10 +93,8 @@ describe("shared Markdown renderer", () => {
     const html = renderToStaticMarkup(<Markdown content="https://github.com/openai/codex" />);
 
     expect(html).toContain("md-autolink-icon");
-    expect(html).toContain('data-link-icon="github-logo"');
-    expect(html).toContain("s2/favicons");
-    expect(html).toContain("domain=github.com");
-    expect(externalLinkIcon("https://github.com/openai/codex")).toBe("github-logo");
+    expect(html).toContain('data-link-icon="devicon:github"');
+    expect(deviconFromHref("https://github.com/openai/codex")).toBe("github");
   });
 
   test("keeps GitHub brand icons when the last path segment looks like a version", () => {
@@ -103,17 +102,16 @@ describe("shared Markdown renderer", () => {
       <Markdown content="https://github.com/ErKeLost/pi-gui/releases/tag/v0.2.2" />,
     );
 
-    expect(html).toContain('data-link-icon="github-logo"');
-    expect(html).toContain("domain=github.com");
+    expect(html).toContain('data-link-icon="devicon:github"');
     expect(html).not.toContain("data-link-icon=\"file:");
   });
 
-  test("uses colorful favicons for other websites", () => {
+  test("matches colored Devicon logos from the hostname", () => {
     const href = "https://vercel.com/docs/ai-gateway";
     const html = renderToStaticMarkup(<Markdown content={href} />);
 
-    expect(html).toContain("s2/favicons");
-    expect(html).toContain("domain=vercel.com");
-    expect(html).toContain('data-link-icon="globe"');
+    expect(deviconFromHref(href)).toBe("vercel");
+    expect(html).toContain('data-link-icon="devicon:vercel"');
+    expect(externalLinkIcon("https://youtube.com")).toBe("youtube-logo-fill");
   });
 });

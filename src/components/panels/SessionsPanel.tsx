@@ -4,7 +4,7 @@ import { useWorkspace } from "../../lib/store";
 import { changeSession, report, retireSession } from "../../lib/rpc";
 import type { Session } from "../../lib/protocol";
 import { mergeProjectSessions, useProjectSessions } from "../../hooks/use-project-sessions";
-import { Button, Input, Skeleton } from "../UI";
+import { Button, Input } from "../UI";
 import { Icon } from "../Icon";
 import { DeleteSessionDialog } from "../DeleteSessionDialog";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../ui/context-menu";
@@ -33,9 +33,8 @@ export function SessionsPanel() {
   }
 
   return <>
-    <div className="panel-heading"><div><h1>会话</h1><p>保存在本机的项目对话。</p></div><Button className="primary" disabled={!online} onClick={() => void changeSession({ type: "new_session" }).catch(report)}><Icon name="plus" />新会话</Button></div>
-    <Input className="search-input" placeholder="搜索会话" value={search} onChange={event => setSearch(event.target.value)} />
-    {sessions.isLoading && <Skeleton active paragraph={{ rows: 4 }} />}
+    <div className="panel-heading"><div><h1><Icon name="chats" />所有会话</h1><p>保存在本机的项目对话。</p></div><div className="panel-heading-actions"><span className="badge"><Icon name="chats" />{visibleSessions.length} 个会话</span><Button className="primary" disabled={!online} onClick={() => void changeSession({ type: "new_session" }).catch(report)}><Icon name="plus" />新会话</Button></div></div>
+    <label className="settings-page-search"><Icon name="magnifying-glass" /><Input className="search-input" aria-label="搜索会话" placeholder="搜索会话" value={search} onChange={event => setSearch(event.target.value)} /></label>
     {sessions.error && <p className="error-inline">{String(sessions.error)}</p>}
     <div className="session-rows">{visibleSessions.map(session => {
       const working = liveSessions.some(live => live.running && live.path === session.path);

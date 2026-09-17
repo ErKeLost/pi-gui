@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { FileIcon, Icon } from "./Icon";
-import { externalLinkIcon, faviconUrl } from "../lib/link-visual";
+import { deviconFromHref, externalLinkIcon } from "../lib/link-visual";
 import { Button } from "./ui/button";
 
 /**
@@ -113,18 +113,10 @@ const toText = (node: unknown): string => {
   return "";
 };
 
-function LinkFavicon({ href, fallback, file }: { href?: string; fallback: string; file?: string }) {
-  const src = faviconUrl(href);
-  const [failed, setFailed] = useState(!src);
-
-  useEffect(() => {
-    setFailed(!src);
-  }, [src]);
-
-  if (!failed && src) {
-    return <img className="md-link-favicon" src={src} alt="" width={16} height={16} draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
-  }
+function LinkBrandIcon({ href, fallback, file }: { href?: string; fallback: string; file?: string }) {
   if (file) return <FileIcon path={file} />;
+  const colored = deviconFromHref(href);
+  if (colored) return <Icon name={`devicon:${colored}`} />;
   return <Icon name={fallback} />;
 }
 
@@ -156,21 +148,22 @@ export function MarkdownLink({
   const autolink = Boolean(href && (label === href || label === href.replace(/^https?:\/\//, "")));
   const brand = external ? externalLinkIcon(href) : "globe";
   const file = autolink ? fileNameFromHref(href) : "";
+  const colored = !file && external ? deviconFromHref(href) : "";
   const attrs = external ? { target: "_blank" as const, rel: "noreferrer" } : {};
-  const iconName = brand !== "globe" ? brand : file ? `file:${file}` : "globe";
+  const iconName = file ? `file:${file}` : colored ? `devicon:${colored}` : brand;
 
   if (autolink) {
     return (
       <a {...rest} {...attrs} href={href} className={`md-autolink ${className}`.trim()}>
         <span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}>
-          {external ? <LinkFavicon href={href} fallback={brand} file={file} /> : file ? <FileIcon path={file} /> : <Icon name={brand} />}
+          {external ? <LinkBrandIcon href={href} fallback={brand} file={file} /> : file ? <FileIcon path={file} /> : <Icon name={brand} />}
         </span>
         <span className="md-autolink-label">{children}</span>
       </a>
     );
   }
 
-  if (external) return <a {...rest} {...attrs} href={href} className={`md-external-link ${className}`.trim()}><span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}><LinkFavicon href={href} fallback={brand} /></span>{children}</a>;
+  if (external) return <a {...rest} {...attrs} href={href} className={`md-external-link ${className}`.trim()}><span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}><LinkBrandIcon href={href} fallback={brand} /></span>{children}</a>;
   return <a {...rest} {...attrs} href={href} className={className}>{children}</a>;
 }
 

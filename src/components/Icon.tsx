@@ -2,10 +2,12 @@ import { Icon as Iconify, addCollection } from '@iconify/react'
 import icons from '../icons.generated.json'
 import fileIcons from '../file-icons.generated.json'
 import skillIcons from '../skill-icons.generated.json'
-// Bundle a single official icon family; rendering makes no network requests.
+import { coloredDeviconCollection } from '../lib/link-visual'
+// Bundle icon families locally; rendering makes no network requests.
 addCollection(icons)
 addCollection(fileIcons)
 addCollection(skillIcons)
+addCollection(coloredDeviconCollection())
 
 export function Icon({ name, className }: { name: string; className?: string }) {
   const iconName = name.includes(':') ? name : `ph:${name}`

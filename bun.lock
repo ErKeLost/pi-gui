@@ -11,6 +11,7 @@
         "@fontsource/dm-mono": "^5.3.0",
         "@fontsource/inter": "^5.3.0",
         "@iconify-json/catppuccin": "^1.2.17",
+        "@iconify-json/devicon": "^1.2.64",
         "@iconify-json/ph": "1.2.2",
         "@iconify-json/vscode-icons": "1.2.77",
         "@iconify/react": "6.0.2",
@@ -379,6 +380,8 @@
     "@iarna/toml": ["@iarna/toml@2.2.5", "", {}, "sha512-trnsAYxU3xnS1gPHPyU961coFyLkh4gAD/0zQ5mymY4yOZ+CYvsPqUbOFSw0aDM4y0tV7tiFxL/1XfXPNC6IPg=="],
 
     "@iconify-json/catppuccin": ["@iconify-json/catppuccin@1.2.17", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-l1pFOADEUlw+j7V+yfFzBowdE4deeMuI4amqfKaN+7uTI9B0Ho24C86DitQk5zb62NkEM9poOyfuG7WS2bw6jg=="],
+
+    "@iconify-json/devicon": ["@iconify-json/devicon@1.2.64", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-Q8LSueQOGu61gMhjErC+8UxdtEQSX1r1JowBYJQt3z1QTJNhN5vpg1HImmKYjQSpWKYW/ccEPCQkEeD71H+Vmg=="],
 
     "@iconify-json/ph": ["@iconify-json/ph@1.2.2", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-PgkEZNtqa8hBGjHXQa4pMwZa93hmfu8FUSjs/nv4oUU6yLsgv+gh9nu28Kqi8Fz9CCVu4hj1MZs9/60J57IzFw=="],
 
