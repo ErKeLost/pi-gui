@@ -31,11 +31,18 @@ export type ProviderModel={
 export type ProviderProfile={id:string;name?:string;baseUrl?:string;modelsUrl?:string;api?:string;authHeader?:boolean;hasApiKey:boolean;modelCount:number}
 type Snapshot=Pick<Workspace,'transcript'|'telemetry'|'state'|'connection'|'error'|'draft'|'dialogs'|'notices'|'statuses'|'widgets'>
 type Pending={project:string;resolve:(value:unknown)=>void;reject:(error:Error)=>void;timeout:ReturnType<typeof setTimeout>}
-const pending=new Map<string,Pending>(),snapshots=new Map<string,Snapshot>(),connections=new Map<string,symbol>(),eventQueues=new Map<string,Event[]>(),flushTimers=new Map<string,ReturnType<typeof setTimeout>>()
+const pending=new Map<string,Pending>(),snapshots=new Map<string,Snapshot>(),connections=new Map<string,{token:symbol;cwd:string}>(),projectActive=new Map<string,string>(),sessionOwners=new Map<string,string>(),eventQueues=new Map<string,Event[]>(),flushTimers=new Map<string,ReturnType<typeof setTimeout>>()
 const fresh=():Snapshot=>({transcript:emptyTranscript(),telemetry:emptyTelemetry(),state:null,connection:'offline',error:null,draft:'',dialogs:[],notices:[],statuses:{},widgets:{}})
 function snapshot():Snapshot{const s=useWorkspace.getState();return {transcript:s.transcript,telemetry:s.telemetry,state:s.state,connection:s.connection,error:s.error,draft:s.draft,dialogs:s.dialogs,notices:s.notices,statuses:s.statuses,widgets:s.widgets}}
-function current(project:string):Snapshot{return useWorkspace.getState().cwd===project?snapshot():snapshots.get(project)??fresh()}
-function patch(project:string,value:Partial<Snapshot>){const next={...current(project),...value};snapshots.set(project,next);if(useWorkspace.getState().cwd===project)useWorkspace.getState().set(value)}
+function route(target=useWorkspace.getState().cwd){return projectActive.get(target)??target}
+function connectionsFor(cwd:string){return [...connections.entries()].flatMap(([id,meta])=>meta.cwd===cwd?[id]:[])}
+function persistSession(cwd:string,sessionFile?:string){if(!sessionFile)return;let files:Record<string,string>={};try{files=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')}catch{};files[cwd]=sessionFile;localStorage.setItem('pi-gui.sessionFiles',JSON.stringify(files))}
+function current(id:string):Snapshot{return useWorkspace.getState().connectionId===id?snapshot():snapshots.get(id)??fresh()}
+function patch(id:string,value:Partial<Snapshot>){
+ const previous=current(id),next={...previous,...value}
+ if(previous.state?.sessionFile&&previous.state.sessionFile!==next.state?.sessionFile&&sessionOwners.get(previous.state.sessionFile)===id)sessionOwners.delete(previous.state.sessionFile)
+ snapshots.set(id,next);if(next.state?.sessionFile)sessionOwners.set(next.state.sessionFile,id);if(useWorkspace.getState().connectionId===id)useWorkspace.getState().set(value)
+}
 function failPending(project:string,message:string){for(const [id,p]of pending){if(p.project!==project)continue;clearTimeout(p.timeout);p.reject(new Error(message));pending.delete(id)}}
 function applyEvent(event:Event,project:string){
  if(event.type==='response'){
@@ -50,7 +57,7 @@ function applyEvent(event:Event,project:string){
   else if(request.method==='set_editor_text')patch(project,{draft:request.text})
   else if(request.method==='setStatus')patch(project,{statuses:{...s.statuses,[request.statusKey]:request.statusText??''}})
   else if(request.method==='setWidget')patch(project,{widgets:{...s.widgets,[request.widgetKey]:request.widgetLines??[]}})
-  else if(request.method==='setTitle'&&useWorkspace.getState().cwd===project)document.title=request.title
+  else if(request.method==='setTitle'&&useWorkspace.getState().connectionId===project)document.title=request.title
   return
  }
  patch(project,{transcript:reduceEvent(s.transcript,event),telemetry:observe(s.telemetry,event)})
@@ -71,8 +78,8 @@ function dispatch(event:Event,project:string){
  const queue=eventQueues.get(project)??[];queue.push(event);eventQueues.set(project,queue)
  if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),32))
 }
-export function request<T=unknown>(command:RpcCommand,timeoutMs=30000,project=useWorkspace.getState().cwd):Promise<T>{
- const id=crypto.randomUUID()
+export function request<T=unknown>(command:RpcCommand,timeoutMs=30000,target=useWorkspace.getState().cwd):Promise<T>{
+ const id=crypto.randomUUID(),project=route(target)
  return new Promise<T>((resolve,reject)=>{
   const timeout=setTimeout(()=>{pending.delete(id);reject(new Error(`Pi ${command.type} 响应超时`))},timeoutMs)
   pending.set(id,{project,resolve:value=>resolve(value as T),reject,timeout})
@@ -83,54 +90,100 @@ export function report(error:unknown){useWorkspace.getState().set({error:String(
 export function persistedSessionFile(project:string):string {
  try { const value=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')[project]; return typeof value==='string'?value:'' } catch { return '' }
 }
-export async function refresh(project=useWorkspace.getState().cwd){const state=await request<RpcSessionState>({type:'get_state'},30000,project);patch(project,{state});if(state.sessionFile){let files:Record<string,string>={};try{files=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')}catch{};files[project]=state.sessionFile;localStorage.setItem('pi-gui.sessionFiles',JSON.stringify(files))}await queryClient.invalidateQueries({queryKey:['pi','live-stats',project]});return state}
+export async function refresh(target=useWorkspace.getState().cwd){const id=route(target),state=await request<RpcSessionState>({type:'get_state'},30000,id);patch(id,{state});const cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd;if(state.sessionFile&&projectActive.get(cwd)===id)persistSession(cwd,state.sessionFile);await queryClient.invalidateQueries({queryKey:['pi','live-stats',id]});return state}
 export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
 export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(!native) throw new Error('文件索引需要桌面应用'); return invoke<string[]>('list_project_files',{cwd:project}) }
 export async function listProviderProfiles():Promise<ProviderProfile[]> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<ProviderProfile[]>('list_provider_profiles') }
 export async function probeProviderModels(provider:string,baseUrl:string,api:string,apiKey?:string,authHeader=true,modelsUrl?:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('probe_provider_models',{provider,baseUrl,api,apiKey:apiKey||null,authHeader,modelsUrl:modelsUrl||null}) }
 export async function saveProvider(input:{provider:string;name?:string;baseUrl:string;modelsUrl?:string;api:string;apiKey?:string;authHeader:boolean}):Promise<{id:string;hasApiKey:boolean}> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<{id:string;hasApiKey:boolean}>('save_provider',{provider:input.provider,name:input.name||null,baseUrl:input.baseUrl,modelsUrl:input.modelsUrl||null,api:input.api,apiKey:input.apiKey||null,authHeader:input.authHeader}) }
 export async function deleteSession(sessionPath:string):Promise<void> { if(!native) throw new Error('删除会话需要桌面应用'); return invoke<void>('delete_session',{sessionPath}) }
+export async function retireSession(sessionPath:string){
+ const cwd=useWorkspace.getState().cwd,owner=sessionOwners.get(sessionPath),wasActive=owner?useWorkspace.getState().connectionId===owner:useWorkspace.getState().state?.sessionFile===sessionPath
+ if(owner&&connections.has(owner))await closeConnection(owner,'会话已关闭')
+ await deleteSession(sessionPath);sessionOwners.delete(sessionPath)
+ if(!wasActive)return
+ const remaining=connectionsFor(cwd)[0]
+ if(remaining){activateConnection(remaining,cwd);return}
+ useWorkspace.getState().set({...fresh(),cwd,connectionId:cwd,panel:'chat'})
+ await startConnection(cwd,cwd)
+}
 export async function getSessionTurnDurations(sessionPath:string):Promise<Record<string,number>> { if(!native) return {}; return invoke<Record<string,number>>('session_turn_durations',{sessionPath}) }
 export async function syncProviderModels(provider:string):Promise<{provider:string;count:number;previous:number;firstModelId?:string}> { if(!native) throw new Error('同步模型需要桌面应用'); return invoke<{provider:string;count:number;previous:number;firstModelId?:string}>('sync_provider_models',{provider}) }
 export async function persistDefaultModel(provider:string,modelId:string):Promise<{provider:string;id:string}> { if(!native) throw new Error('设置默认模型需要桌面应用'); return invoke<{provider:string;id:string}>('set_default_model',{provider,modelId}) }
 export type ProjectTrustMode = 'ask' | 'always' | 'never'
 export async function getProjectTrustMode():Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('get_project_trust_mode') }
 export async function setProjectTrustMode(mode:ProjectTrustMode):Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('set_project_trust_mode',{mode}) }
-export async function loadMessages(project=useWorkspace.getState().cwd){const data=await request<{messages:PiMessage[]}>({type:'get_messages'},30000,project);patch(project,{transcript:hydrate(data.messages)});await refresh(project)}
-export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspace.getState().workspaceMode){
- if(!native)throw new Error('请在桌面应用中选择项目')
- const previous=useWorkspace.getState();if(previous.cwd)snapshots.set(previous.cwd,snapshot())
- const saved=snapshots.get(cwd)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode})
- localStorage.setItem('pi-gui.cwd',cwd)
- localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
- if(connections.has(cwd)&&saved.connection==='online'){await refresh(cwd);return}
- const token=Symbol(cwd);connections.set(cwd,token);patch(cwd,{connection:'connecting',error:null})
+export async function loadMessages(target=useWorkspace.getState().cwd){const id=route(target),data=await request<{messages:PiMessage[]}>({type:'get_messages'},30000,id);patch(id,{transcript:hydrate(data.messages)});await refresh(id)}
+async function closeConnection(id:string,message='连接已关闭'){
+ const cwd=connections.get(id)?.cwd,s=current(id)
+ if(s.transcript.running){try{await request({type:'clear_queue'},30000,id);await request({type:'abort'},60000,id)}catch{/* process may already be gone */}}
+ clearEvents(id);connections.delete(id);failPending(id,message);snapshots.delete(id)
+ if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd)
+ for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file)
+ await invoke('pi_disconnect',{project:id}).catch(()=>{})
+}
+function activateConnection(id:string,cwd:string){
+ const previous=useWorkspace.getState()
+ if(previous.connectionId&&previous.connectionId!==id)snapshots.set(previous.connectionId,snapshot())
+ projectActive.set(cwd,id)
+ const saved=snapshots.get(id)??fresh()
+ useWorkspace.getState().set({...saved,cwd,connectionId:id,panel:'chat'})
+ persistSession(cwd,saved.state?.sessionFile)
+ if(saved.connection==='online')void refresh(id).catch(error=>patch(id,{error:String(error)}))
+}
+async function startConnection(cwd:string,id:string,options?:{restoreLast?:boolean;sessionPath?:string}){
+ const token=Symbol(id);connections.set(id,{token,cwd});projectActive.set(cwd,id);patch(id,{connection:'connecting',error:null})
  const onEvent=new Channel<{kind:string;payload?:Event;message?:string;code?:number}>()
  onEvent.onmessage=event=>{
-  if(connections.get(cwd)!==token)return
-  if(event.kind==='rpc'&&event.payload)dispatch(event.payload,cwd)
-  if(event.kind==='exit'){flushEvents(cwd);clearEvents(cwd);connections.delete(cwd);patch(cwd,{connection:'offline',error:`Pi 进程已退出（${event.code??'signal'}）`});failPending(cwd,'Pi 进程已退出')}
-  if(event.kind==='protocol_error')patch(cwd,{error:event.message})
+  if(connections.get(id)?.token!==token)return
+  if(event.kind==='rpc'&&event.payload)dispatch(event.payload,id)
+  if(event.kind==='exit'){const cwd=connections.get(id)?.cwd;flushEvents(id);clearEvents(id);connections.delete(id);if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd);for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file);patch(id,{connection:'offline',error:`Pi 进程已退出（${event.code??'signal'}）`});failPending(id,'Pi 进程已退出')}
+  if(event.kind==='protocol_error')patch(id,{error:event.message})
  }
  try{
-  await invoke('pi_connect',{cwd,onEvent})
-  const state=await request<RpcSessionState>({type:'get_state'},45000,cwd)
-  if(connections.get(cwd)!==token)return
-  patch(cwd,{connection:'online',state})
-  const previousFile=persistedSessionFile(cwd)||undefined
-  if(previousFile&&previousFile!==state.sessionFile){try{await request({type:'switch_session',sessionPath:previousFile},45000,cwd)}catch{patch(cwd,{notices:['上次会话无法读取，已打开新会话']})}}
-  await loadMessages(cwd)
- }catch(error){connections.delete(cwd);failPending(cwd,'连接失败');await invoke('pi_disconnect',{project:cwd}).catch(()=>{});patch(cwd,{connection:'offline'});throw error}
+  await invoke('pi_connect',{cwd,onEvent,connectionId:id})
+  const state=await request<RpcSessionState>({type:'get_state'},45000,id)
+  if(connections.get(id)?.token!==token)return
+  patch(id,{connection:'online',state})
+  if(options?.sessionPath){try{await request({type:'switch_session',sessionPath:options.sessionPath},45000,id)}catch{patch(id,{notices:['会话无法读取，已打开新会话']})}}
+  else if(options?.restoreLast){const previousFile=persistedSessionFile(cwd)||undefined;if(previousFile&&previousFile!==state.sessionFile){try{await request({type:'switch_session',sessionPath:previousFile},45000,id)}catch{patch(id,{notices:['上次会话无法读取，已打开新会话']})}}}
+  await loadMessages(id)
+ }catch(error){connections.delete(id);if(projectActive.get(cwd)===id)projectActive.delete(cwd);failPending(id,'连接失败');await invoke('pi_disconnect',{project:id}).catch(()=>{});patch(id,{connection:'offline'});throw error}
 }
-export async function disconnect(){const project=useWorkspace.getState().cwd,s=current(project);if(s.transcript.running){await request({type:'clear_queue'},30000,project);await request({type:'abort'},60000,project)}clearEvents(project);connections.delete(project);failPending(project,'项目已断开');await invoke('pi_disconnect',{project});patch(project,{connection:'offline',state:null,transcript:{...s.transcript,running:false}})}
+export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspace.getState().workspaceMode){
+ if(!native)throw new Error('请在桌面应用中选择项目')
+ const previous=useWorkspace.getState();if(previous.connectionId)snapshots.set(previous.connectionId,snapshot())
+ const id=projectActive.get(cwd)??cwd
+ const saved=snapshots.get(id)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode,connectionId:id})
+ localStorage.setItem('pi-gui.cwd',cwd)
+ localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
+ if(connections.has(id)&&saved.connection==='online'){await refresh(id);return}
+ await startConnection(cwd,id,{restoreLast:true})
+}
+export async function disconnect(){const cwd=useWorkspace.getState().cwd;await Promise.all(connectionsFor(cwd).map(id=>closeConnection(id,'项目已断开')));projectActive.delete(cwd);useWorkspace.getState().set({...fresh(),cwd,connectionId:'',workspaceMode:useWorkspace.getState().workspaceMode})}
 export async function forgetProject(project:string){
- clearEvents(project);connections.delete(project);failPending(project,'项目已移除');snapshots.delete(project)
+ await Promise.all(connectionsFor(project).map(id=>closeConnection(id,'项目已移除')))
+ projectActive.delete(project)
  queryClient.removeQueries({predicate:query=>query.queryKey.includes(project)})
- await invoke('pi_disconnect',{project})
  let files:Record<string,string>={};try{files=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')}catch{}
  delete files[project];localStorage.setItem('pi-gui.sessionFiles',JSON.stringify(files))
- if(useWorkspace.getState().cwd===project)useWorkspace.getState().set({...fresh(),cwd:''})
+ if(useWorkspace.getState().cwd===project)useWorkspace.getState().set({...fresh(),cwd:'',connectionId:''})
 }
-export async function stop(){const project=useWorkspace.getState().cwd,cleared=await request<{steering:string[];followUp:string[]}>({type:'clear_queue'},30000,project);await request({type:'abort'},60000,project);patch(project,{draft:[current(project).draft,...cleared.steering,...cleared.followUp].filter(Boolean).join('\n')});await refresh(project)}
-export async function changeSession(command:RpcCommand){const project=useWorkspace.getState().cwd,result=await request<{cancelled?:boolean;text?:string}>(command,60000,project);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(project,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{}});if(useWorkspace.getState().cwd===project)useWorkspace.getState().set({panel:'chat'});await loadMessages(project);await queryClient.invalidateQueries({queryKey:['pi','sessions',project]})}
-export async function answerDialog(request:UiRequest,answer:{value?:string;confirmed?:boolean;cancelled?:boolean}){const project=useWorkspace.getState().cwd;await invoke('pi_send',{project,command:{type:'extension_ui_response',id:request.id,...answer}});patch(project,{dialogs:current(project).dialogs.filter(item=>item.id!==request.id)})}
+export async function stop(){const id=route(),cleared=await request<{steering:string[];followUp:string[]}>({type:'clear_queue'},30000,id);await request({type:'abort'},60000,id);patch(id,{draft:[current(id).draft,...cleared.steering,...cleared.followUp].filter(Boolean).join('\n')});await refresh(id)}
+export async function changeSession(command:RpcCommand){
+ const cwd=useWorkspace.getState().cwd,active=route(cwd),running=current(active).transcript.running
+ if(command.type==='switch_session'){
+  if(useWorkspace.getState().state?.sessionFile===command.sessionPath){useWorkspace.getState().set({panel:'chat'});return}
+  const owner=sessionOwners.get(command.sessionPath)
+  if(owner&&connections.has(owner)){activateConnection(owner,cwd);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return}
+ }
+ if((command.type==='new_session'||command.type==='switch_session')&&running){
+  const id=`${cwd}#${crypto.randomUUID()}`
+  snapshots.set(active,snapshot())
+  useWorkspace.getState().set({...fresh(),cwd,connectionId:id,panel:'chat'})
+  await startConnection(cwd,id,command.type==='switch_session'?{sessionPath:command.sessionPath}:undefined)
+  await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return
+ }
+ const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{}});if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'});await loadMessages(active);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
+}
+export async function answerDialog(request:UiRequest,answer:{value?:string;confirmed?:boolean;cancelled?:boolean}){const id=useWorkspace.getState().connectionId||route();await invoke('pi_send',{project:id,command:{type:'extension_ui_response',id:request.id,...answer}});patch(id,{dialogs:current(id).dialogs.filter(item=>item.id!==request.id)})}

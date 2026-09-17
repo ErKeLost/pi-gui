@@ -304,14 +304,16 @@ const TranscriptMessage = memo(
 );
 export function Chat() {
   const project = useWorkspace((s) => s.cwd),
+    connectionId = useWorkspace((s) => s.connectionId),
     transcript = useWorkspace((s) => s.transcript),
     telemetry = useWorkspace((s) => s.telemetry),
     online = useWorkspace((s) => s.connection === "online"),
     state = useWorkspace((s) => s.state);
+  const composerKey = connectionId || project;
   const [attachments, setAttachments] = useState<Attachment[]>(
-      () => composerCache.get(project)?.attachments ?? [],
+      () => composerCache.get(composerKey)?.attachments ?? [],
     ),
-    [draft, setDraft] = useState(() => composerCache.get(project)?.text ?? ""),
+    [draft, setDraft] = useState(() => useWorkspace.getState().draft || composerCache.get(composerKey)?.text || ""),
     [modelMenuOpen, setModelMenuOpen] = useState(false),
     [modelSearch, setModelSearch] = useState(""),
     deliveryOverride = useRef<"steer" | "followUp" | null>(null),
@@ -453,15 +455,15 @@ export function Chat() {
   useEffect(() => {
     const timer = setTimeout(
       () =>
-        cacheComposer(project, {
-          text: composerCache.get(project)?.text ?? "",
+        cacheComposer(composerKey, {
+          text: composerCache.get(composerKey)?.text ?? "",
           attachments,
         }),
       0,
     );
     return () => clearTimeout(timer);
-  }, [attachments, project]);
-  useEffect(() => { cacheComposer(project, {text: draft, attachments: composerCache.get(project)?.attachments ?? attachments}); }, [draft, attachments, project]);
+  }, [attachments, composerKey]);
+  useEffect(() => { cacheComposer(composerKey, {text: draft, attachments: composerCache.get(composerKey)?.attachments ?? attachments}); }, [draft, attachments, composerKey]);
   async function submit(message: PromptInputMessage) {
     const streamingBehavior = deliveryOverride.current ?? "steer";
     deliveryOverride.current = null;

@@ -432,13 +432,15 @@ mod image_input_tests {
 }
 
 #[tauri::command]
-pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, state: State<'_, Bridge>) -> Result<Value, String> {
+pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, state: State<'_, Bridge>, connection_id: Option<String>) -> Result<Value, String> {
     let path = project(&cwd)?;
     append_image_input_to_custom_models(&agent_dir()?)?;
     let pi = pi_path()?;
     let node = executable("node")?;
     // Explicit executable paths also work when Finder's PATH lacks the Node version manager.
-    state.stop_project(&cwd);
+    // Connection id lets one project keep multiple live Pi processes (one session each).
+    let id = connection_id.filter(|value| !value.is_empty()).unwrap_or_else(|| cwd.clone());
+    state.stop_project(&id);
     let extension = app.path().resolve("resources/gui-extension.ts", BaseDirectory::Resource).map_err(|e|e.to_string())?;
     let mut child = Command::new(node).arg(&pi).args(["--mode", "rpc", "--offline"]).arg("--extension").arg(extension).current_dir(&path)
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e|e.to_string())?;
@@ -447,7 +449,7 @@ pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, s
     let stdout = child.stdout.take().ok_or("Pi stdout unavailable")?;
     let stderr = child.stderr.take().ok_or("Pi stderr unavailable")?;
     let child = Arc::new(Mutex::new(child));
-    state.0.lock().map_err(|e| e.to_string())?.insert(cwd.clone(), Worker {child: child.clone(), stdin});
+    state.0.lock().map_err(|e| e.to_string())?.insert(id.clone(), Worker {child: child.clone(), stdin});
     let output_channel = on_event.clone();
     thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
@@ -471,7 +473,7 @@ pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, s
         if let Some(status) = status { let _=on_event.send(json!({"kind":"exit","code":status.code()})); break; }
         thread::sleep(Duration::from_millis(150));
     });
-    Ok(json!({"pid":pid,"cwd":path,"pi":pi}))
+    Ok(json!({"pid":pid,"cwd":path,"pi":pi,"connectionId":id}))
 }
 #[tauri::command]
 pub fn pi_send(project: String, command: Value, state: State<'_, Bridge>) -> Result<(), String> {
