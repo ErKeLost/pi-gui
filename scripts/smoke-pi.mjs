@@ -32,11 +32,11 @@ try{
  const levels=await req({type:'get_available_thinking_levels'});assert(levels.levels.includes(state.thinkingLevel));results.push('current thinking level returned by Pi capability API')
  await req({type:'prompt',message:'/gui-tools'});assert(toolState.tools.length>0);results.push('GUI extension: tool inventory')
  await req({type:'prompt',message:'/gui-tools-set ["read"]'});assert.deepEqual(toolState.active,['read']);results.push('GUI extension: active tools update')
- const bash=await req({type:'bash',command:'printf "Pi GUI integration ok"',excludeFromContext:true});assert.equal(bash.exitCode,0);assert.equal(bash.output,'Pi GUI integration ok');results.push('real Bash execution through RPC')
+ const bash=await req({type:'bash',command:'printf "Orbit integration ok"',excludeFromContext:true});assert.equal(bash.exitCode,0);assert.equal(bash.output,'Orbit integration ok');results.push('real Bash execution through RPC')
  const commands=await req({type:'get_commands'});assert(commands.commands.some(c=>c.name==='gui-tree'));results.push('commands enumerated')
  if(process.argv.includes('--live')){
    const settled=new Promise((resolve,reject)=>pending.set('settled',{resolve,reject}))
-   await req({type:'prompt',message:'只回复：Pi GUI 连接测试成功。不要调用工具。'})
+   await req({type:'prompt',message:'只回复：Orbit 连接测试成功。不要调用工具。'})
    await settled
    const text=await req({type:'get_last_assistant_text'});assert(text.text?.includes('测试成功'));results.push('live model response: '+text.text)
  }

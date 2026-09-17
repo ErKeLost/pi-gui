@@ -7,6 +7,7 @@ import { Button } from "../UI";
 import { Icon } from "../Icon";
 import { PromptInput, PromptInputSubmit, PromptInputTextarea, type PromptInputMessage } from "../ai-elements/prompt-input";
 import { ComposerModelSelector } from "./ComposerModelSelector";
+import { ComposerContext } from "./ComposerContext";
 
 type Attachment = { name: string; data: string; mimeType: string };
 const composerCache = new Map<string, { text: string; attachments: Attachment[] }>();
@@ -77,6 +78,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
           <div className="composer-tool-cluster"><Button variant="ghost" className="size-8 rounded-full p-0 text-muted-foreground hover:text-foreground hover:bg-accent" aria-label="上传附件" title="上传图片" onClick={() => fileInput.current?.click()}><Icon name="plus" className="size-4" /></Button></div>
           <ComposerModelSelector />
           {(transcript.queue.steering.length > 0 || transcript.queue.followUp.length > 0) && <span className="composer-queue-status" aria-live="polite">已排队 {transcript.queue.steering.length + transcript.queue.followUp.length}</span>}
+          <ComposerContext />
           <PromptInputSubmit status={transcript.running ? "streaming" : "ready"} disabled={!online} title={transcript.running ? "暂停生成" : "发送消息"} aria-label={transcript.running ? "暂停生成" : "发送消息"} onClick={transcript.running ? () => void stop().catch(report) : undefined} />
         </div>
       </PromptInput>

@@ -4,8 +4,10 @@ import { useWorkspace } from "../../lib/store";
 import { changeSession, report, retireSession } from "../../lib/rpc";
 import type { Session } from "../../lib/protocol";
 import { mergeProjectSessions, useProjectSessions } from "../../hooks/use-project-sessions";
-import { Button, Input, Modal, Skeleton } from "../UI";
+import { Button, Input, Skeleton } from "../UI";
 import { Icon } from "../Icon";
+import { DeleteSessionDialog } from "../DeleteSessionDialog";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../ui/context-menu";
 
 export function SessionsPanel() {
   const cwd = useWorkspace(state => state.cwd);
@@ -37,12 +39,21 @@ export function SessionsPanel() {
     {sessions.error && <p className="error-inline">{String(sessions.error)}</p>}
     <div className="session-rows">{visibleSessions.map(session => {
       const working = liveSessions.some(live => live.running && live.path === session.path);
-      return <div className={`session-row${working ? " working" : ""}`} key={session.id}>
-        <Button disabled={!online} aria-busy={working} onClick={() => void changeSession({ type: "switch_session", sessionPath: session.path }).catch(report)}><Icon name="chats" /><span><strong>{session.name || session.firstMessage || "未命名会话"}</strong><small>{session.messageCount} 条消息 · {session.modified ? new Date(session.modified).toLocaleString("zh-CN") : "刚刚"}</small></span>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name="arrow-up-right" />}</Button>
-        {merged.listedPaths.has(session.path) && <Button title="删除会话" disabled={!online} onClick={() => setDeleting(session)}><Icon name="trash" /></Button>}
-      </div>;
+      const label = session.name || session.firstMessage || "未命名会话";
+      const openSession = () => void changeSession({ type: "switch_session", sessionPath: session.path }).catch(report);
+      return <ContextMenu key={session.id}>
+        <ContextMenuTrigger render={<div className={`session-row${working ? " working" : ""}`} />}>
+          <Button disabled={!online} aria-busy={working} onClick={openSession}><Icon name="chats" /><span><strong>{label}</strong><small>{session.messageCount} 条消息 · {session.modified ? new Date(session.modified).toLocaleString("zh-CN") : "刚刚"}</small></span>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name="arrow-up-right" />}</Button>
+          {merged.listedPaths.has(session.path) && <Button title="删除会话" disabled={!online} onClick={() => setDeleting(session)}><Icon name="trash" /></Button>}
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-44">
+          <ContextMenuItem disabled={!online} onClick={openSession}><Icon name="chats" />打开会话</ContextMenuItem>
+          <ContextMenuItem onClick={() => void navigator.clipboard.writeText(label)}><Icon name="copy" />复制标题</ContextMenuItem>
+          {merged.listedPaths.has(session.path) && <><ContextMenuSeparator /><ContextMenuItem variant="destructive" disabled={!online} onClick={() => setDeleting(session)}><Icon name="trash" />删除会话</ContextMenuItem></>}
+        </ContextMenuContent>
+      </ContextMenu>;
     })}</div>
     {!merged.sessions.length && <div className="empty-panel"><Icon name="chats" /><h3>还没有保存的会话</h3><p>发送第一条消息后，Pi 会自动保存。</p></div>}
-    <Modal open={Boolean(deleting)} title="删除会话" onCancel={() => setDeleting(null)} onOk={() => void remove()} okText="删除" cancelText="取消">删除后无法恢复：{deleting?.name || deleting?.firstMessage || "未命名会话"}</Modal>
+    <DeleteSessionDialog open={Boolean(deleting)} sessionName={deleting?.name || deleting?.firstMessage || "未命名会话"} onCancel={() => setDeleting(null)} onConfirm={() => void remove()} />
   </>;
 }

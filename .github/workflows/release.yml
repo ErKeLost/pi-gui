@@ -64,7 +64,7 @@ jobs:
         with:
           tauriScript: bun run tauri
           tagName: v__VERSION__
-          releaseName: Pi GUI v__VERSION__
+          releaseName: Orbit v__VERSION__
           releaseBody: Signed installers for macOS, Linux, and Windows. Linux auto-updates use the signed AppImage artifact.
           releaseDraft: false
           prerelease: false

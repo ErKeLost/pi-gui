@@ -32,7 +32,7 @@ export function UpdateChecker() {
       .then(({ check }) => check())
       .then((update) => {
         if (!update) return
-        gooeyToast.info(`发现 Pi GUI ${update.version}`, {
+        gooeyToast.info(`发现 Orbit ${update.version}`, {
           description: update.body || "新版本已经可以安装。",
           duration: Infinity,
           showTimestamp: false,

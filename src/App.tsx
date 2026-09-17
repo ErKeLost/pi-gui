@@ -25,7 +25,7 @@ export default function App(){
  const merged=useMemo(()=>mergeProjectSessions(cwd,sessions.data??[],liveSessions),[cwd,sessions.data,liveSessions])
  const recentSessions=merged.sessions.slice(0,8)
  const currentSession=recentSessions.find(session=>session.path===state?.sessionFile)
- const rawHeaderTitle=panel==='chat'?(currentSession?.name||currentSession?.firstMessage||''):panel==='settings'?'设置':panel==='commands'?'技能与命令':'Pi GUI'
+ const rawHeaderTitle=panel==='chat'?(currentSession?.name||currentSession?.firstMessage||''):panel==='settings'?'设置':panel==='commands'?'技能与命令':'Orbit'
  const headerTitle=panel==='chat'?compactTitle(rawHeaderTitle):rawHeaderTitle
  const toggleSidebar=()=>setSidebarOpen(value=>!value)
  return <main className={`app-shell ${sidebarOpen?'':'sidebar-collapsed'}`}>

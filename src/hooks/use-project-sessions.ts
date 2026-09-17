@@ -20,6 +20,7 @@ export function mergeProjectSessions(cwd: string, listed: Session[], live: LiveS
       id: session.path,
       cwd,
       firstMessage: session.title,
+      icon: undefined,
       messageCount: 0,
       modified: new Date().toISOString(),
     } satisfies Session] : []),

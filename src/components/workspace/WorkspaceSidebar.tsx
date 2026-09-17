@@ -6,8 +6,10 @@ import { useWorkspace } from "../../lib/store";
 import { changeSession, report, retireSession } from "../../lib/rpc";
 import { sessionGlyph } from "../../lib/session-visual";
 import { ProjectPicker } from "../ProjectPicker";
-import { Button, Modal } from "../UI";
+import { Button } from "../UI";
 import { Icon } from "../Icon";
+import { DeleteSessionDialog } from "../DeleteSessionDialog";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../ui/context-menu";
 import { WorkspaceTitlebar } from "./WorkspaceTitlebar";
 
 const navigation: { id: Panel; label: string; icon: string }[] = [
@@ -51,13 +53,21 @@ export function WorkspaceSidebar(props: WorkspaceSidebarProps) {
       <div className="recent-sessions">{sessions.map(session => {
         const working = liveSessions.some(live => live.running && live.path === session.path);
         const label = session.name || session.firstMessage || "未命名会话";
-        return <div className={`recent-session-row ${session.path === currentSessionFile ? "active" : ""}${working ? " working" : ""}`} key={session.id}>
-          <button type="button" className="recent-session-main" disabled={!online} aria-busy={working} onClick={() => void changeSession({ type: "switch_session", sessionPath: session.path }).catch(report)}>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name={sessionGlyph(label)} className="recent-session-glyph" />}<span className="recent-session-title">{label}</span></button>
-          {listedPaths.has(session.path) && <button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${label}`} disabled={!online} onClick={event => { event.stopPropagation(); setDeleting(session); }}><Icon name="trash" /></button>}
-        </div>;
+        const openSession = () => void changeSession({ type: "switch_session", sessionPath: session.path }).catch(report);
+        return <ContextMenu key={session.id}>
+          <ContextMenuTrigger render={<div className={`recent-session-row ${session.path === currentSessionFile ? "active" : ""}${working ? " working" : ""}`} />}>
+            <button type="button" className="recent-session-main" disabled={!online} aria-busy={working} onClick={openSession}>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name={sessionGlyph(session.icon)} className="recent-session-glyph" />}<span className="recent-session-title">{label}</span></button>
+            {listedPaths.has(session.path) && <button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${label}`} disabled={!online} onClick={event => { event.stopPropagation(); setDeleting(session); }}><Icon name="trash" /></button>}
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem disabled={!online} onClick={openSession}><Icon name="chats" />打开会话</ContextMenuItem>
+            <ContextMenuItem onClick={() => void navigator.clipboard.writeText(label)}><Icon name="copy" />复制标题</ContextMenuItem>
+            {listedPaths.has(session.path) && <><ContextMenuSeparator /><ContextMenuItem variant="destructive" disabled={!online} onClick={() => setDeleting(session)}><Icon name="trash" />删除会话</ContextMenuItem></>}
+          </ContextMenuContent>
+        </ContextMenu>;
       })}{!sessions.length && <p>你的会话会保存在这里。</p>}</div>
       <div className="sidebar-bottom"><Button className="nav-item" onClick={() => useWorkspace.getState().set({ panel: "settings", settingsPage: "general" })}><Icon name="gear-six" />设置<kbd>⌘ ,</kbd></Button></div>
     </aside>
-    <Modal open={Boolean(deleting)} title="删除会话" onCancel={() => setDeleting(null)} onOk={() => void remove()} okText="删除" cancelText="取消">删除后无法恢复：{deleting?.name || deleting?.firstMessage || "未命名会话"}</Modal>
+    <DeleteSessionDialog open={Boolean(deleting)} sessionName={deleting?.name || deleting?.firstMessage || "未命名会话"} onCancel={() => setDeleting(null)} onConfirm={() => void remove()} />
   </div>;
 }

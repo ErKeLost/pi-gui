@@ -25,7 +25,7 @@ export function useWorkspaceBootstrap() {
     }
     const storedPath = localStorage.getItem("pi-gui.cwd");
     const savedProjects = useProjects.getState().projects;
-    if (!storedPath && localStorage.getItem("pi-gui.projects") !== null && savedProjects.length === 0) {
+    if (!storedPath && savedProjects.length === 0) {
       useWorkspace.getState().set({ cwd: "", workspaceMode: "project" });
       return;
     }

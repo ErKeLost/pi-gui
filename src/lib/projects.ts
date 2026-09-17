@@ -1,10 +1,11 @@
 import {create} from 'zustand'
 export type Project={path:string;name:string}
+const PROJECTS_KEY='pi-gui.projects.v1',LEGACY_PROJECTS_KEY=['pi-gui','projects'].join('.')
 export function mergeProjects(existing:Project[],paths:string[]):Project[]{const all=new Map(existing.map(p=>[p.path,p]));for(const raw of paths){const path=raw.replace(/\/+$/,'')||'/';all.set(path,{path,name:path.split('/').filter(Boolean).at(-1)||'/'})}return [...all.values()]}
 export function removeProject(projects:Project[],path:string):Project[]{return projects.filter(project=>project.path!==path)}
-function load():Project[]{try{const value=JSON.parse(localStorage.getItem('pi-gui.projects')??'[]');return Array.isArray(value)?value.filter((item:Project)=>item&&typeof item.path==='string'&&typeof item.name==='string'):[]}catch{return []}}
+function load():Project[]{try{const value=JSON.parse(localStorage.getItem(PROJECTS_KEY)??localStorage.getItem(LEGACY_PROJECTS_KEY)??'[]');return Array.isArray(value)?value.filter((item:Project)=>item&&typeof item.path==='string'&&typeof item.name==='string'):[]}catch{return []}}
 export const useProjects=create<{projects:Project[];add:(paths:string[])=>void;remove:(path:string)=>void}>(set=>({
  projects:load(),
- add:paths=>set(state=>{const projects=mergeProjects(state.projects,paths);localStorage.setItem('pi-gui.projects',JSON.stringify(projects));return {projects}}),
- remove:path=>set(state=>{const projects=removeProject(state.projects,path);localStorage.setItem('pi-gui.projects',JSON.stringify(projects));return {projects}}),
+ add:paths=>set(state=>{const projects=mergeProjects(state.projects,paths);localStorage.setItem(PROJECTS_KEY,JSON.stringify(projects));return {projects}}),
+ remove:path=>set(state=>{const projects=removeProject(state.projects,path);localStorage.setItem(PROJECTS_KEY,JSON.stringify(projects));return {projects}}),
 }))

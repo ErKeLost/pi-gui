@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { FileIcon, Icon } from "./Icon";
+import { externalLinkIcon } from "../lib/link-visual";
 import { Button } from "./ui/button";
 
 /**
@@ -144,18 +145,15 @@ export function MarkdownLink({
     return (
       <a {...rest} {...attrs} href={href} className={`md-autolink ${className}`.trim()}>
         <span className="md-autolink-icon" aria-hidden="true">
-          {file ? <FileIcon path={file} /> : <Icon name="globe" />}
+          {file ? <FileIcon path={file} /> : <Icon name={externalLinkIcon(href)} />}
         </span>
         <span className="md-autolink-label">{children}</span>
       </a>
     );
   }
 
-  return (
-    <a {...rest} {...attrs} href={href} className={className}>
-      {children}
-    </a>
-  );
+  if (external) return <a {...rest} {...attrs} href={href} className={`md-external-link ${className}`.trim()}><span className="md-autolink-icon" aria-hidden="true"><Icon name={externalLinkIcon(href)} /></span>{children}</a>;
+  return <a {...rest} {...attrs} href={href} className={className}>{children}</a>;
 }
 
 const LANGUAGE_LABELS: Record<string, string> = {

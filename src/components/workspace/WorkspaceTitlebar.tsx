@@ -1,6 +1,8 @@
+import { FolderClosed } from "lucide-react";
 import { Button } from "../UI";
 import { Icon } from "../Icon";
 import { useWorkspace } from "../../lib/store";
+import { useWindowDrag } from "../../hooks/use-window-drag";
 
 function Navigation({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {
   return <div className="titlebar-navigation">
@@ -20,15 +22,17 @@ type WorkspaceTitlebarProps = {
 };
 
 export function WorkspaceTitlebar({ variant, sidebarOpen, onToggleSidebar, title, rawTitle, showMenu }: WorkspaceTitlebarProps) {
+  const dragRef = useWindowDrag();
   const showNavigation = variant === "sidebar" || variant === "full" || (variant === "workspace" && !sidebarOpen);
   const showContent = variant === "workspace" || variant === "full";
   const className = variant === "workspace" && !sidebarOpen
     ? "app-header app-header-workspace app-header-workspace-full"
     : `app-header app-header-${variant}`;
-  return <header className={className} data-tauri-drag-region="deep" aria-hidden={variant === "inspector" || undefined}>
+  return <header ref={dragRef} className={className} data-tauri-drag-region aria-hidden={variant === "inspector" || undefined}>
     {showNavigation && <Navigation sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />}
     {showNavigation && showContent && <span className="titlebar-divider" aria-hidden />}
     {showContent && <>
+      <FolderClosed className="app-header-folder" strokeWidth={1.7} aria-hidden="true" />
       <strong className="app-header-title" title={rawTitle || title}>{title}</strong>
       {showMenu && <Button className="titlebar-button app-header-more" title="会话管理" onClick={() => useWorkspace.getState().set({ panel: "settings", settingsPage: "sessions" })}><Icon name="dots-three" /></Button>}
     </>}

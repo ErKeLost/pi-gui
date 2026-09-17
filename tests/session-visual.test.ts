@@ -1,14 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { compactTitle, sessionGlyph } from "../src/lib/session-visual";
+import { modelFamily } from "../src/lib/model-meta";
 
 describe("sessionGlyph", () => {
-  test("picks a content icon from the title", () => {
-    expect(sessionGlyph("如何提高图片的清晰度?")).toBe("image-square");
-    expect(sessionGlyph("Generate Light Theme SVG Image")).toBe("image-square");
-    expect(sessionGlyph("全栈todolist网站开发请求")).toBe("list-checks");
-    expect(sessionGlyph("你好")).toBe("robot");
-    expect(sessionGlyph("天气应用的产品结构设计")).toBe("cloud-sun");
-    expect(sessionGlyph("创建一个Landing Page")).toBe("palette");
+  test("uses persisted agent metadata when the icon is bundled", () => {
+    expect(sessionGlyph("image-square")).toBe("image-square");
+    expect(sessionGlyph("code")).toBe("code");
   });
 
   test("compacts first-message titles for the header", () => {
@@ -19,9 +16,17 @@ describe("sessionGlyph", () => {
     expect(compactTitle("   ")).toBe("新会话");
   });
 
-  test("keeps unnamed sessions and unrelated titles stable", () => {
-    expect(sessionGlyph("")).toBe("chat-teardrop-text");
-    expect(sessionGlyph("随机标题甲")).toBe(sessionGlyph("随机标题甲"));
-    expect(sessionGlyph("随机标题甲")).not.toBe(sessionGlyph("另一个完全不同的标题"));
+  test("falls back to one default for missing or invalid metadata", () => {
+    expect(sessionGlyph()).toBe("chat-teardrop-text");
+    expect(sessionGlyph("not-a-bundled-icon")).toBe("chat-teardrop-text");
+  });
+});
+
+describe("modelFamily", () => {
+  test("uses the same model mapping as the rendered model icon", () => {
+    expect(modelFamily("claude-opus-5")).toBe("Claude");
+    expect(modelFamily("gpt-5.6-sol")).toBe("OpenAI");
+    expect(modelFamily("glm-5.3-flash")).toBe("GLM");
+    expect(modelFamily("kimi-k2.7-code")).toBe("Kimi");
   });
 });

@@ -51,7 +51,7 @@ export function CurrentResponseSection({ telemetry, transcript }: { telemetry: T
 
 export function QueueToolsSection({ stats, state, transcript }: { stats?: Stats; state: RpcSessionState | null; transcript: Transcript }) {
   const attributed = Object.entries(transcript.tools).filter(([, tool]) => tool.usage);
-  const runningTools = Object.values(transcript.tools).filter(tool => tool.running).map(tool => tool.name).join(", ") || "无";
+  const runningTools = Object.values(transcript.tools).reduce<string[]>((names,tool) => { if(tool.running) names.push(tool.name); return names; }, []).join(", ") || "无";
   return <section><h3>队列与工具</h3><Rows rows={[["待处理消息", state?.pendingMessageCount], ["引导 / 跟进", `${transcript.queue.steering.length} / ${transcript.queue.followUp.length}`], ["引导投递模式", state?.steeringMode], ["跟进投递模式", state?.followUpMode], ["执行中工具", runningTools], ["累计工具调用", stats?.toolCalls], ["累计工具结果", stats?.toolResults], ["全部历史消息", stats?.totalMessages], ["当前上下文消息", state?.messageCount], ["用户 / 助手消息", stats ? `${stats.userMessages} / ${stats.assistantMessages}` : null]]} />{attributed.length > 0 ? <Rows rows={attributed.map(([id, tool]) => [`${tool.name} · ${id.slice(0, 6)}`, `${tool.usage?.totalTokens.toLocaleString()} tokens${tool.usage?.cost?.total != null ? ` · $${tool.usage.cost.total.toFixed(4)}` : ""}`])} /> : <p className="metric-note">Pi 的标准工具通常不返回独立 token 用量；可归因的嵌套模型用量会在工具卡中显示。</p>}</section>;
 }
 

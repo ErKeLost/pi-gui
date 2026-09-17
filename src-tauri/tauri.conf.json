@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Pi GUI",
-  "version": "0.1.32",
+  "productName": "Orbit",
+  "version": "0.1.33",
   "identifier": "ai.pi.gui",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Pi GUI",
+        "title": "Orbit",
         "width": 1280,
         "height": 840,
         "resizable": true,

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../src/components/Markdown";
+import { externalLinkIcon } from "../src/lib/link-visual";
 
 describe("shared Markdown renderer", () => {
   test("renders GFM tables and KaTeX through LobeHub Streamdown", () => {
@@ -85,5 +86,12 @@ describe("shared Markdown renderer", () => {
     expect(html).toContain("md-autolink");
     expect(html).toContain("href=\"https://lobehub.com/icons/skill.md\"");
     expect(html).toContain("md-chip is-mention");
+  });
+
+  test("renders bundled brand logos for external links", () => {
+    const html = renderToStaticMarkup(<Markdown content="https://github.com/openai/codex" />);
+
+    expect(html).toContain("md-autolink-icon");
+    expect(externalLinkIcon("https://github.com/openai/codex")).toBe("github-logo");
   });
 });

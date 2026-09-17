@@ -1,5 +1,5 @@
 // Adapted from Beautiful UI. See docs/licenses/beautiful-ui.txt.
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useReducedMotion } from "motion/react";
 import { ElapsedTime } from "./elapsed-time";
 import { StableShimmer } from "./stable-shimmer";
@@ -65,12 +65,14 @@ function SurferVideo({ src }: { src: string }) {
 export default function LoadingState({
   label,
   detail,
+  icon,
   variant = "Drive",
   videoSrc = "https://95dnc2a95qgwt9ff.public.blob.vercel-storage.com/subway-surfers.mp4",
   className = "",
 }: {
   label?: string;
   detail?: string;
+  icon?: ReactNode;
   variant?: LoadingVariant;
   videoSrc?: string;
   className?: string;
@@ -80,7 +82,7 @@ export default function LoadingState({
   return (
     <span className={`loading-state ${className}`}>
       <span role="status" aria-label={resolvedLabel} className="loading-state-status">
-        <LoaderGrid variant={surfer ? "Drive" : variant} />
+        {icon ?? <LoaderGrid variant={surfer ? "Drive" : variant} />}
         <span className="loading-state-copy">
           <StableShimmer text={resolvedLabel} className="loading-state-label" />
           {detail && <StableShimmer text={detail} className="loading-detail" />}

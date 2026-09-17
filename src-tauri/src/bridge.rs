@@ -227,7 +227,7 @@ pub fn set_project_trust_mode(mode: String) -> Result<String, String> {
 
 fn load_provider_store(dir: &std::path::Path) -> Result<Value, String> {
     let path = provider_store_path(dir);
-    if path.exists() { read_json_file(path, "Pi GUI Provider 配置") } else { Ok(json!({"providers": {}})) }
+    if path.exists() { read_json_file(path, "Orbit Provider 配置") } else { Ok(json!({"providers": {}})) }
 }
 
 fn write_provider_store(dir: &std::path::Path, store: &Value) -> Result<(), String> {
@@ -493,7 +493,7 @@ pub async fn list_sessions(cwd: String) -> Result<Value, String> {
         let pi = pi_path()?;
         let sdk = pi.parent().ok_or("Invalid Pi path")?.join("index.js");
         // SDK SessionManager.list is the documented session index, not a guessed JSONL parser.
-        let code = "const {pathToFileURL}=require('node:url'); (async()=>{const {SessionManager}=await import(pathToFileURL(process.argv[1]).href); console.log(JSON.stringify((await SessionManager.list(process.argv[2])).map(({allMessagesText,...session})=>session)));})().catch(()=>process.exit(1));";
+        let code = "const {pathToFileURL}=require('node:url'); (async()=>{const {SessionManager}=await import(pathToFileURL(process.argv[1]).href);const sessions=await SessionManager.list(process.argv[2]);const result=sessions.map(({allMessagesText,...session})=>{let icon;try{const entries=SessionManager.open(session.path).getEntries();const meta=[...entries].reverse().find(entry=>entry.type==='custom'&&entry.customType==='pi-gui-session-meta');if(meta?.data&&typeof meta.data.icon==='string')icon=meta.data.icon}catch{}return {...session,...(icon?{icon}:{})}});console.log(JSON.stringify(result));})().catch(()=>process.exit(1));";
         let output = Command::new(executable("node")?).args(["-e",code]).arg(sdk).arg(path).output().map_err(|e|e.to_string())?;
         if !output.status.success() { return Err("Pi SDK 无法读取会话列表".into()); }
         serde_json::from_slice(&output.stdout).map_err(|e|e.to_string())

@@ -1,7 +1,7 @@
 [package]
-name = "pi-gui"
-version = "0.1.32"
-description = "A local desktop workspace for Pi"
+name = "orbit"
+version = "0.1.33"
+description = "A local desktop workspace for Orbit"
 authors = ["you"]
 license = ""
 repository = ""

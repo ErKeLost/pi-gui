@@ -143,5 +143,5 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
   }
 }
 export type Model = NonNullable<RpcSessionState['model']>
-export type Session = { path:string; id:string; cwd:string; name?:string; modified:string; messageCount:number; firstMessage:string }
+export type Session = { path:string; id:string; cwd:string; name?:string; icon?:string; modified:string; messageCount:number; firstMessage:string }
 export type UiRequest = RpcExtensionUIRequest

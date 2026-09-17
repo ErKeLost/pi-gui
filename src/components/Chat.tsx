@@ -1,3 +1,4 @@
+import { Wifi } from "lucide-react";
 import { useEffect, useId, useMemo, useState, type RefObject } from "react";
 import { m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
@@ -135,7 +136,7 @@ export function Chat() {
           savedDuration={savedDurations[turnDurationId(group.items) ?? ""]}
         />)}
         {transcript.error && !transcript.running && <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}><ErrorOutput error={transcript.error} /></m.div>}
-        {(compacting || retrying || (transcript.running && !activeHasOutput)) && <LoadingState className="chat-loading-state" label={compacting ? "正在压缩上下文" : (transcript.phase || "正在处理")} detail={compacting ? compactionDetail : retryDetail} />}
+        {(compacting || retrying || (transcript.running && !activeHasOutput)) && <LoadingState icon={retrying && !compacting ? <Wifi size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" /> : undefined} className="chat-loading-state" label={compacting ? "正在压缩上下文" : (transcript.phase || "正在处理")} detail={compacting ? compactionDetail : retryDetail} />}
       </ConversationContent>
       {!atBottom && <ConversationScrollButton onClick={scrollToBottom} />}
     </Conversation>

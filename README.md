@@ -1,6 +1,6 @@
-# Pi GUI
+# Orbit
 
-桌面的 Pi 工作台：Tauri 2 + Vite + React + Motion + TanStack Query + Zustand + Iconify + assistant-ui。使用真实 Pi RPC 和 SDK，不是模拟聊天界面。
+桌面的 Orbit 工作台：Tauri 2 + Vite + React + Motion + TanStack Query + Zustand + Iconify + assistant-ui。使用真实 Pi RPC 和 SDK，不是模拟聊天界面。
 
 ## 运行
 
