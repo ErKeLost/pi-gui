@@ -1,33 +1,16 @@
-export type EffortFieldMode = "high" | "extra" | "max" | null;
+export type EffortFieldMode = "off" | "minimal" | "low" | "medium" | "high" | "extra" | "max";
 
 type Rgb = readonly [number, number, number];
 
-const LEVEL_COLORS: readonly Rgb[] = [
-  [158, 158, 158],
-  [151, 151, 151],
-  [144, 144, 144],
-  [192, 186, 236],
-  [186, 176, 232],
-  [182, 156, 240],
-];
-
-const LEVEL_COLORS_SOFT: readonly Rgb[] = [
-  [214, 214, 214],
-  [210, 210, 210],
-  [206, 206, 206],
-  [212, 208, 242],
-  [208, 202, 240],
-  [206, 184, 244],
-];
-
-const LEVEL_COLORS_DEEP: readonly Rgb[] = [
-  [120, 120, 120],
-  [114, 114, 114],
-  [108, 108, 108],
-  [124, 110, 190],
-  [120, 102, 186],
-  [114, 74, 198],
-];
+const LEVEL_PALETTE: Record<string, { base: Rgb; soft: Rgb; deep: Rgb }> = {
+  off: { base: [145, 145, 150], soft: [214, 214, 218], deep: [100, 100, 106] },
+  minimal: { base: [115, 159, 176], soft: [190, 216, 224], deep: [64, 117, 137] },
+  low: { base: [91, 143, 205], soft: [180, 207, 239], deep: [55, 97, 160] },
+  medium: { base: [83, 181, 160], soft: [177, 230, 215], deep: [44, 125, 109] },
+  high: { base: [112, 161, 255], soft: [190, 211, 250], deep: [57, 105, 205] },
+  extra: { base: [176, 140, 250], soft: [214, 198, 246], deep: [120, 80, 203] },
+  max: { base: [211, 126, 232], soft: [233, 193, 242], deep: [151, 72, 183] },
+};
 
 const VISUAL_SLOT: Record<string, number> = {
   none: 0,
@@ -40,8 +23,6 @@ const VISUAL_SLOT: Record<string, number> = {
   xhigh: 4,
   max: 5,
 };
-
-const VISUAL_POSITION: Record<string, number> = { ...VISUAL_SLOT, minimal: 0.5 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const smoothstep = (value: number) => {
@@ -68,7 +49,7 @@ export function effortVisualSlot(level?: string) {
 }
 
 export function effortVisualPosition(level?: string) {
-  return VISUAL_POSITION[normalize(level)] ?? 0;
+  return VISUAL_SLOT[normalize(level)] ?? 0;
 }
 
 export function effortFieldMode(level?: string): EffortFieldMode {
@@ -76,23 +57,10 @@ export function effortFieldMode(level?: string): EffortFieldMode {
   if (canonical === "max") return "max";
   if (canonical === "extra" || canonical === "xhigh") return "extra";
   if (canonical === "high") return "high";
-  return null;
-}
-
-function paletteColorAt(palette: readonly Rgb[], value: number) {
-  const safe = clamp(Number.isFinite(value) ? value : 0, 0, 5);
-  const lowerIndex = Math.floor(safe);
-  const upperIndex = Math.min(lowerIndex + 1, 5);
-  const amount = smoothstep(safe - lowerIndex);
-  return mixColor(palette[lowerIndex], palette[upperIndex], amount);
-}
-
-export function effortColorsAt(value: number) {
-  return {
-    base: rgb(paletteColorAt(LEVEL_COLORS, value)),
-    soft: rgb(paletteColorAt(LEVEL_COLORS_SOFT, value)),
-    deep: rgb(paletteColorAt(LEVEL_COLORS_DEEP, value)),
-  };
+  if (canonical === "medium") return "medium";
+  if (canonical === "low") return "low";
+  if (canonical === "minimal") return "minimal";
+  return "off";
 }
 
 export function effortColorsForLevels(levels: readonly string[], value: number) {
@@ -101,10 +69,14 @@ export function effortColorsForLevels(levels: readonly string[], value: number) 
   const lowerIndex = Math.floor(safe);
   const upperIndex = Math.min(lowerIndex + 1, max);
   const amount = smoothstep(safe - lowerIndex);
-  const lowerPosition = effortVisualPosition(levels[lowerIndex]);
-  const upperPosition = effortVisualPosition(levels[upperIndex]);
-  const combine = (palette: readonly Rgb[]) => rgb(mixColor(paletteColorAt(palette, lowerPosition), paletteColorAt(palette, upperPosition), amount));
-  return { base: combine(LEVEL_COLORS), soft: combine(LEVEL_COLORS_SOFT), deep: combine(LEVEL_COLORS_DEEP) };
+  const palette = (level?: string) => LEVEL_PALETTE[effortFieldMode(level)];
+  const lower = palette(levels[lowerIndex]);
+  const upper = palette(levels[upperIndex]);
+  return {
+    base: rgb(mixColor(lower.base, upper.base, amount)),
+    soft: rgb(mixColor(lower.soft, upper.soft, amount)),
+    deep: rgb(mixColor(lower.deep, upper.deep, amount)),
+  };
 }
 
 export function magnetizeEffort(value: number, targets: number[]) {

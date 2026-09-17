@@ -2037,7 +2037,7 @@ body,
 .composer-model-row-copy small { color: var(--muted-foreground); font-size: 8.5px; }
 .composer-model-check { width: 13px; height: 13px; color: var(--foreground) !important; }
 .composer-model-empty { margin: 12px 8px; color: var(--muted-foreground); font-size: 11px; }
-.composer-effort-footer { padding: 7px 12px; border-top: 1px solid var(--border); background: color-mix(in oklch, var(--muted) 24%, var(--popover)); }
+.composer-effort-footer { padding: 4px 12px; border-top: 1px solid var(--border); background: color-mix(in oklch, var(--muted) 24%, var(--popover)); }
 
 /* Workspace switcher: compact rows with enough path context to distinguish
    projects that share the same directory name. */

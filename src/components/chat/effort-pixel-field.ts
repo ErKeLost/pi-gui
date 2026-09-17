@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 
-export type EffortFieldMode = "high" | "extra" | "max" | null;
+export type EffortFieldMode = "off" | "minimal" | "low" | "medium" | "high" | "extra" | "max";
 
 type BooleanSource = boolean | RefObject<boolean>;
 type Color = readonly [number, number, number];
@@ -129,7 +129,7 @@ function drawMaxField({ context, width, height, time, startedAt, reveal, cells, 
     paleCool,
   ];
 
-  const rawFlow = elapsed / 4000;
+  const rawFlow = elapsed / FIELD_PROFILE.max.period;
   const flowCycle = Math.floor(rawFlow);
   const easedFlow = flowCycle + smoothstep(0, 1, rawFlow - flowCycle);
 
@@ -230,13 +230,13 @@ function drawMaxField({ context, width, height, time, startedAt, reveal, cells, 
   context.globalAlpha = 1;
 }
 
-interface DrawRippleOptions {
+interface DrawStageOptions {
   context: CanvasRenderingContext2D;
   width: number;
   height: number;
   time: number;
   startedAt: number;
-  mode: "high" | "extra";
+  mode: Exclude<EffortFieldMode, "max">;
   progress: number;
   thumbWidth: number;
   reducedMotion: boolean;
@@ -244,7 +244,21 @@ interface DrawRippleOptions {
   cell: number;
 }
 
-function drawRippleField({
+const FIELD_PROFILE = {
+  off: { color: [145, 145, 150], density: 0.1, period: 2600 },
+  minimal: { color: [105, 165, 180], density: 0.18, period: 2200 },
+  low: { color: [88, 143, 220], density: 0.28, period: 1800 },
+  medium: { color: [74, 190, 155], density: 0.4, period: 1450 },
+  high: { color: [120, 160, 255], density: 0.56, period: 1100 },
+  extra: { color: [185, 130, 250], density: 0.74, period: 820 },
+  max: { color: [211, 126, 232], density: 1, period: 680 },
+} as const satisfies Record<EffortFieldMode, { color: Color; density: number; period: number }>;
+
+export function effortFieldProfile(mode: EffortFieldMode) {
+  return FIELD_PROFILE[mode];
+}
+
+function drawStageField({
   context,
   width,
   height,
@@ -256,29 +270,31 @@ function drawRippleField({
   reducedMotion,
   cells,
   cell,
-}: DrawRippleOptions) {
+}: DrawStageOptions) {
   const thumbX = (width - thumbWidth) * progress + thumbWidth * 0.5;
   const originX = clamp(thumbX, 4, width - 4);
-  const color: Color = mode === "high" ? [130, 172, 255] : [176, 140, 250];
+  const profile = effortFieldProfile(mode);
+  const color = profile.color;
   const elapsed = Math.max(0, time - startedAt);
-  const reveal = reducedMotion ? 1 : smoothstep(0, 1, elapsed / 900);
-  const ripplePhase = (elapsed % 1400) / 1400;
+  const reveal = reducedMotion ? 1 : smoothstep(0, 1, elapsed / 520);
+  const ripplePhase = (elapsed % profile.period) / profile.period;
 
   context.save();
   clipToTrack(context, width, height);
 
   for (const current of cells) {
     const { x, y, base, tempo, phase } = current;
+    if (x + cell * 0.5 > originX) continue;
     const dx = Math.abs(x - originX) / (width * 0.5);
     if (dx > 1) continue;
-    const near = clamp(1 - dx * 1.1, 0, 1);
-    if (base > 0.6 - near * 0.5) continue;
+    const near = clamp(1 - dx * 0.92, 0, 1);
+    const density = profile.density * (0.56 + near * 0.44);
+    if (base > density) continue;
 
-    const flicker = 0.5 + 0.5 * Math.sin(elapsed * 0.015 + tempo * Math.PI * 2 + phase * 6.28);
-    const wave = 0.5 + 0.5 * Math.sin((dx * 3 - ripplePhase) * Math.PI * 2);
+    const flicker = 0.5 + 0.5 * Math.sin((elapsed / profile.period) * Math.PI * 2 * (1.4 + tempo * 1.8) + phase * 6.28);
+    const wave = 0.5 + 0.5 * Math.sin((dx * 2.7 - ripplePhase) * Math.PI * 2);
     const revealAlpha = smoothstep(0, 1, reveal * (1 - dx * 0.85) + dx * 0.15);
-    const brightness =
-      (0.15 + 0.45 * flicker + near * (0.5 + near * 0.3)) * (0.12 + 0.88 * wave) * revealAlpha;
+    const brightness = (0.18 + 0.48 * flicker + near * 0.4) * (0.25 + 0.75 * wave) * revealAlpha;
     const alpha = clamp(brightness, 0, 1);
 
     context.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha.toFixed(3)})`;
@@ -332,8 +348,8 @@ export function mountEffortPixelField({
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
 
-    if (mode === "high" || mode === "extra") {
-      drawRippleField({
+    if (mode !== "max") {
+      drawStageField({
         context,
         width,
         height,
@@ -395,7 +411,7 @@ export function mountEffortPixelField({
     }
     if (time - lastCanvasFrame >= FRAME_INTERVAL) {
       lastCanvasFrame = time;
-      if (mode === "max") maxReveal = smoothstep(0, 1, (time - startedAt) / 1000);
+      if (mode === "max") maxReveal = smoothstep(0, 1, (time - startedAt) / 640);
       draw(time);
     }
     animationFrame = requestAnimationFrame(frame);

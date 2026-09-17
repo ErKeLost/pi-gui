@@ -49,6 +49,18 @@ function clearLight(event: PointerEvent<HTMLElement>) {
   event.currentTarget.style.setProperty("--light-strength", "0");
 }
 
+function valueFromPointer(root: HTMLElement | null, clientX: number, maxIndex: number) {
+  if (!root || maxIndex <= 0) return 0;
+  const track = root.querySelector<HTMLElement>(".effort-slider-track");
+  if (!track) return 0;
+  const rect = track.getBoundingClientRect();
+  const thumbWidth = Number.parseFloat(getComputedStyle(root).getPropertyValue("--ds-effort-thumb-w")) || 24;
+  const thumbInset = Number.parseFloat(getComputedStyle(root).getPropertyValue("--ds-effort-thumb-inset")) || 2;
+  const centerInset = thumbInset + thumbWidth * 0.5;
+  const progress = clamp((clientX - rect.left - centerInset) / Math.max(1, rect.width - centerInset * 2), 0, 1);
+  return progress * maxIndex;
+}
+
 export function EffortSlider({ levels, value, disabled, onChange }: EffortSliderProps) {
   const maxIndex = Math.max(0, levels.length - 1);
   const selectedIndex = Math.max(0, levels.indexOf(value ?? levels[0]));
@@ -61,11 +73,14 @@ export function EffortSlider({ levels, value, disabled, onChange }: EffortSlider
   const continuousValueRef = useRef(selectedIndex);
   const progressRef = useRef(maxIndex ? selectedIndex / maxIndex : 0.5);
   const draggingRef = useRef(false);
+  const pointerIdRef = useRef<number | null>(null);
+  const pointerStartRef = useRef(0);
   const lastCommittedRef = useRef(value);
   const activeLevel = levels[activeIndex];
   const activeVisualSlot = effortVisualSlot(activeLevel);
   const fieldMode = effortFieldMode(activeLevel);
   const initialColors = effortColorsForLevels(levels, selectedIndex);
+  const magnetTargets = levels.map((_, index) => index);
 
   const applyVisual = useCallback((nextValue: number) => {
     const safeValue = clamp(Number.isFinite(nextValue) ? nextValue : 0, 0, maxIndex);
@@ -92,7 +107,7 @@ export function EffortSlider({ levels, value, disabled, onChange }: EffortSlider
       root.toggleAttribute("data-glow", nextVisualSlot >= 3);
       root.toggleAttribute("data-max", nextMode === "max");
       root.toggleAttribute("data-field", nextMode === "high" || nextMode === "extra");
-      root.toggleAttribute("data-pixels-ready", nextMode === "max");
+      root.setAttribute("data-pixels-ready", "");
     }
     if (activeIndexRef.current !== nextIndex) {
       activeIndexRef.current = nextIndex;
@@ -115,7 +130,7 @@ export function EffortSlider({ levels, value, disabled, onChange }: EffortSlider
     thumbRef,
     continuousValueRef: progressRef,
     mode: fieldMode,
-    active: fieldMode != null,
+    active: true,
     dragging: draggingRef,
   }), [fieldMode]);
 
@@ -141,19 +156,15 @@ export function EffortSlider({ levels, value, disabled, onChange }: EffortSlider
     "--ds-effort-level-soft": initialColors.soft,
     "--ds-effort-level-deep": initialColors.deep,
   };
-  const hasMax = levels.some(level => effortFieldMode(level) === "max");
-
   return (
     <section
       ref={rootRef}
       className="effort-slider"
       data-disabled={disabled || undefined}
-      data-field={fieldMode === "high" || fieldMode === "extra" ? "" : undefined}
       data-glow={activeVisualSlot >= 3 ? "" : undefined}
       data-level={activeVisualSlot}
       data-max={fieldMode === "max" ? "" : undefined}
-      data-max-supported={hasMax ? "" : undefined}
-      data-pixels-ready={fieldMode === "max" ? "" : undefined}
+      data-pixels-ready=""
       onPointerMove={moveLight}
       onPointerLeave={clearLight}
       style={style}
@@ -189,27 +200,47 @@ export function EffortSlider({ levels, value, disabled, onChange }: EffortSlider
           aria-label="思考强度"
           aria-valuetext={effortLabel(activeLevel)}
           onPointerDown={event => {
-            draggingRef.current = true;
-            rootRef.current?.setAttribute("data-dragging", "");
-            event.currentTarget.setPointerCapture(event.pointerId);
+            if (disabled) return;
+            event.preventDefault();
+            event.currentTarget.focus();
+            pointerIdRef.current = event.pointerId;
+            pointerStartRef.current = event.clientX;
+            draggingRef.current = false;
+            rootRef.current?.setAttribute("data-clicking", "");
+            applyVisual(valueFromPointer(rootRef.current, event.clientX, maxIndex));
+            try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* pointer already released */ }
           }}
-          onPointerUp={() => {
+          onPointerMove={event => {
+            if (pointerIdRef.current !== event.pointerId) return;
+            if (!draggingRef.current && Math.abs(event.clientX - pointerStartRef.current) > 2) {
+              draggingRef.current = true;
+              rootRef.current?.removeAttribute("data-clicking");
+              rootRef.current?.setAttribute("data-dragging", "");
+            }
             if (!draggingRef.current) return;
+            const raw = valueFromPointer(rootRef.current, event.clientX, maxIndex);
+            applyVisual(magnetizeEffort(raw, magnetTargets));
+          }}
+          onPointerUp={event => {
+            if (pointerIdRef.current !== event.pointerId) return;
+            const raw = valueFromPointer(rootRef.current, event.clientX, maxIndex);
+            pointerIdRef.current = null;
             draggingRef.current = false;
             rootRef.current?.removeAttribute("data-dragging");
-            commit();
+            rootRef.current?.removeAttribute("data-clicking");
+            commit(Math.round(raw));
           }}
           onPointerCancel={() => {
-            if (!draggingRef.current) return;
+            pointerIdRef.current = null;
             draggingRef.current = false;
             rootRef.current?.removeAttribute("data-dragging");
+            rootRef.current?.removeAttribute("data-clicking");
             commit();
           }}
           onInput={event => {
+            if (pointerIdRef.current != null) return;
             const raw = Number(event.currentTarget.value);
-            const next = draggingRef.current ? magnetizeEffort(raw, levels.map((_, index) => index)) : raw;
-            event.currentTarget.value = String(next);
-            applyVisual(next);
+            applyVisual(raw);
           }}
           onKeyDown={handleKey}
           onBlur={() => commit()}

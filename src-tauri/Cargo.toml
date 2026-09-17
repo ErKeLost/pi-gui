@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.1.33"
+version = "0.2.0"
 description = "A local desktop workspace for Orbit"
 authors = ["you"]
 license = ""
