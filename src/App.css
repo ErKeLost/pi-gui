@@ -2363,7 +2363,7 @@ body,
   border-right-color: transparent;
   border-radius: 50%;
   opacity: 0.85;
-  animation: session-working-spin 0.7s linear infinite;
+  animation: session-working-spin 1.8s linear infinite;
 }
 @keyframes session-working-spin {
   to { transform: rotate(360deg); }
