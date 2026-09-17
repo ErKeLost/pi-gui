@@ -10,7 +10,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useWorkspace, type Panel as PanelName } from './lib/store'
 import { native, connect, report, changeSession, retireSession } from './lib/rpc'
 import type { Session } from './lib/protocol'
+import { sessionGlyph } from './lib/session-visual'
 import { Icon } from './components/Icon'
+import { compactTitle } from './lib/session-visual'
 import { Chat } from './components/Chat'
 import { Panel, ExtensionDialog } from './components/Panels'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './components/ui/resizable'
@@ -73,17 +75,18 @@ export default function App(){
   ...listed,
  ].slice(0,8)
  const currentSession=recentSessions.find(session=>session.path===state?.sessionFile)
- const headerTitle=panel==='chat'?(currentSession?.name||currentSession?.firstMessage||'新会话'):panel==='settings'?'设置':navigation.find(item=>item.id===panel)?.label||'Pi GUI'
+ const rawHeaderTitle=panel==='chat'?(currentSession?.name||currentSession?.firstMessage||''):panel==='settings'?'设置':navigation.find(item=>item.id===panel)?.label||'Pi GUI'
+ const headerTitle=panel==='chat'?compactTitle(rawHeaderTitle):rawHeaderTitle
  const titlebarNavigation=<div className="titlebar-navigation">
   <Button className="titlebar-button" title={sidebarOpen?'收起侧栏':'展开侧栏'} onClick={()=>setSidebarOpen(value=>!value)}><Icon name="sidebar-simple"/></Button>
   <Button className="titlebar-button" title="后退" disabled><Icon name="arrow-left"/></Button>
   <Button className="titlebar-button" title="前进" disabled><Icon name="arrow-right"/></Button>
  </div>
  return <main className={`app-shell ${sidebarOpen?'':'sidebar-collapsed'}`}>
-   <header className="app-header" data-tauri-drag-region>
+   <header className="app-header" data-tauri-drag-region="deep">
     {titlebarNavigation}
     <span className="titlebar-divider" aria-hidden />
-    <strong className="app-header-title">{headerTitle}</strong>
+    <strong className="app-header-title" title={rawHeaderTitle||headerTitle}>{headerTitle}</strong>
     {panel==='chat'&&<Button className="titlebar-button app-header-more" title="会话管理" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'sessions'})}><Icon name="dots-three"/></Button>}
    </header>
    {panel==='settings'?<section className="settings-root"><MetricsSync/><Panel/></section>:<ResizablePanelGroup
@@ -97,7 +100,7 @@ export default function App(){
     <Button variant="outline" className="new-session" disabled={!online} onClick={()=>void changeSession({type:'new_session'}).catch(report)}><Icon name="plus"/>新建会话<kbd>⌘ N</kbd></Button>
     <nav aria-label="主导航">{navigation.map(item=><Button key={item.id} className={`nav-item ${panel===item.id?'selected':''}`} onClick={()=>useWorkspace.getState().set({panel:item.id})}><Icon name={item.icon}/><span>{item.label}</span>{item.id==='commands'&&<Icon name="arrow-up-right"/>}</Button>)}</nav>
     <div className="sidebar-section-title"><span>最近会话</span><Button title="查看所有会话" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'sessions'})}><Icon name="dots-three"/></Button></div>
-    <div className="recent-sessions">{recentSessions.map(session=>{const working=liveSessions.some(live=>live.running&&live.path===session.path),label=session.name||session.firstMessage||'未命名会话',persisted=listedPaths.has(session.path);return <div className={`recent-session-row ${session.path===state?.sessionFile?'active':''}${working?' working':''}`} key={session.id}><button type="button" className="recent-session-main" disabled={!online} aria-busy={working} onClick={()=>void changeSession({type:'switch_session',sessionPath:session.path}).catch(report)}><Icon name="chat-circle"/><span className="recent-session-title">{label}</span>{working&&<span className="session-working-indicator" title="正在工作" aria-hidden/>}</button>{persisted&&<button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${label}`} disabled={!online} onClick={(event)=>{event.stopPropagation();setDeletingSession(session)}}><Trash2/></button>}</div>})}{!recentSessions.length&&<p>你的会话会保存在这里。</p>}</div>
+    <div className="recent-sessions">{recentSessions.map(session=>{const working=liveSessions.some(live=>live.running&&live.path===session.path),label=session.name||session.firstMessage||'未命名会话',persisted=listedPaths.has(session.path);return <div className={`recent-session-row ${session.path===state?.sessionFile?'active':''}${working?' working':''}`} key={session.id}><button type="button" className="recent-session-main" disabled={!online} aria-busy={working} onClick={()=>void changeSession({type:'switch_session',sessionPath:session.path}).catch(report)}>{working?<span className="session-working-indicator" title="正在工作" aria-hidden/>:<Icon name={sessionGlyph(label)} className="recent-session-glyph"/>}<span className="recent-session-title">{label}</span></button>{persisted&&<button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${label}`} disabled={!online} onClick={(event)=>{event.stopPropagation();setDeletingSession(session)}}><Trash2/></button>}</div>})}{!recentSessions.length&&<p>你的会话会保存在这里。</p>}</div>
     <div className="sidebar-bottom"><Button className="nav-item" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'general'})}><Icon name="gear-six"/>设置<kbd>⌘ ,</kbd></Button></div>
    </aside>
    </ResizablePanel>

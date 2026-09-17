@@ -5,9 +5,10 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import "katex/contrib/mhchem";
+import { remarkMentions } from "../lib/remark-mentions";
 import { MarkdownLink, Pre } from "./CodeBlock";
 
-const remarkPlugins = [remarkGfm, remarkMath];
+const remarkPlugins = [remarkGfm, remarkMath, remarkMentions];
 const rehypePlugins = [rehypeKatex];
 
 export function Markdown({

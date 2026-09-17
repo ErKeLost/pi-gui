@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { COLLAPSED_MESSAGE_LINES, estimateMarkdownLines, markdownHeadingSections, shouldCollapseMessage } from "../src/lib/message-layout";
 
-describe("long assistant message disclosure", () => {
+describe("long user message disclosure", () => {
   test("keeps short replies fully visible", () => {
     expect(shouldCollapseMessage("Short answer.\n\nSecond paragraph.")).toBe(false);
   });

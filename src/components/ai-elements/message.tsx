@@ -25,10 +25,18 @@ export function MessageContent({ className = "", children, ...props }: HTMLAttri
   );
 }
 
-export function MessageResponse({ children, animated = false }: { children: string; animated?: boolean }) {
+export function MessageResponse({
+  children,
+  animated = false,
+  collapse = false,
+}: {
+  children: string;
+  animated?: boolean;
+  collapse?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
-  const collapsible = !animated && shouldCollapseMessage(children);
+  const collapsible = collapse && !animated && shouldCollapseMessage(children);
 
   return (
     <section className="message-response-disclosure" data-collapsible={collapsible} data-open={expanded}>

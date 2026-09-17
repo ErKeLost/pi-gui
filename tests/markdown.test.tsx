@@ -26,6 +26,18 @@ describe("shared Markdown renderer", () => {
 
     expect(html).toContain("<pre>");
     expect(html).toContain("const reveal");
+    expect(html).toContain("md-code");
+    expect(html).toContain("TypeScript");
+    expect(html).toContain("aria-label=\"复制代码\"");
+  });
+
+  test("labels unlabeled fences as plain text with copy and download actions", () => {
+    const html = renderToStaticMarkup(<Markdown content={"```\nhello\n```"} />);
+
+    expect(html).toContain("md-code");
+    expect(html).toContain("纯文本");
+    expect(html).toContain("aria-label=\"下载代码\"");
+    expect(html).toContain("hello");
   });
 
   test("renders settled mermaid fences as SVG", () => {
@@ -61,6 +73,17 @@ describe("shared Markdown renderer", () => {
     expect(html).toContain("<blockquote");
     expect(html).toContain("href=\"https://streamdown.lobehub.com\"");
     expect(html).toContain("target=\"_blank\"");
+    expect(html).toContain("md-autolink");
     expect(html).not.toContain("node=\"[object Object]\"");
+  });
+
+  test("renders file autolinks with an icon and package mentions as chips", () => {
+    const html = renderToStaticMarkup(
+      <Markdown content={"Read https://lobehub.com/icons/skill.md and follow @lobehub/icons"} />,
+    );
+
+    expect(html).toContain("md-autolink");
+    expect(html).toContain("href=\"https://lobehub.com/icons/skill.md\"");
+    expect(html).toContain("md-chip is-mention");
   });
 });

@@ -88,16 +88,18 @@ function PartView({
   tools,
   running,
   thinking,
+  collapse = false,
 }: {
   part: Part;
   tools: Record<string, Tool>;
   running: boolean;
   thinking: boolean;
+  collapse?: boolean;
 }) {
   if (part.type === "text") {
     if (!part.text) return null;
     return (
-      <MessageResponse animated={running}>{part.text}</MessageResponse>
+      <MessageResponse animated={running} collapse={collapse}>{part.text}</MessageResponse>
     );
   }
   if (part.type === "thinking") {
@@ -196,6 +198,7 @@ const TranscriptMessage = memo(
     const responseText = content.flatMap(({ part }) => part.type === "text" && part.text?.trim() ? [part.text] : []).join("\n\n");
     const responseTime = turnTime(items);
     const progressNodes: ReactNode[] = [];
+    const mediaNodes: ReactNode[] = [];
     const contentNodes: ReactNode[] = [];
     const latestThinking = thinkingParts.at(-1);
     if (latestThinking) {
@@ -228,20 +231,23 @@ const TranscriptMessage = memo(
     }
     for (const { part, key, active } of content) {
       if (part.type === "thinking" || part.type === "toolCall" || (part.type === "text" && !part.text)) continue;
-      contentNodes.push(
+      const node = (
         <PartView
           key={key}
           part={part}
           tools={tools}
           running={active}
           thinking={false}
-        />,
+          collapse={role === "user"}
+        />
       );
+      if (role === "user" && part.type === "image") mediaNodes.push(node);
+      else contentNodes.push(node);
     }
     items.forEach(entry => {
       if (entry.message.errorMessage) contentNodes.push(<ErrorOutput key={`${entry.id}-error`} error={entry.message.errorMessage} />);
     });
-    if (progressNodes.length === 0 && contentNodes.length === 0) return null;
+    if (progressNodes.length === 0 && contentNodes.length === 0 && mediaNodes.length === 0) return null;
     const startedAt = items.find(entry => entry.startedAt !== undefined)?.startedAt;
     const elapsedMs = [...items].reverse().find(entry => entry.elapsedMs !== undefined)?.elapsedMs ?? savedDuration;
     return (
@@ -252,35 +258,38 @@ const TranscriptMessage = memo(
         transition={{ duration: 0.16 }}
       >
         <Message from={role}>
-          <MessageContent>
-            {progressNodes.length > 0 && (
-              <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} startedAt={startedAt} durationMs={elapsedMs}>
-                {progressNodes}
-              </ProcessingPanel>
-            )}
-            {contentNodes}
-            {role === "assistant" && !streaming && responseText && (
-              <footer className="message-response-footer">
-                {responseTime && <time dateTime={responseTime.dateTime}>{responseTime.label}</time>}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="message-response-copy"
-                  aria-label={copied ? "已复制" : "复制回复"}
-                  title={copied ? "已复制" : "复制回复"}
-                  onClick={() => {
-                    void navigator.clipboard.writeText(responseText).then(() => {
-                      setCopied(true);
-                      window.setTimeout(() => setCopied(false), 1600);
-                    }).catch(() => undefined);
-                  }}
-                >
-                  <Icon name={copied ? "check" : "copy"} />
-                </Button>
-              </footer>
-            )}
-          </MessageContent>
+          {mediaNodes.length > 0 && <div className="user-message-media">{mediaNodes}</div>}
+          {(progressNodes.length > 0 || contentNodes.length > 0) && (
+            <MessageContent>
+              {progressNodes.length > 0 && (
+                <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} startedAt={startedAt} durationMs={elapsedMs}>
+                  {progressNodes}
+                </ProcessingPanel>
+              )}
+              {contentNodes}
+              {role === "assistant" && !streaming && responseText && (
+                <footer className="message-response-footer">
+                  {responseTime && <time dateTime={responseTime.dateTime}>{responseTime.label}</time>}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="message-response-copy"
+                    aria-label={copied ? "已复制" : "复制回复"}
+                    title={copied ? "已复制" : "复制回复"}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(responseText).then(() => {
+                        setCopied(true);
+                        window.setTimeout(() => setCopied(false), 1600);
+                      }).catch(() => undefined);
+                    }}
+                  >
+                    <Icon name={copied ? "check" : "copy"} />
+                  </Button>
+                </footer>
+              )}
+            </MessageContent>
+          )}
         </Message>
       </m.div>
     );

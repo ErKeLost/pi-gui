@@ -958,28 +958,63 @@ body,
   max-width: 100% !important;
   flex-direction: column;
   align-items: flex-end !important;
-  margin-top: 10px !important;
-  margin-bottom: 14px !important;
+  gap: 8px !important;
+  margin-top: 6px !important;
+  margin-bottom: 8px !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
+}
+
+.chat-root .transcript-message.user .user-message-media {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: min(86%, 720px);
+}
+
+.chat-root .transcript-message.user .message-image {
+  display: block;
+  width: 132px;
+  height: 132px;
+  object-fit: cover;
+  border: 1px solid color-mix(in oklch, var(--border) 45%, transparent);
+  border-radius: 16px;
+  background: var(--muted);
 }
 
 .chat-root .transcript-message.user .ai-message-content {
   width: fit-content !important;
   max-width: min(86%, 720px) !important;
   margin-left: auto !important;
-  padding: 12px 16px !important;
-  border: 1px solid color-mix(in oklch, var(--border) 55%, transparent) !important;
-  border-radius: 16px !important;
-  background: color-mix(in oklch, var(--muted) 82%, var(--background)) !important;
+  padding: 10px 14px !important;
+  border: 0 !important;
+  border-radius: 18px !important;
+  background: color-mix(in oklch, var(--muted) 38%, var(--background)) !important;
   color: var(--card-foreground) !important;
   font-size: 14px;
   line-height: 1.55;
   box-shadow: none;
 }
 
+.chat-root .transcript-message.user .ai-message-response {
+  font-size: 14px;
+  line-height: 1.55;
+  color: inherit;
+}
+
+.chat-root .transcript-message.user .ai-message-response p {
+  margin: 0 0 6px;
+}
+
 .chat-root .transcript-message.user .ai-message-content p:last-child {
   margin-bottom: 0 !important;
+}
+
+.chat-root .transcript-message.user .ai-message-response :not(pre) > code,
+.chat-root .transcript-message.user .md-chip {
+  border: 0;
+  background: color-mix(in oklch, var(--background) 58%, transparent);
 }
 
 /* The app chrome is deliberately neutral. File icons are the one colorful
@@ -2298,14 +2333,19 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.recent-sessions .recent-session-glyph {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
 .session-working-indicator {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 10px;
-  border: 1.5px solid currentColor;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 1.5px dashed currentColor;
   border-right-color: transparent;
   border-radius: 50%;
-  opacity: 0.8;
+  opacity: 0.85;
   animation: session-working-spin 0.7s linear infinite;
 }
 @keyframes session-working-spin {
@@ -2316,11 +2356,6 @@ body,
 }
 .settings-content .session-row .session-working-indicator {
   margin-left: auto;
-}
-.recent-sessions .recent-session-main svg {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
 }
 .recent-sessions .recent-session-row.active .recent-session-main,
 .recent-sessions .recent-session-row:hover .recent-session-main,
@@ -3212,6 +3247,8 @@ body,
   border-bottom: 1px solid var(--border);
   background: var(--background);
   user-select: none;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 .titlebar-navigation {
   display: flex;
@@ -3231,6 +3268,8 @@ body,
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--muted-foreground);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 .app-shell [data-slot="button"].titlebar-button:hover:not(:disabled) {
   background: var(--accent);
@@ -3253,7 +3292,9 @@ body,
   background: var(--border);
 }
 .app-header-title {
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: min(28em, calc(100% - 220px));
   overflow: hidden;
   color: var(--foreground);
   font-size: 13px;
@@ -3264,7 +3305,7 @@ body,
 }
 .app-header-more {
   flex: 0 0 auto;
-  margin-left: 2px;
+  margin-left: auto;
 }
 .app-shell > [data-slot="resizable-panel-group"] {
   flex: 1 1 0 !important;
