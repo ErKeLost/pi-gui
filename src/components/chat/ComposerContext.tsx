@@ -1,17 +1,13 @@
-import { useState } from "react";
 import { MetalFx } from "metal-fx";
 import { useTheme } from "next-themes";
 import { useReducedMotion } from "motion/react";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
-import { Switch } from "../UI";
 import { Icon } from "../Icon";
-import { refresh, report, request } from "../../lib/rpc";
 import {
   Context,
   ContextContent,
   ContextContentBody,
-  ContextContentFooter,
   ContextContentHeader,
   ContextTrigger,
   ContextIcon,
@@ -28,17 +24,6 @@ export function ComposerContext() {
   const compacting = useWorkspace(workspace => workspace.transcript.compacting);
   const { resolvedTheme } = useTheme();
   const reducedMotion = useReducedMotion();
-  const connectionId = useWorkspace(workspace => workspace.connectionId);
-  const running = useWorkspace(workspace => workspace.transcript.running || workspace.transcript.compacting);
-  const [saving, setSaving] = useState(false);
-  async function setAutoCompaction(enabled: boolean) {
-    setSaving(true);
-    try {
-      await request({ type: "set_auto_compaction", enabled }, 30000, connectionId);
-      await refresh(connectionId);
-    } catch (error) { report(error); }
-    finally { setSaving(false); }
-  }
   const usage = stats?.contextUsage;
   const usedTokens = usage?.tokens ?? 0;
   const reportedMaxTokens = usage?.contextWindow ?? state?.model?.contextWindow;
@@ -66,10 +51,6 @@ export function ComposerContext() {
           <div><dt><span><Icon name="chart-bar" /></span>压缩阈值</dt><dd>{format(threshold)}</dd></div>
         </dl>
       </ContextContentBody>
-      <ContextContentFooter className="composer-context-footer">
-        <span><i><Icon name="sliders-horizontal" /></i>自动压缩</span>
-        <Switch aria-label="自动压缩" checked={state?.autoCompactionEnabled ?? false} disabled={!online || !state || running || saving} onChange={enabled => void setAutoCompaction(enabled)} />
-      </ContextContentFooter>
     </ContextContent>
   </Context>;
 }

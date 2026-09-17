@@ -386,7 +386,6 @@ body,
 .composer-context-body dl > div { display: flex; justify-content: space-between; gap: 18px; }
 .composer-context-body dt { color: var(--muted-foreground); }
 .composer-context-body dd { margin: 0; color: var(--foreground); font: 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.composer-context-footer strong { color: var(--foreground); font-weight: 550; }
 
 /* Responsive sizing: panels own the available width and their children may
    shrink without forcing the neighboring panel off screen. */
@@ -4437,8 +4436,7 @@ body,
   color: var(--muted-foreground);
   font-size: 10px;
 }
-.composer-context-body dt > span,
-.composer-context-footer > span > i {
+.composer-context-body dt > span {
   display: inline-grid;
   width: 15px;
   height: 15px;
@@ -4449,8 +4447,7 @@ body,
   color: var(--foreground);
   font-style: normal;
 }
-.composer-context-body dt svg,
-.composer-context-footer > span svg {
+.composer-context-body dt svg {
   width: 13px;
   height: 13px;
 }
@@ -4459,23 +4456,6 @@ body,
   color: var(--foreground);
   font: 500 10px/1.4 var(--font-mono);
   font-variant-numeric: tabular-nums;
-}
-.composer-context-footer {
-  display: flex;
-  min-height: 39px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 6px 10px !important;
-  background: color-mix(in oklch, var(--muted) 30%, transparent);
-}
-.composer-context-footer > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--foreground);
-  font-size: 11px;
-  font-weight: 560;
 }
 
 /* Final contrast pass: Codex-like surfaces are only slightly lifted from the
@@ -4500,8 +4480,7 @@ body,
   background: color-mix(in oklch, var(--settings-surface) 70%, transparent) !important;
 }
 .settings-stats,
-.provider-settings .provider-actions,
-.composer-context-footer {
+.provider-settings .provider-actions {
   background: color-mix(in oklch, var(--settings-control) 62%, transparent) !important;
 }
 .app-shell [data-slot="button"][data-variant="default"] {
