@@ -21,7 +21,7 @@ import './App.css'
 const navigation:{id:PanelName;label:string;icon:string}[]=[{id:'chat',label:'工作台',icon:'chat-circle-text'},{id:'commands',label:'技能与命令',icon:'puzzle-piece'}]
 let started=false
 export default function App(){
- const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connectionId=useWorkspace(s=>s.connectionId),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector)
+ const panel=useWorkspace(s=>s.panel),cwd=useWorkspace(s=>s.cwd),connectionId=useWorkspace(s=>s.connectionId),connection=useWorkspace(s=>s.connection),state=useWorkspace(s=>s.state),dialogs=useWorkspace(s=>s.dialogs),statuses=useWorkspace(s=>s.statuses),inspector=useWorkspace(s=>s.inspector),liveSessions=useWorkspace(s=>s.liveSessions)
  const online=connection==='online'
  const [deletingSession,setDeletingSession]=useState<Session|null>(null)
  const [sidebarOpen,setSidebarOpen]=useState(()=>localStorage.getItem('pi-gui.sidebarOpen')!=='false')
@@ -66,7 +66,13 @@ export default function App(){
    };window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler)
  },[online])
  useEffect(()=>{localStorage.setItem('pi-gui.sidebarOpen',String(sidebarOpen))},[sidebarOpen])
- const currentSession=sessions.data?.find(session=>session.path===state?.sessionFile)
+ const listed=sessions.data??[]
+ const listedPaths=new Set(listed.map(session=>session.path))
+ const recentSessions:Session[]=[
+  ...liveSessions.flatMap(live=>live.path&&!listedPaths.has(live.path)?[{path:live.path,id:live.path,cwd,firstMessage:live.title,messageCount:0,modified:new Date().toISOString()} satisfies Session]:[]),
+  ...listed,
+ ].slice(0,8)
+ const currentSession=recentSessions.find(session=>session.path===state?.sessionFile)
  const headerTitle=panel==='chat'?(currentSession?.name||currentSession?.firstMessage||'新会话'):panel==='settings'?'设置':navigation.find(item=>item.id===panel)?.label||'Pi GUI'
  const titlebarNavigation=<div className="titlebar-navigation">
   <Button className="titlebar-button" title={sidebarOpen?'收起侧栏':'展开侧栏'} onClick={()=>setSidebarOpen(value=>!value)}><Icon name="sidebar-simple"/></Button>
@@ -91,7 +97,7 @@ export default function App(){
     <Button variant="outline" className="new-session" disabled={!online} onClick={()=>void changeSession({type:'new_session'}).catch(report)}><Icon name="plus"/>新建会话<kbd>⌘ N</kbd></Button>
     <nav aria-label="主导航">{navigation.map(item=><Button key={item.id} className={`nav-item ${panel===item.id?'selected':''}`} onClick={()=>useWorkspace.getState().set({panel:item.id})}><Icon name={item.icon}/><span>{item.label}</span>{item.id==='commands'&&<Icon name="arrow-up-right"/>}</Button>)}</nav>
     <div className="sidebar-section-title"><span>最近会话</span><Button title="查看所有会话" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'sessions'})}><Icon name="dots-three"/></Button></div>
-    <div className="recent-sessions">{sessions.data?.slice(0,8).map(session=><div className={`recent-session-row ${session.path===state?.sessionFile?'active':''}`} key={session.id}><button type="button" className="recent-session-main" disabled={!online} onClick={()=>void changeSession({type:'switch_session',sessionPath:session.path}).catch(report)}><Icon name="chat-circle"/><span>{session.name||session.firstMessage||'未命名会话'}</span></button><button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${session.name||session.firstMessage||'未命名会话'}`} disabled={!online} onClick={(event)=>{event.stopPropagation();setDeletingSession(session)}}><Trash2/></button></div>)}{!sessions.data?.length&&<p>你的会话会保存在这里。</p>}</div>
+    <div className="recent-sessions">{recentSessions.map(session=>{const working=liveSessions.some(live=>live.running&&live.path===session.path),label=session.name||session.firstMessage||'未命名会话',persisted=listedPaths.has(session.path);return <div className={`recent-session-row ${session.path===state?.sessionFile?'active':''}${working?' working':''}`} key={session.id}><button type="button" className="recent-session-main" disabled={!online} aria-busy={working} onClick={()=>void changeSession({type:'switch_session',sessionPath:session.path}).catch(report)}><Icon name="chat-circle"/><span className="recent-session-title">{label}</span>{working&&<span className="session-working-indicator" title="正在工作" aria-hidden/>}</button>{persisted&&<button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${label}`} disabled={!online} onClick={(event)=>{event.stopPropagation();setDeletingSession(session)}}><Trash2/></button>}</div>})}{!recentSessions.length&&<p>你的会话会保存在这里。</p>}</div>
     <div className="sidebar-bottom"><Button className="nav-item" onClick={()=>useWorkspace.getState().set({panel:'settings',settingsPage:'general'})}><Icon name="gear-six"/>设置<kbd>⌘ ,</kbd></Button></div>
    </aside>
    </ResizablePanel>

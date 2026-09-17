@@ -2,7 +2,7 @@ import {emptyTelemetry,observe} from './telemetry'
 import {Channel,invoke,isTauri} from '@tauri-apps/api/core'
 import {QueryClient} from '@tanstack/react-query'
 import type {RpcCommand,RpcResponse} from '@earendil-works/pi-coding-agent'
-import {useWorkspace,type Workspace,type WorkspaceMode} from './store'
+import {useWorkspace,type LiveSession,type Workspace,type WorkspaceMode} from './store'
 import {emptyTranscript,hydrate,reduceEvent,type Event,type PiMessage,type RpcSessionState,type UiRequest} from './protocol'
 export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000,gcTime:120000}}})
 export const native=isTauri()
@@ -38,10 +38,42 @@ function route(target=useWorkspace.getState().cwd){return projectActive.get(targ
 function connectionsFor(cwd:string){return [...connections.entries()].flatMap(([id,meta])=>meta.cwd===cwd?[id]:[])}
 function persistSession(cwd:string,sessionFile?:string){if(!sessionFile)return;let files:Record<string,string>={};try{files=JSON.parse(localStorage.getItem('pi-gui.sessionFiles')??'{}')}catch{};files[cwd]=sessionFile;localStorage.setItem('pi-gui.sessionFiles',JSON.stringify(files))}
 function current(id:string):Snapshot{return useWorkspace.getState().connectionId===id?snapshot():snapshots.get(id)??fresh()}
+function firstUserTitle(transcript:Workspace['transcript']){
+ for(const item of transcript.messages){
+  if(item.message.role!=='user')continue
+  const content=item.message.content
+  if(typeof content==='string'&&content.trim())return content.trim().slice(0,80)
+  if(Array.isArray(content)){
+   const text=content.flatMap(part=>part.type==='text'&&part.text?[part.text]:[]).join('').trim()
+   if(text)return text.slice(0,80)
+  }
+ }
+ return ''
+}
+function sameLiveSessions(a:LiveSession[],b:LiveSession[]){return a.length===b.length&&a.every((item,index)=>item.path===b[index]?.path&&item.title===b[index]?.title&&item.running===b[index]?.running)}
+function syncLiveSessions(){
+ const items:LiveSession[]=[],seen=new Set<string>()
+ const ids=new Set([...snapshots.keys(),useWorkspace.getState().connectionId].filter(Boolean))
+ for(const id of ids){
+  const snap=current(id),path=snap.state?.sessionFile
+  if(!path||seen.has(path))continue
+  const running=snap.transcript.running||snap.transcript.compacting
+  if(!running&&!snap.transcript.messages.some(item=>item.message.role==='user'))continue
+  seen.add(path);items.push({path,title:firstUserTitle(snap.transcript)||'新会话',running})
+ }
+ if(!sameLiveSessions(useWorkspace.getState().liveSessions,items))useWorkspace.getState().set({liveSessions:items})
+}
+function invalidateSessionList(id:string){
+ const cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd
+ if(cwd)void queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
+}
 function patch(id:string,value:Partial<Snapshot>){
  const previous=current(id),next={...previous,...value}
  if(previous.state?.sessionFile&&previous.state.sessionFile!==next.state?.sessionFile&&sessionOwners.get(previous.state.sessionFile)===id)sessionOwners.delete(previous.state.sessionFile)
  snapshots.set(id,next);if(next.state?.sessionFile)sessionOwners.set(next.state.sessionFile,id);if(useWorkspace.getState().connectionId===id)useWorkspace.getState().set(value)
+ const activityChanged=previous.transcript.running!==next.transcript.running||previous.transcript.compacting!==next.transcript.compacting||previous.state?.sessionFile!==next.state?.sessionFile||firstUserTitle(previous.transcript)!==firstUserTitle(next.transcript)
+ if(activityChanged)syncLiveSessions()
+ if(previous.state?.sessionFile!==next.state?.sessionFile&&next.state?.sessionFile)invalidateSessionList(id)
 }
 function failPending(project:string,message:string){for(const [id,p]of pending){if(p.project!==project)continue;clearTimeout(p.timeout);p.reject(new Error(message));pending.delete(id)}}
 function applyEvent(event:Event,project:string){
@@ -64,7 +96,7 @@ function applyEvent(event:Event,project:string){
  if(['compaction_end','message_end','agent_settled'].includes(event.type))void queryClient.invalidateQueries({queryKey:['pi','live-stats',project]})
  if(event.type==='agent_settled'){
   if(s.state?.sessionFile)void queryClient.invalidateQueries({queryKey:['pi','turn-durations',s.state.sessionFile]})
-  void refresh(project).catch(error=>patch(project,{error:String(error)}))
+  void refresh(project).then(()=>invalidateSessionList(project)).catch(error=>patch(project,{error:String(error)}))
  }
 }
 const burstEvents=new Set(['message_update','tool_execution_update'])
@@ -120,7 +152,7 @@ async function closeConnection(id:string,message='连接已关闭'){
  clearEvents(id);connections.delete(id);failPending(id,message);snapshots.delete(id)
  if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd)
  for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file)
- await invoke('pi_disconnect',{project:id}).catch(()=>{})
+ await invoke('pi_disconnect',{project:id}).catch(()=>{});syncLiveSessions()
 }
 function activateConnection(id:string,cwd:string){
  const previous=useWorkspace.getState()
@@ -128,7 +160,7 @@ function activateConnection(id:string,cwd:string){
  projectActive.set(cwd,id)
  const saved=snapshots.get(id)??fresh()
  useWorkspace.getState().set({...saved,cwd,connectionId:id,panel:'chat'})
- persistSession(cwd,saved.state?.sessionFile)
+ persistSession(cwd,saved.state?.sessionFile);syncLiveSessions()
  if(saved.connection==='online')void refresh(id).catch(error=>patch(id,{error:String(error)}))
 }
 async function startConnection(cwd:string,id:string,options?:{restoreLast?:boolean;sessionPath?:string}){
@@ -137,7 +169,7 @@ async function startConnection(cwd:string,id:string,options?:{restoreLast?:boole
  onEvent.onmessage=event=>{
   if(connections.get(id)?.token!==token)return
   if(event.kind==='rpc'&&event.payload)dispatch(event.payload,id)
-  if(event.kind==='exit'){const cwd=connections.get(id)?.cwd;flushEvents(id);clearEvents(id);connections.delete(id);if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd);for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file);patch(id,{connection:'offline',error:`Pi 进程已退出（${event.code??'signal'}）`});failPending(id,'Pi 进程已退出')}
+  if(event.kind==='exit'){const cwd=connections.get(id)?.cwd,s=current(id);flushEvents(id);clearEvents(id);connections.delete(id);if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd);for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file);patch(id,{connection:'offline',error:`Pi 进程已退出（${event.code??'signal'}）`,transcript:{...s.transcript,running:false,compacting:false}});failPending(id,'Pi 进程已退出')}
   if(event.kind==='protocol_error')patch(id,{error:event.message})
  }
  try{

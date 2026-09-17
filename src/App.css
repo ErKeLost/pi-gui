@@ -2290,13 +2290,32 @@ body,
   text-align: left;
   cursor: pointer;
 }
-.recent-sessions .recent-session-main span {
+.recent-sessions .recent-session-main .recent-session-title {
   display: block;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.session-working-indicator {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  opacity: 0.8;
+  animation: session-working-spin 0.7s linear infinite;
+}
+@keyframes session-working-spin {
+  to { transform: rotate(360deg); }
+}
+.recent-sessions .recent-session-row.working .session-working-indicator {
+  color: var(--sidebar-foreground);
+}
+.settings-content .session-row .session-working-indicator {
+  margin-left: auto;
 }
 .recent-sessions .recent-session-main svg {
   width: 15px;
