@@ -559,10 +559,13 @@ html[data-theme="dark"] .markdown-renderer .shiki span {
 }
 
 .ai-message-response .md-autolink-icon svg,
-.markdown-renderer .md-autolink-icon svg {
+.markdown-renderer .md-autolink-icon svg,
+.ai-message-response .md-autolink-icon img,
+.markdown-renderer .md-autolink-icon img {
   display: block;
   width: 100%;
   height: 100%;
+  border-radius: 2px;
 }
 
 .ai-message-response .md-chip,

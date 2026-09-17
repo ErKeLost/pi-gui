@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { FileIcon, Icon } from "./Icon";
-import { externalLinkIcon } from "../lib/link-visual";
+import { externalLinkIcon, faviconUrl } from "../lib/link-visual";
 import { Button } from "./ui/button";
 
 /**
@@ -113,12 +113,28 @@ const toText = (node: unknown): string => {
   return "";
 };
 
+function LinkFavicon({ href, fallback, file }: { href?: string; fallback: string; file?: string }) {
+  const src = faviconUrl(href);
+  const [failed, setFailed] = useState(!src);
+
+  useEffect(() => {
+    setFailed(!src);
+  }, [src]);
+
+  if (!failed && src) {
+    return <img className="md-link-favicon" src={src} alt="" width={16} height={16} draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+  }
+  if (file) return <FileIcon path={file} />;
+  return <Icon name={fallback} />;
+}
+
 function fileNameFromHref(href?: string) {
   if (!href || href.startsWith("mention:")) return "";
   try {
     const path = href.includes("://") ? new URL(href).pathname : href;
-    const file = path.split("/").at(-1) ?? "";
-    return file.includes(".") ? decodeURIComponent(file) : "";
+    const file = decodeURIComponent(path.split("/").at(-1) ?? "");
+    const ext = file.includes(".") ? file.split(".").at(-1)?.toLowerCase() ?? "" : "";
+    return ext && !/^\d+$/.test(ext) && /^[a-z0-9]{1,8}$/.test(ext) ? file : "";
   } catch {
     return "";
   }
@@ -138,21 +154,23 @@ export function MarkdownLink({
   const external = Boolean(href && /^https?:\/\//.test(href));
   const label = toText(children).trim();
   const autolink = Boolean(href && (label === href || label === href.replace(/^https?:\/\//, "")));
+  const brand = external ? externalLinkIcon(href) : "globe";
   const file = autolink ? fileNameFromHref(href) : "";
   const attrs = external ? { target: "_blank" as const, rel: "noreferrer" } : {};
+  const iconName = brand !== "globe" ? brand : file ? `file:${file}` : "globe";
 
   if (autolink) {
     return (
       <a {...rest} {...attrs} href={href} className={`md-autolink ${className}`.trim()}>
-        <span className="md-autolink-icon" aria-hidden="true">
-          {file ? <FileIcon path={file} /> : <Icon name={externalLinkIcon(href)} />}
+        <span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}>
+          {external ? <LinkFavicon href={href} fallback={brand} file={file} /> : file ? <FileIcon path={file} /> : <Icon name={brand} />}
         </span>
         <span className="md-autolink-label">{children}</span>
       </a>
     );
   }
 
-  if (external) return <a {...rest} {...attrs} href={href} className={`md-external-link ${className}`.trim()}><span className="md-autolink-icon" aria-hidden="true"><Icon name={externalLinkIcon(href)} /></span>{children}</a>;
+  if (external) return <a {...rest} {...attrs} href={href} className={`md-external-link ${className}`.trim()}><span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}><LinkFavicon href={href} fallback={brand} /></span>{children}</a>;
   return <a {...rest} {...attrs} href={href} className={className}>{children}</a>;
 }
 

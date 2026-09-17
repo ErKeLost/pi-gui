@@ -92,6 +92,28 @@ describe("shared Markdown renderer", () => {
     const html = renderToStaticMarkup(<Markdown content="https://github.com/openai/codex" />);
 
     expect(html).toContain("md-autolink-icon");
+    expect(html).toContain('data-link-icon="github-logo"');
+    expect(html).toContain("s2/favicons");
+    expect(html).toContain("domain=github.com");
     expect(externalLinkIcon("https://github.com/openai/codex")).toBe("github-logo");
+  });
+
+  test("keeps GitHub brand icons when the last path segment looks like a version", () => {
+    const html = renderToStaticMarkup(
+      <Markdown content="https://github.com/ErKeLost/pi-gui/releases/tag/v0.2.2" />,
+    );
+
+    expect(html).toContain('data-link-icon="github-logo"');
+    expect(html).toContain("domain=github.com");
+    expect(html).not.toContain("data-link-icon=\"file:");
+  });
+
+  test("uses colorful favicons for other websites", () => {
+    const href = "https://vercel.com/docs/ai-gateway";
+    const html = renderToStaticMarkup(<Markdown content={href} />);
+
+    expect(html).toContain("s2/favicons");
+    expect(html).toContain("domain=vercel.com");
+    expect(html).toContain('data-link-icon="globe"');
   });
 });

@@ -9,12 +9,22 @@ const domainIcons: [string[], string][] = [
   [["reddit.com"], "reddit-logo"],
 ];
 
-export function externalLinkIcon(href?: string) {
-  if (!href) return "globe";
+export function linkHostname(href?: string) {
+  if (!href) return "";
   try {
-    const hostname = new URL(href).hostname.toLowerCase().replace(/^www\./, "");
-    return domainIcons.find(([domains]) => domains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`)))?.[1] ?? "globe";
+    return new URL(href).hostname.toLowerCase().replace(/^www\./, "");
   } catch {
-    return "globe";
+    return "";
   }
+}
+
+export function faviconUrl(href?: string) {
+  const hostname = linkHostname(href);
+  return hostname ? `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(hostname)}` : "";
+}
+
+export function externalLinkIcon(href?: string) {
+  const hostname = linkHostname(href);
+  if (!hostname) return "globe";
+  return domainIcons.find(([domains]) => domains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`)))?.[1] ?? "globe";
 }
