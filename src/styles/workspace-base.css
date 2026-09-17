@@ -324,23 +324,25 @@
 
 .ai-message-response .md-code,
 .markdown-renderer .md-code {
+  display: block;
   width: 100%;
   max-width: 100%;
-  margin: 14px 0 18px;
+  min-width: 0;
+  margin: 12px 0 16px;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: color-mix(in oklch, var(--muted) 88%, var(--background));
+  border: 1px solid color-mix(in oklch, var(--border) 45%, transparent);
+  border-radius: 18px;
+  background: color-mix(in oklch, var(--muted) 38%, var(--background));
 }
 
 .ai-message-response .md-code-header,
 .markdown-renderer .md-code-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 10px 4px 16px;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px 0 14px;
   color: var(--foreground);
   font-style: normal;
 }
@@ -349,17 +351,22 @@
 .markdown-renderer .md-code-lang {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
 
+.ai-message-response .md-code-icon,
+.markdown-renderer .md-code-icon,
 .ai-message-response .md-code-lang svg,
-.markdown-renderer .md-code-lang svg {
-  width: 20px;
-  height: 20px;
+.markdown-renderer .md-code-lang svg,
+.ai-message-response .md-code-action svg,
+.markdown-renderer .md-code-action svg {
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
   color: var(--muted-foreground);
 }
 
@@ -367,21 +374,17 @@
 .markdown-renderer .md-code-actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   margin-left: auto;
 }
 
 .ai-message-response .md-code-action,
 .markdown-renderer .md-code-action {
-  width: 34px !important;
-  height: 34px !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
   color: var(--muted-foreground) !important;
-}
-
-.ai-message-response .md-code-action svg,
-.markdown-renderer .md-code-action svg {
-  width: 20px !important;
-  height: 20px !important;
 }
 
 .ai-message-response .md-code-action:hover,
@@ -390,10 +393,18 @@
   background: color-mix(in oklch, var(--foreground) 8%, transparent) !important;
 }
 
+.ai-message-response .md-code-action:hover svg,
+.markdown-renderer .md-code-action:hover svg {
+  color: var(--foreground);
+}
+
 .ai-message-response .md-code-body,
 .markdown-renderer .md-code-body {
   min-width: 0;
-  padding: 2px 4px 12px;
+  padding: 2px 0 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--foreground) 28%, transparent) transparent;
 }
 
 .ai-message-response pre,
@@ -423,10 +434,11 @@
 .ai-message-response .md-code .shiki,
 .markdown-renderer .md-code .shiki {
   margin: 0;
-  padding: 8px 16px 12px;
+  padding: 6px 16px 10px;
   border: 0;
   border-radius: 0;
   background: transparent !important;
+  overflow: visible;
 }
 
 .ai-message-response pre code,

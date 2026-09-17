@@ -923,8 +923,8 @@ body,
 }
 
 .chat-root .transcript-message.assistant .md-code {
-  width: 100%;
-  max-width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .chat-root .transcript-message.user .message-response-footer {
