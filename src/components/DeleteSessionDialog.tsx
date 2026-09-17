@@ -20,13 +20,13 @@ export function DeleteSessionDialog({
   onConfirm: () => void;
 }) {
   return <Dialog open={open} onOpenChange={next => { if (!next) onCancel(); }}>
-    <DialogContent className="delete-session-dialog">
+    <DialogContent className="delete-session-dialog" showCloseButton={false}>
       <DialogHeader>
-        <DialogTitle>删除“{sessionName}”？</DialogTitle>
+        <DialogTitle>删除会话？</DialogTitle>
       </DialogHeader>
       <DialogFooter className="delete-session-dialog-footer">
         <DialogClose render={<Button variant="outline">取消</Button>} />
-        <Button variant="destructive" onClick={onConfirm}>删除</Button>
+        <Button variant="destructive" aria-label={`删除会话 ${sessionName}`} onClick={onConfirm}>删除</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

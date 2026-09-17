@@ -262,7 +262,7 @@ body,
 }
 
 .delete-session-dialog[data-slot="dialog-content"] {
-  width: min(420px, calc(100% - 32px));
+  width: min(340px, calc(100% - 32px));
   max-width: none;
   gap: 0;
   padding: 0;
@@ -273,35 +273,27 @@ body,
   box-shadow: 0 22px 70px color-mix(in oklch, var(--background) 76%, transparent);
 }
 .delete-session-dialog [data-slot="dialog-header"] {
-  min-height: 104px;
+  min-height: 72px;
   justify-content: center;
-  padding: 24px 28px;
+  padding: 20px 22px;
 }
 .delete-session-dialog [data-slot="dialog-title"] {
-  max-width: calc(100% - 34px);
-  overflow: hidden;
   color: var(--foreground);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.delete-session-dialog [data-slot="dialog-close"] {
-  top: 18px;
-  right: 18px;
+  line-height: 1.4;
 }
 .delete-session-dialog-footer[data-slot="dialog-footer"] {
-  min-height: 72px;
+  min-height: 62px;
   align-items: center;
-  padding: 16px 20px;
+  padding: 14px 18px;
   border-top: 1px solid var(--border);
   background: color-mix(in oklch, var(--muted) 32%, var(--popover));
 }
 .delete-session-dialog-footer [data-slot="button"] {
-  min-width: 72px;
-  height: 34px;
-  padding-inline: 14px;
+  min-width: 68px;
+  height: 32px;
+  padding-inline: 12px;
   border-radius: var(--radius-md);
   font-size: 12px;
 }
@@ -2061,21 +2053,22 @@ body,
 .project-search [data-slot="input"] { width: 100%; height: 32px; min-width: 0; padding: 0; border: 0 !important; outline: 0; background: transparent !important; color: var(--foreground); font-size: 11px; }
 .project-search [data-slot="input"]:focus,.project-search [data-slot="input"]:focus-visible { border-color: transparent !important; outline: none !important; box-shadow: none !important; }
 .project-options { max-height: 280px; margin: 8px 0; overflow-y: auto; scrollbar-width: thin; }
-.project-option { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; border-radius: var(--radius-lg); }
+.project-option { position: relative; display: block; border-radius: var(--radius-lg); }
 .project-option:hover,.project-option:focus-within { background: var(--accent); }
 .project-option.selected { background: color-mix(in srgb, var(--accent) 68%, transparent); }
-.project-options .project-option-main[data-slot="button"] { display: flex; width: 100%; min-width: 0; min-height: 49px; align-items: center; justify-content: flex-start; gap: 9px; padding: 7px 8px; border-radius: var(--radius-lg); background: transparent; color: var(--foreground); text-align: left; }
+.project-options .project-option-main[data-slot="button"] { display: flex; width: 100%; min-width: 0; min-height: 49px; align-items: center; justify-content: flex-start; gap: 9px; padding: 7px 38px 7px 8px; border-radius: var(--radius-lg); background: transparent; color: var(--foreground); text-align: left; }
 .project-options .project-option-main[data-slot="button"]:hover { background: transparent; }
 .project-options .project-option-main[data-slot="button"] > svg { width: 16px; height: 16px; flex: none; color: var(--muted-foreground); }
 .project-option-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
 .project-option-copy strong { overflow: hidden; color: var(--foreground); font-size: 12px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .project-option-copy small { overflow: hidden; color: var(--muted-foreground); font: 10px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .project-option-active { flex: none; color: var(--muted-foreground); font-size: 10px; }
-.project-options .project-option-remove[data-slot="button"] { display: grid; width: 26px; height: 26px; min-height: 0; place-items: center; padding: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted-foreground); opacity: .72; transition: color 140ms ease, background-color 140ms ease, opacity 140ms ease; }
+.project-options .project-option-remove[data-slot="button"] { position: absolute; top: 50%; right: 6px; display: grid; width: 24px; height: 24px; min-height: 0; place-items: center; padding: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); opacity: 0; transform: translateY(-50%); transition: color 140ms ease, background-color 140ms ease, opacity 140ms ease; }
 .project-option:hover .project-option-remove[data-slot="button"],.project-option:focus-within .project-option-remove[data-slot="button"] { opacity: 1; }
-.project-options .project-option-remove[data-slot="button"]:hover { background: color-mix(in oklch, var(--destructive) 10%, transparent); color: var(--destructive); }
+.project-options .project-option-remove[data-slot="button"]:hover { background: color-mix(in oklch, var(--destructive) 8%, transparent); color: var(--destructive); }
 .project-options .project-option-remove[data-slot="button"]:disabled { opacity: 0; pointer-events: none; }
-.project-options .project-option-remove[data-slot="button"] svg { width: 14px; height: 14px; }
+.project-options .project-option-remove[data-slot="button"] svg { width: 13px; height: 13px; }
+@media (pointer: coarse) { .project-options .project-option-remove[data-slot="button"] { opacity: .72; } }
 .project-empty { margin: 14px 8px; color: var(--muted-foreground); font-size: 11px; }
 .project-menu .add-project[data-slot="button"] { display: flex; width: 100%; min-height: 38px; align-items: center; gap: 8px; margin-top: 2px; padding: 7px 8px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--foreground); font-size: 11px; }
 .project-menu .add-project[data-slot="button"]:hover { background: var(--accent); }

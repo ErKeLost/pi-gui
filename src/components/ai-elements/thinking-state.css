@@ -190,8 +190,16 @@
 .thinking-state-row p { margin: 0; color: var(--thinking-ink-2); font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-loading-state { width: 100%; padding: 2px 0; }
 .ai-elapsed-time { min-width: 4.8ch; }
-.chat-loading-state .loading-state-status { width: 100%; }
-.chat-loading-state .ai-elapsed-time { display: block; height: 24px; line-height: 24px; }
+.chat-loading-state .loading-state-status {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.chat-loading-state .loading-state-copy { flex: 0 1 auto; }
+.chat-loading-state .ai-elapsed-time { display: inline-flex; height: 24px; align-items: center; line-height: 24px; }
 .loading-video-card {
   display: block;
   width: 224px;

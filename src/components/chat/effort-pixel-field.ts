@@ -288,13 +288,12 @@ function drawStageField({
     const dx = Math.abs(x - originX) / (width * 0.5);
     if (dx > 1) continue;
     const near = clamp(1 - dx * 0.92, 0, 1);
-    const density = profile.density * (0.56 + near * 0.44);
-    if (base > density) continue;
+    if (base > profile.density) continue;
 
     const flicker = 0.5 + 0.5 * Math.sin((elapsed / profile.period) * Math.PI * 2 * (1.4 + tempo * 1.8) + phase * 6.28);
     const wave = 0.5 + 0.5 * Math.sin((dx * 2.7 - ripplePhase) * Math.PI * 2);
     const revealAlpha = smoothstep(0, 1, reveal * (1 - dx * 0.85) + dx * 0.15);
-    const brightness = (0.18 + 0.48 * flicker + near * 0.4) * (0.25 + 0.75 * wave) * revealAlpha;
+    const brightness = (0.28 + 0.42 * flicker + near * 0.3) * (0.36 + 0.64 * wave) * revealAlpha;
     const alpha = clamp(brightness, 0, 1);
 
     context.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha.toFixed(3)})`;

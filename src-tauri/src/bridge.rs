@@ -112,6 +112,29 @@ fn append_image_input(model: &mut Value) -> bool {
     true
 }
 
+fn complete_model_cost(model: &mut Value) -> usize {
+    let Some(cost) = model.get_mut("cost").and_then(Value::as_object_mut) else { return 0 };
+    let mut changed = 0;
+    for field in ["input", "output", "cacheRead", "cacheWrite"] {
+        if !cost.contains_key(field) {
+            cost.insert(field.into(), Value::from(0.0));
+            changed += 1;
+        }
+    }
+    if let Some(tiers) = cost.get_mut("tiers").and_then(Value::as_array_mut) {
+        for tier in tiers {
+            let Some(tier) = tier.as_object_mut() else { continue };
+            for field in ["input", "output", "cacheRead", "cacheWrite"] {
+                if !tier.contains_key(field) {
+                    tier.insert(field.into(), Value::from(0.0));
+                    changed += 1;
+                }
+            }
+        }
+    }
+    changed
+}
+
 fn append_image_input_to_custom_models(dir: &std::path::Path) -> Result<usize, String> {
     let path = dir.join("models.json");
     if !path.exists() { return Ok(0); }
@@ -120,7 +143,10 @@ fn append_image_input_to_custom_models(dir: &std::path::Path) -> Result<usize, S
     if let Some(providers) = config.get_mut("providers").and_then(Value::as_object_mut) {
         for provider in providers.values_mut() {
             if let Some(models) = provider.get_mut("models").and_then(Value::as_array_mut) {
-                for model in models { changed += usize::from(append_image_input(model)); }
+                for model in models {
+                    changed += usize::from(append_image_input(model));
+                    changed += complete_model_cost(model);
+                }
             }
         }
     }
@@ -179,9 +205,9 @@ fn pi_model_from_catalog(item: &Value) -> Option<Value> {
     }
     if let Some(pricing) = item.get("pricing").and_then(Value::as_object) {
         let rates = [("prompt", "input"), ("completion", "output"), ("input_cache_read", "cacheRead"), ("input_cache_write", "cacheWrite")];
-        let mut cost = serde_json::Map::new();
+        let mut cost = serde_json::Map::from_iter(["input", "output", "cacheRead", "cacheWrite"].map(|field| (field.into(), Value::from(0.0))));
         for (source, target) in rates { if let Some(value) = pricing.get(source).and_then(Value::as_str).and_then(|value| value.parse::<f64>().ok()) { cost.insert(target.into(), Value::from(value * 1_000_000.0)); } }
-        if !cost.is_empty() { model["cost"] = Value::Object(cost); }
+        model["cost"] = Value::Object(cost);
     }
     append_image_input(&mut model);
     Some(model)
@@ -424,6 +450,23 @@ mod image_input_tests {
         assert_eq!(models[0]["input"], json!(["text", "image"]));
         assert_eq!(models[1]["input"], json!(["text", "image"]));
         assert_eq!(models[2]["input"], json!(["text", "image"]));
+        assert!(dir.join("models.json.pi-gui.bak").exists());
+        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 0);
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn repairs_incomplete_costs_that_make_pi_reject_models_json() {
+        let dir = std::env::temp_dir().join(format!("pi-gui-cost-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("models.json"), r#"{"providers":{"relay":{"models":[{"id":"a","input":["text","image"],"cost":{"input":1,"output":2}},{"id":"b","input":["text","image"],"cost":{"input":1,"output":2,"cacheRead":3,"cacheWrite":4}}]}}}"#).unwrap();
+
+        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 2);
+        let config = read_json_file(dir.join("models.json"), "models").unwrap();
+        let models = config["providers"]["relay"]["models"].as_array().unwrap();
+        assert_eq!(models[0]["cost"], json!({"input":1,"output":2,"cacheRead":0.0,"cacheWrite":0.0}));
+        assert_eq!(models[1]["cost"], json!({"input":1,"output":2,"cacheRead":3,"cacheWrite":4}));
         assert!(dir.join("models.json.pi-gui.bak").exists());
         assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 0);
 
