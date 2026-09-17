@@ -915,7 +915,24 @@ body,
 
 .chat-root .transcript-message.assistant .ai-message-response {
   width: 100%;
+  max-width: 100%;
+}
+
+.chat-root .transcript-message.assistant .ai-message-response .streamdown-animated > :not(.md-code) {
   max-width: min(100%, 68ch);
+}
+
+.chat-root .transcript-message.assistant .md-code {
+  width: 100%;
+  max-width: 100%;
+}
+
+.chat-root .transcript-message.user .message-response-footer {
+  width: max-content;
+  max-width: min(86%, 720px);
+  margin: 0 2px -2px auto;
+  padding: 0;
+  background: transparent;
 }
 
 .chat-root .transcript-message.assistant .tool-activity-group,

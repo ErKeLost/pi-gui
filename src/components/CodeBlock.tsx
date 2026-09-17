@@ -231,14 +231,14 @@ function CodeFrame({
     <figure className="md-code">
       <figcaption className="md-code-header">
         <span className="md-code-lang">
-          <Icon name="code" />
+          <Icon name="code" className="size-5" />
           {languageLabel(language)}
         </span>
         <span className="md-code-actions">
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="icon-lg"
             className="md-code-action"
             title="下载"
             aria-label="下载代码"
@@ -252,12 +252,12 @@ function CodeFrame({
               URL.revokeObjectURL(url);
             }}
           >
-            <Icon name="export" />
+            <Icon name="export" className="size-5" />
           </Button>
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="icon-lg"
             className="md-code-action"
             title={copied ? "已复制" : "复制"}
             aria-label={copied ? "已复制" : "复制代码"}
@@ -268,7 +268,7 @@ function CodeFrame({
               }).catch(() => undefined);
             }}
           >
-            <Icon name="copy" />
+            <Icon name={copied ? "check" : "copy"} className="size-5" />
           </Button>
         </span>
       </figcaption>

@@ -159,6 +159,38 @@ function turnTime(items: DisplayMessage[]) {
     label: new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }).format(date),
   };
 }
+function MessageCopyFooter({
+  text,
+  time,
+  copied,
+  onCopied,
+  label,
+}: {
+  text: string;
+  time: { dateTime: string; label: string } | null;
+  copied: boolean;
+  onCopied: () => void;
+  label: string;
+}) {
+  return (
+    <footer className="message-response-footer">
+      {time && <time dateTime={time.dateTime}>{time.label}</time>}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-lg"
+        className="message-response-copy"
+        aria-label={copied ? "已复制" : label}
+        title={copied ? "已复制" : label}
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(onCopied).catch(() => undefined);
+        }}
+      >
+        <Icon name={copied ? "check" : "copy"} className="size-5" />
+      </Button>
+    </footer>
+  );
+}
 const TranscriptMessage = memo(
   function TranscriptMessage({
     items,
@@ -258,6 +290,18 @@ const TranscriptMessage = memo(
         transition={{ duration: 0.16 }}
       >
         <Message from={role}>
+          {role === "user" && responseText && (
+            <MessageCopyFooter
+              text={responseText}
+              time={responseTime}
+              copied={copied}
+              label="复制消息"
+              onCopied={() => {
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              }}
+            />
+          )}
           {mediaNodes.length > 0 && <div className="user-message-media">{mediaNodes}</div>}
           {(progressNodes.length > 0 || contentNodes.length > 0) && (
             <MessageContent>
@@ -268,25 +312,16 @@ const TranscriptMessage = memo(
               )}
               {contentNodes}
               {role === "assistant" && !streaming && responseText && (
-                <footer className="message-response-footer">
-                  {responseTime && <time dateTime={responseTime.dateTime}>{responseTime.label}</time>}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="message-response-copy"
-                    aria-label={copied ? "已复制" : "复制回复"}
-                    title={copied ? "已复制" : "复制回复"}
-                    onClick={() => {
-                      void navigator.clipboard.writeText(responseText).then(() => {
-                        setCopied(true);
-                        window.setTimeout(() => setCopied(false), 1600);
-                      }).catch(() => undefined);
-                    }}
-                  >
-                    <Icon name={copied ? "check" : "copy"} />
-                  </Button>
-                </footer>
+                <MessageCopyFooter
+                  text={responseText}
+                  time={responseTime}
+                  copied={copied}
+                  label="复制回复"
+                  onCopied={() => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1600);
+                  }}
+                />
               )}
             </MessageContent>
           )}

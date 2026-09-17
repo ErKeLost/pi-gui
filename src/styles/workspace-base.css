@@ -179,23 +179,23 @@
 
 .message-response-footer {
   display: flex;
-  min-height: 27px;
+  min-height: 32px;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
   margin-top: 4px;
   color: color-mix(in oklch, var(--muted-foreground) 72%, transparent);
 }
 
 .message-response-footer time {
-  font: 10.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
   font-variant-numeric: tabular-nums;
 }
 
 .message-response-copy[data-slot="button"] {
-  width: 30px;
-  height: 30px;
-  padding: 0;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
   background: transparent;
   color: inherit;
 }
@@ -206,8 +206,8 @@
 }
 
 .message-response-copy[data-slot="button"] svg {
-  width: 17px;
-  height: 17px;
+  width: 20px !important;
+  height: 20px !important;
 }
 
 .ai-message-response .streamdown-animated > :first-child,
@@ -324,12 +324,14 @@
 
 .ai-message-response .md-code,
 .markdown-renderer .md-code {
-  margin: 12px 0 18px;
-  padding: 2px 0 10px;
+  width: 100%;
+  max-width: 100%;
+  margin: 14px 0 18px;
+  padding: 0;
   overflow: hidden;
-  border: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
-  border-radius: 18px;
-  background: color-mix(in oklch, var(--muted) 70%, var(--card));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in oklch, var(--muted) 88%, var(--background));
 }
 
 .ai-message-response .md-code-header,
@@ -337,8 +339,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
-  padding: 8px 14px 2px 16px;
+  min-height: 44px;
+  padding: 6px 10px 4px 16px;
   color: var(--foreground);
   font-style: normal;
 }
@@ -356,8 +358,8 @@
 
 .ai-message-response .md-code-lang svg,
 .markdown-renderer .md-code-lang svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   color: var(--muted-foreground);
 }
 
@@ -371,9 +373,15 @@
 
 .ai-message-response .md-code-action,
 .markdown-renderer .md-code-action {
-  width: 28px !important;
-  height: 28px !important;
+  width: 34px !important;
+  height: 34px !important;
   color: var(--muted-foreground) !important;
+}
+
+.ai-message-response .md-code-action svg,
+.markdown-renderer .md-code-action svg {
+  width: 20px !important;
+  height: 20px !important;
 }
 
 .ai-message-response .md-code-action:hover,
@@ -385,7 +393,7 @@
 .ai-message-response .md-code-body,
 .markdown-renderer .md-code-body {
   min-width: 0;
-  padding: 4px 4px 8px;
+  padding: 2px 4px 12px;
 }
 
 .ai-message-response pre,
