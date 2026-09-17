@@ -1,4 +1,4 @@
-import { Children, createContext, isValidElement, useContext, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
+import { Children, isValidElement, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { Button as ShadcnButton } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip as ShadcnTooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { PromptContext, type PromptOptions } from '@/lib/prompt'
 
 type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, 'className'> & { className?: string; title?: string; type?: 'button' | 'submit' | 'reset' }
 export function Button({ type = 'button', title, className = '', variant, size, ...props }: ButtonProps) {
@@ -38,10 +39,6 @@ export function Skeleton({ paragraph, className = '', active: _active, ...props 
 export function Disclosure({ title, children, className = '', defaultOpen = false }: { title: ReactNode; children: ReactNode; className?: string; defaultOpen?: boolean }) {
   return <Collapsible defaultOpen={defaultOpen} className={className}><CollapsibleTrigger className="disclosure-title">{title}</CollapsibleTrigger><CollapsibleContent>{children}</CollapsibleContent></Collapsible>
 }
-
-type PromptOptions = { title: string; initial?: string; multiline?: boolean }
-const PromptContext = createContext<(options: PromptOptions) => Promise<string | null>>(() => Promise.resolve(null))
-export const usePrompt = () => useContext(PromptContext)
 
 export function PromptProvider({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<(PromptOptions & { resolve: (value: string | null) => void }) | null>(null)

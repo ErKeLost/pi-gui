@@ -2,6 +2,7 @@
 import { useState, type CSSProperties } from "react";
 import { useReducedMotion } from "motion/react";
 import { ElapsedTime } from "./elapsed-time";
+import { StableShimmer } from "./stable-shimmer";
 import "./thinking-state.css";
 
 const chevron = Array.from({ length: 9 }, (_, index) => {
@@ -80,8 +81,11 @@ export default function LoadingState({
     <span className={`loading-state ${className}`}>
       <span role="status" aria-label={resolvedLabel} className="loading-state-status">
         <LoaderGrid variant={surfer ? "Drive" : variant} />
-        <span className="thinking-shimmer">{resolvedLabel}{detail && <span className="loading-detail">{detail}</span>}</span>
-        <ElapsedTime />
+        <span className="loading-state-copy">
+          <StableShimmer text={resolvedLabel} className="loading-state-label" />
+          {detail && <StableShimmer text={detail} className="loading-detail" />}
+        </span>
+        <ElapsedTime shimmer />
       </span>
       {surfer && <SurferVideo key={videoSrc} src={videoSrc} />}
     </span>

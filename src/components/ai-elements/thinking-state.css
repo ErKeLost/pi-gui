@@ -20,9 +20,10 @@
   align-items: flex-start;
 }
 .loading-state-status {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
   min-height: 24px;
   min-width: 0;
   max-width: 100%;
@@ -56,7 +57,9 @@
   font-weight: 500;
   line-height: 1.5;
 }
-.loading-detail { display: inline-block; max-width: min(52vw, 520px); margin-left: 10px; color: var(--thinking-ink-3) !important; font: 11px/1.5 "SFMono-Regular", Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: baseline; }
+.loading-state-copy { display: flex; min-width: 0; height: 24px; align-items: center; gap: 10px; overflow: hidden; }
+.loading-state-label { display: block; flex: none; color: transparent; font-size: 13px; font-weight: 500; line-height: 24px; white-space: nowrap; }
+.loading-detail { display: block; min-width: 0; max-width: min(52vw, 520px); flex: 1; overflow: hidden; color: transparent !important; font: 11px/24px "SFMono-Regular", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .chat-loading-state { min-height: 28px; max-height: 28px; overflow: hidden; contain: layout; }
 .ai-elapsed-time {
   flex: none;
@@ -188,6 +191,7 @@
 .chat-loading-state { width: 100%; padding: 2px 0; }
 .ai-elapsed-time { min-width: 4.8ch; }
 .chat-loading-state .loading-state-status { width: 100%; }
+.chat-loading-state .ai-elapsed-time { display: block; height: 24px; line-height: 24px; }
 .loading-video-card {
   display: block;
   width: 224px;

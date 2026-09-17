@@ -2434,38 +2434,30 @@ body,
 }
 
 .transcript-error {
-  width: 100%;
-  max-width: min(100%, 68ch);
-  margin: 6px 0 10px;
-  overflow: hidden;
-  border: 1px solid color-mix(in oklch, var(--destructive) 32%, var(--border));
-  border-radius: var(--radius-lg);
-  background: color-mix(in oklch, var(--destructive) 7%, var(--background));
-  color: var(--foreground);
-}
-.transcript-error-heading {
   display: flex;
-  align-items: center;
+  width: fit-content;
+  max-width: min(100%, 68ch);
+  align-items: flex-start;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid color-mix(in oklch, var(--destructive) 22%, var(--border));
-  color: var(--destructive);
-  font-size: 12px;
-  font-weight: 550;
+  margin: 6px 0 10px;
+  padding: 5px 0;
+  color: var(--muted-foreground);
 }
-.transcript-error-heading svg {
+.transcript-error > svg {
   width: 15px;
   height: 15px;
+  margin-top: 2px;
   color: var(--destructive) !important;
 }
 .transcript-error p {
   margin: 0;
-  padding: 12px;
-  color: var(--foreground);
-  font-size: 13px;
-  line-height: 1.7;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
+.transcript-error strong { color: var(--foreground); font-weight: 550; }
 
 .transcript-compaction {
   width: 100%;
@@ -3244,11 +3236,23 @@ body,
   }
 }
 
-/* Persistent Codex-style titlebar. Only the navigation panel below it
-   collapses; the titlebar and its sidebar toggle always remain available. */
+/* Codex-style split titlebar. Each resizable pane owns its header so the
+   sidebar tint and conversation surface stay aligned while resizing. */
 .app-shell {
   display: flex;
   flex-direction: column;
+}
+.sidebar-pane,
+.inspector-pane {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+.sidebar-pane {
+  background: var(--sidebar);
 }
 .app-header {
   position: relative;
@@ -3260,12 +3264,32 @@ body,
   height: 52px;
   align-items: center;
   gap: 4px;
-  padding: 0 12px 0 76px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--background);
   user-select: none;
   -webkit-app-region: drag;
   app-region: drag;
+}
+.app-header-sidebar {
+  padding-left: 76px;
+  border-color: var(--sidebar-border);
+  background: var(--sidebar);
+}
+.app-header-workspace,
+.app-header-inspector,
+.app-header-full {
+  background: var(--background);
+}
+.app-header-workspace {
+  padding-left: 18px;
+}
+.app-header-workspace-full,
+.app-header-full {
+  padding-left: 76px;
+}
+.app-header-inspector {
+  padding: 0;
 }
 .titlebar-navigation {
   display: flex;
@@ -3324,12 +3348,22 @@ body,
   flex: 0 0 auto;
   margin-left: auto;
 }
+.app-header-workspace .app-header-more {
+  margin-left: 2px;
+}
 .app-shell > [data-slot="resizable-panel-group"] {
   flex: 1 1 0 !important;
   height: auto !important;
 }
 .sidebar {
+  flex: 1 1 0 !important;
+  min-height: 0;
   padding: 12px 12px 14px !important;
+  border-right: 0 !important;
+}
+.inspector-pane > .inspector {
+  flex: 1 1 0 !important;
+  min-height: 0;
 }
 .settings-root {
   flex: 1 1 0;

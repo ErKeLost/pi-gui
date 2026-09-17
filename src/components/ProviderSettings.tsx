@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useReducer } from "react";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   listProviderProfiles,
   probeProviderModels,
@@ -70,61 +70,66 @@ function ModelDetails({ model, onUse, disabled }: { model: ProviderModel; onUse:
 }
 
 export function ProviderSettings() {
+  const profiles = useQuery({ queryKey: ["provider-profiles"], queryFn: listProviderProfiles, staleTime: 10_000 });
+  const first = profiles.data?.[0];
+  return <ProviderSettingsEditor key={first?.id ?? "new-provider"} profiles={profiles} initialProfile={first} />;
+}
+
+type ProviderFormState = {
+  provider: string;
+  name: string;
+  baseUrl: string;
+  modelsUrl: string;
+  api: (typeof apiTypes)[number];
+  apiKey: string;
+  authHeader: boolean;
+  models: ProviderModel[];
+  search: string;
+  busy: "save" | "probe" | "use" | null;
+};
+
+function initialForm(profile?: ProviderProfile): ProviderFormState {
+  return {
+    provider: profile?.id ?? "",
+    name: profile?.name ?? "",
+    baseUrl: profile?.baseUrl ?? "",
+    modelsUrl: profile?.modelsUrl ?? "",
+    api: (profile?.api as (typeof apiTypes)[number]) || "openai-completions",
+    apiKey: "",
+    authHeader: profile?.authHeader !== false,
+    models: [],
+    search: "",
+    busy: null,
+  };
+}
+
+function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQueryResult<ProviderProfile[]>; initialProfile?: ProviderProfile }) {
   const cwd = useWorkspace((state) => state.cwd);
   const online = useWorkspace((state) => state.connection === "online");
   const running = useWorkspace((state) => state.transcript.running);
-  const profiles = useQuery({ queryKey: ["provider-profiles"], queryFn: listProviderProfiles, staleTime: 10_000 });
-  const [provider, setProvider] = useState("");
-  const [name, setName] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [modelsUrl, setModelsUrl] = useState("");
-  const [api, setApi] = useState<(typeof apiTypes)[number]>("openai-completions");
-  const [apiKey, setApiKey] = useState("");
-  const [authHeader, setAuthHeader] = useState(true);
-  const [models, setModels] = useState<ProviderModel[]>([]);
-  const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState<"save" | "probe" | "use" | null>(null);
-  const [isNewProvider, setIsNewProvider] = useState(false);
+  const [form, update] = useReducer((state: ProviderFormState, patch: Partial<ProviderFormState>) => ({ ...state, ...patch }), initialProfile, initialForm);
+  const { provider, name, baseUrl, modelsUrl, api, apiKey, authHeader, models, search, busy } = form;
 
   const selected = profiles.data?.find((item) => item.id === provider);
-  useEffect(() => {
-    const first = profiles.data?.[0];
-    if (provider || isNewProvider || !first) return;
-    setProvider(first.id);
-    setName(first.name ?? "");
-    setBaseUrl(first.baseUrl ?? "");
-    setModelsUrl(first.modelsUrl ?? "");
-    setApi((first.api as (typeof apiTypes)[number]) || "openai-completions");
-    setAuthHeader(first.authHeader !== false);
-  }, [profiles.data, provider, isNewProvider]);
   function selectProvider(id: string) {
-    setProvider(id);
     const profile = profiles.data?.find((item) => item.id === id);
-    if (profile) {
-      setName(profile.name ?? "");
-      setBaseUrl(profile.baseUrl ?? "");
-      setModelsUrl(profile.modelsUrl ?? "");
-      setApi((profile.api as (typeof apiTypes)[number]) || "openai-completions");
-      setAuthHeader(profile.authHeader !== false);
-      setApiKey("");
-    }
-    setModels([]);
-    setIsNewProvider(false);
+    update(profile ? { ...initialForm(profile), provider: id } : { provider: id, models: [] });
   }
 
   function newProvider() {
-    setIsNewProvider(true); setProvider(""); setName(""); setBaseUrl(""); setModelsUrl(""); setApi("openai-completions"); setApiKey(""); setAuthHeader(true); setModels([]);
+    update(initialForm());
   }
 
   function applyPreset(preset: (typeof presets)[number]) {
-    setIsNewProvider(true); setProvider(preset.id); setName(preset.name); setBaseUrl(preset.baseUrl); setModelsUrl(`${preset.baseUrl}/models`); setApi(preset.api); setAuthHeader(true); setModels([]); gooeyToast.info(`已填入 ${preset.name} 官方端点`, { showTimestamp: false });
+    update({ ...initialForm(), provider: preset.id, name: preset.name, baseUrl: preset.baseUrl, modelsUrl: `${preset.baseUrl}/models`, api: preset.api });
+    gooeyToast.info(`已填入 ${preset.name} 官方端点`, { showTimestamp: false });
   }
 
   async function save() {
-    setBusy("save");
+    update({ busy: "save" });
     try {
       const result = await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
-      setProvider(result.id); setIsNewProvider(false); setApiKey("");
+      update({ provider: result.id, apiKey: "" });
       let synced: Awaited<ReturnType<typeof syncProviderModels>>;
       try {
         synced = await syncProviderModels(result.id);
@@ -155,20 +160,20 @@ export function ProviderSettings() {
       gooeyToast.success("已保存并同步到 Pi", { description: switchedModel ? `${synced.count} 个模型 · 已切换到 ${switchedModel.id}` : `${synced.count} 个模型已写入 Pi`, showTimestamp: false });
       await queryClient.invalidateQueries({ queryKey: ["pi", "models", cwd] });
       await profiles.refetch();
-    } catch (error) { report(error); } finally { setBusy(null); }
+    } catch (error) { report(error); } finally { update({ busy: null }); }
   }
 
   async function probe() {
-    setBusy("probe");
+    update({ busy: "probe" });
     try {
       const catalog = await probeProviderModels(provider.trim(), baseUrl.trim(), api, apiKey.trim() || undefined, authHeader, modelsUrl.trim() || undefined);
       const next = Array.isArray(catalog.data) ? catalog.data : [];
-      setModels(next); gooeyToast.success(`已加载 ${next.length} 个模型`, { description: "模型目录已更新", showTimestamp: false });
-    } catch (error) { report(error); } finally { setBusy(null); }
+      update({ models: next }); gooeyToast.success(`已加载 ${next.length} 个模型`, { description: "模型目录已更新", showTimestamp: false });
+    } catch (error) { report(error); } finally { update({ busy: null }); }
   }
 
   async function applyModel(model: ProviderModel) {
-    setBusy("use");
+    update({ busy: "use" });
     try {
       await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
       await syncProviderModels(provider.trim());
@@ -178,9 +183,9 @@ export function ProviderSettings() {
       const current = await refresh(cwd);
       if (current.model?.provider !== provider.trim() || current.model?.id !== model.id) throw new Error("Pi 没有确认模型切换");
       await persistDefaultModel(provider.trim(), model.id);
-      setApiKey(""); gooeyToast.success("模型已切换", { description: `${provider.trim()} / ${model.id}`, showTimestamp: false });
+      update({ apiKey: "" }); gooeyToast.success("模型已切换", { description: `${provider.trim()} / ${model.id}`, showTimestamp: false });
       await profiles.refetch();
-    } catch (error) { report(error); } finally { setBusy(null); }
+    } catch (error) { report(error); } finally { update({ busy: null }); }
   }
 
   const visibleModels = useMemo(() => models.filter((model) => `${model.id} ${modelDisplayName(model)}`.toLowerCase().includes(search.toLowerCase())), [models, search]);
@@ -201,21 +206,21 @@ export function ProviderSettings() {
       <div className="provider-preset-strip"><span>快速填充</span><div className="provider-preset-row">{presets.map((preset) => <Button key={preset.id} className="secondary" onClick={() => applyPreset(preset)}>{preset.name}<Icon name="arrow-down-right" /></Button>)}</div></div>
       <div className="provider-editor">
        <section className="provider-form-section"><header><span>01</span><div><h3>标识</h3><p>用于 Pi 配置和模型选择器。</p></div></header><div className="provider-form-grid">
-        <label>Provider ID<Input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 my-gateway" /></label>
-        <label>显示名称<Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如 Team Gateway" /></label>
+        <label>Provider ID<Input value={provider} onChange={(event) => update({ provider: event.target.value })} placeholder="例如 my-gateway" /></label>
+        <label>显示名称<Input value={name} onChange={(event) => update({ name: event.target.value })} placeholder="例如 Team Gateway" /></label>
        </div></section>
        <section className="provider-form-section"><header><span>02</span><div><h3>接口</h3><p>填写兼容协议和模型目录地址。</p></div></header><div className="provider-form-grid">
-        <label>Base URL<Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com/v1" /></label>
-        <label>模型列表接口<Input value={modelsUrl} onChange={(event) => setModelsUrl(event.target.value)} placeholder="留空则使用 Base URL/models" /></label>
-        <label className="provider-form-wide">API 类型<Select value={api} onChange={(event) => setApi(event.target.value as (typeof apiTypes)[number])}>{apiTypes.map((item) => <option key={item} value={item}>{item}</option>)}</Select></label>
+        <label>Base URL<Input value={baseUrl} onChange={(event) => update({ baseUrl: event.target.value })} placeholder="https://example.com/v1" /></label>
+        <label>模型列表接口<Input value={modelsUrl} onChange={(event) => update({ modelsUrl: event.target.value })} placeholder="留空则使用 Base URL/models" /></label>
+        <label className="provider-form-wide">API 类型<Select value={api} onChange={(event) => update({ api: event.target.value as (typeof apiTypes)[number] })}>{apiTypes.map((item) => <option key={item} value={item}>{item}</option>)}</Select></label>
        </div></section>
        <section className="provider-form-section"><header><span>03</span><div><h3>凭据</h3><p>API Key 只写入本机 Pi 配置，不会回显。</p></div></header><div className="provider-credentials">
-        <label>API Key<Input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={selected?.hasApiKey ? "已保存，留空保持不变" : "输入服务商 API Key"} autoComplete="off" /></label>
-        <div className="provider-auth-row"><div><strong>发送认证请求头</strong><p>关闭后，模型服务请求不会附带 API Key。</p></div><Switch aria-label="发送 API 认证请求头" checked={authHeader} onChange={setAuthHeader} /><span className="provider-secret-state">{selected?.hasApiKey ? "凭据已保存" : "尚未保存凭据"}</span></div>
+        <label>API Key<Input type="password" value={apiKey} onChange={(event) => update({ apiKey: event.target.value })} placeholder={selected?.hasApiKey ? "已保存，留空保持不变" : "输入服务商 API Key"} autoComplete="off" /></label>
+        <div className="provider-auth-row"><div><strong>发送认证请求头</strong><p>关闭后，模型服务请求不会附带 API Key。</p></div><Switch aria-label="发送 API 认证请求头" checked={authHeader} onChange={(value) => update({ authHeader: value })} /><span className="provider-secret-state">{selected?.hasApiKey ? "凭据已保存" : "尚未保存凭据"}</span></div>
        </div></section>
        <footer className="provider-actions"><div className="provider-save-note"><Icon name="arrows-clockwise"/><span>保存会更新 Pi 模型配置并重新连接当前项目。</span></div><div><Button className="secondary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void probe()}>{busy === "probe" ? "正在查询…" : "测试连接"}</Button><Button className="primary" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void save()}>{busy === "save" ? "正在保存并同步…" : "保存并同步到 Pi"}</Button></div></footer>
       </div>
-      {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong>接口返回的模型（{visibleModels.length}/{models.length}）</strong><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="筛选模型" /></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelDisplayName(model)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_length ?? model.context_window)}{typeof (model.context_length ?? model.context_window) === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
+      {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong>接口返回的模型（{visibleModels.length}/{models.length}）</strong><Input value={search} onChange={(event) => update({ search: event.target.value })} placeholder="筛选模型" /></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelDisplayName(model)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_length ?? model.context_window)}{typeof (model.context_length ?? model.context_window) === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
     </section>
   );
 }

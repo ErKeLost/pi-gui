@@ -1,0 +1,48 @@
+import { useMemo, useState } from "react";
+import { gooeyToast } from "goey-toast";
+import { useWorkspace } from "../../lib/store";
+import { changeSession, report, retireSession } from "../../lib/rpc";
+import type { Session } from "../../lib/protocol";
+import { mergeProjectSessions, useProjectSessions } from "../../hooks/use-project-sessions";
+import { Button, Input, Modal, Skeleton } from "../UI";
+import { Icon } from "../Icon";
+
+export function SessionsPanel() {
+  const cwd = useWorkspace(state => state.cwd);
+  const online = useWorkspace(state => state.connection === "online");
+  const liveSessions = useWorkspace(state => state.liveSessions);
+  const sessions = useProjectSessions(cwd);
+  const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<Session | null>(null);
+  const merged = useMemo(() => mergeProjectSessions(cwd, sessions.data ?? [], liveSessions), [cwd, liveSessions, sessions.data]);
+  const query = search.toLowerCase();
+  const visibleSessions = merged.sessions.filter(session => `${session.name ?? ""} ${session.firstMessage}`.toLowerCase().includes(query));
+
+  async function remove() {
+    if (!deleting) return;
+    try {
+      await retireSession(deleting.path);
+      setDeleting(null);
+      await sessions.refetch();
+      gooeyToast.success("会话已删除", { showTimestamp: false });
+    } catch (error) {
+      report(error);
+    }
+  }
+
+  return <>
+    <div className="panel-heading"><div><h1>会话</h1><p>保存在本机的项目对话。</p></div><Button className="primary" disabled={!online} onClick={() => void changeSession({ type: "new_session" }).catch(report)}><Icon name="plus" />新会话</Button></div>
+    <Input className="search-input" placeholder="搜索会话" value={search} onChange={event => setSearch(event.target.value)} />
+    {sessions.isLoading && <Skeleton active paragraph={{ rows: 4 }} />}
+    {sessions.error && <p className="error-inline">{String(sessions.error)}</p>}
+    <div className="session-rows">{visibleSessions.map(session => {
+      const working = liveSessions.some(live => live.running && live.path === session.path);
+      return <div className={`session-row${working ? " working" : ""}`} key={session.id}>
+        <Button disabled={!online} aria-busy={working} onClick={() => void changeSession({ type: "switch_session", sessionPath: session.path }).catch(report)}><Icon name="chats" /><span><strong>{session.name || session.firstMessage || "未命名会话"}</strong><small>{session.messageCount} 条消息 · {session.modified ? new Date(session.modified).toLocaleString("zh-CN") : "刚刚"}</small></span>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name="arrow-up-right" />}</Button>
+        {merged.listedPaths.has(session.path) && <Button title="删除会话" disabled={!online} onClick={() => setDeleting(session)}><Icon name="trash" /></Button>}
+      </div>;
+    })}</div>
+    {!merged.sessions.length && <div className="empty-panel"><Icon name="chats" /><h3>还没有保存的会话</h3><p>发送第一条消息后，Pi 会自动保存。</p></div>}
+    <Modal open={Boolean(deleting)} title="删除会话" onCancel={() => setDeleting(null)} onOk={() => void remove()} okText="删除" cancelText="取消">删除后无法恢复：{deleting?.name || deleting?.firstMessage || "未命名会话"}</Modal>
+  </>;
+}

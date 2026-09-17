@@ -6,7 +6,7 @@ import {
   useState,
 } from "react"
 import {
-  motion,
+  m,
   useMotionValue,
   useReducedMotion,
   useSpring,
@@ -118,6 +118,18 @@ const getScrollParent = (element: HTMLElement) => {
   return window
 }
 
+function subscribeToScroll(
+  parents: Set<EventTarget>,
+  listener: EventListener,
+) {
+  for (const parent of parents) parent.addEventListener("scroll", listener, { passive: true })
+  window.addEventListener("resize", listener)
+  return () => {
+    for (const parent of parents) parent.removeEventListener("scroll", listener)
+    window.removeEventListener("resize", listener)
+  }
+}
+
 const Dash = ({
   active,
   mouseY,
@@ -170,7 +182,7 @@ const Dash = ({
       className="group flex h-2.5 w-9 items-center border-0 bg-transparent p-0 outline-none"
       onClick={() => onSelect(section.id)}
     >
-      <motion.span
+      <m.span
         className={`block transition-colors duration-150 ease-out group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 ${active ? "bg-foreground" : preset.className}`}
         style={{
           height: preset.thickness,
@@ -195,10 +207,8 @@ const ProximitySidebar = ({
   const dashRefs = useRef(new Map<string, HTMLButtonElement>())
   const pointerInside = useRef(false)
   const resetTimer = useRef<number | null>(null)
+  const selectFrame = useRef<number | null>(null)
   const [activeId, setActiveId] = useState(sections[0]?.id)
-  const [detectedKinds, setDetectedKinds] = useState<Record<string, SectionKind>>(
-    {}
-  )
 
   const sectionIds = useMemo(
     () => sections.map((section) => section.id).join("|"),
@@ -261,7 +271,9 @@ const ProximitySidebar = ({
       setActiveId(id)
       pulseDash(id)
 
-      window.requestAnimationFrame(() => {
+      if (selectFrame.current) window.cancelAnimationFrame(selectFrame.current)
+      selectFrame.current = window.requestAnimationFrame(() => {
+        selectFrame.current = null
         const element = getSectionElement(id)
         if (!element) return
         element.scrollIntoView({
@@ -274,10 +286,12 @@ const ProximitySidebar = ({
     [onSelectSection, pulseDash, shouldReduceMotion]
   )
 
-  useEffect(() => () => clearPendingReset(), [clearPendingReset])
+  useEffect(() => () => {
+    clearPendingReset()
+    if (selectFrame.current) window.cancelAnimationFrame(selectFrame.current)
+  }, [clearPendingReset])
 
-  useEffect(() => {
-    const kinds = sections.reduce<Record<string, SectionKind>>(
+  const detectedKinds = useMemo(() => sections.reduce<Record<string, SectionKind>>(
       (nextKinds, section) => {
         nextKinds[section.id] =
           section.kind || section.level
@@ -287,15 +301,11 @@ const ProximitySidebar = ({
         return nextKinds
       },
       {}
-    )
-
-    setDetectedKinds(kinds)
-  }, [sectionIds, sections])
+    ), [sections])
 
   useEffect(() => {
-    if (!sections.length) return
-
     let frame = 0
+    const scrollParents = new Set<EventTarget>([window])
 
     const updateActiveSection = () => {
       frame = 0
@@ -332,31 +342,22 @@ const ProximitySidebar = ({
       frame = window.requestAnimationFrame(updateActiveSection)
     }
 
-    const scrollParents = new Set<EventTarget>([window])
-
     for (const section of sections) {
       const element = getSectionElement(section.id)
       if (element) scrollParents.add(getScrollParent(element))
     }
 
-    updateActiveSection()
-
-    for (const parent of scrollParents) {
-      parent.addEventListener("scroll", scheduleUpdate, { passive: true })
+    if (sections.length) {
+      updateActiveSection()
     }
-
-    window.addEventListener("resize", scheduleUpdate)
+    const unsubscribe = sections.length ? subscribeToScroll(scrollParents, scheduleUpdate) : () => undefined
 
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
-
-      for (const parent of scrollParents) {
-        parent.removeEventListener("scroll", scheduleUpdate)
-      }
-
-      window.removeEventListener("resize", scheduleUpdate)
+      clearPendingReset()
+      unsubscribe()
     }
-  }, [activeOffset, pulseDash, sectionIds, sections])
+  }, [activeOffset, clearPendingReset, pulseDash, sectionIds, sections])
 
   return (
     <nav

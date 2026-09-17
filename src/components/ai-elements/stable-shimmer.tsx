@@ -5,7 +5,6 @@ type StableShimmerProps = Omit<TextShimmerProps, "children"> & { text: string };
 
 export function StableShimmer({
   text,
-  as = "span",
   className,
   duration = 1.6,
   spread = 2,
@@ -13,10 +12,10 @@ export function StableShimmer({
   const hostRef = useRef<HTMLSpanElement>(null);
   const [initialText] = useState(text);
   const shimmer = useMemo(() => (
-    <Shimmer as={as} className={className} duration={duration} spread={spread}>
+    <Shimmer className={className} duration={duration} spread={spread}>
       {initialText}
     </Shimmer>
-  ), [as, className, duration, initialText, spread]);
+  ), [className, duration, initialText, spread]);
 
   useLayoutEffect(() => {
     const element = hostRef.current?.firstElementChild as HTMLElement | null;

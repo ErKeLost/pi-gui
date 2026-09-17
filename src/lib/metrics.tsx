@@ -1,19 +1,9 @@
 import {useEffect} from 'react'
 import {useQuery} from '@tanstack/react-query'
-import type {RpcResponse,RpcSessionState} from '@earendil-works/pi-coding-agent'
+import type {RpcSessionState} from '@earendil-works/pi-coding-agent'
 import {request} from './rpc'
 import {useWorkspace} from './store'
 import {usePageVisible} from './page-visibility'
-export type Stats=Extract<RpcResponse,{command:'get_session_stats';success:true}>['data']
-export type RuntimeInfo={compaction:{enabled:boolean;reserveTokens:number;keepRecentTokens:number};retry:{enabled:boolean;maxRetries:number;baseDelayMs:number};providerRetry:Record<string,unknown>;transport:string;projectTrusted:boolean;systemPrompt:string;thinkingBudgets?:Record<string,number>;idle:boolean;pending:boolean;scopedModels:unknown[]}
-export function useMetrics(){
- const cwd=useWorkspace(s=>s.cwd),connectionId=useWorkspace(s=>s.connectionId)
- const visible=usePageVisible()
- const online=useWorkspace(s=>s.connection==='online'),sessionId=useWorkspace(s=>s.state?.sessionId),runtimeText=useWorkspace(s=>s.statuses['gui-runtime'])
- const stats=useQuery({queryKey:['pi','live-stats',connectionId||cwd,sessionId],queryFn:()=>request<Stats>({type:'get_session_stats'},30000,connectionId||cwd),enabled:online&&visible,refetchInterval:2000})
- let runtime:RuntimeInfo|null=null;try{if(runtimeText)runtime=JSON.parse(runtimeText)}catch{/* Keep absent metrics absent. */}
- return {stats:stats.data,runtime,error:stats.error,updatedAt:stats.dataUpdatedAt,online}
-}
 export function MetricsSync(){
  const cwd=useWorkspace(s=>s.cwd),connectionId=useWorkspace(s=>s.connectionId)
  const visible=usePageVisible()
