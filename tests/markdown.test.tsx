@@ -75,6 +75,7 @@ describe("shared Markdown renderer", () => {
     expect(html).toContain("href=\"https://streamdown.lobehub.com\"");
     expect(html).toContain("target=\"_blank\"");
     expect(html).toContain("md-autolink");
+    expect(html).toContain("md-selectable-text");
     expect(html).not.toContain("node=\"[object Object]\"");
   });
 

@@ -1,5 +1,5 @@
 import { Wifi } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useState, type RefObject } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type ClipboardEvent as ReactClipboardEvent, type RefObject } from "react";
 import { m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../lib/store";
@@ -20,6 +20,14 @@ import { ChatComposer } from "./chat/ChatComposer";
 import { ErrorOutput, TranscriptMessage } from "./chat/TranscriptMessage";
 import { hasSectionMedia, messageKind, sectionPreview, sectionPreviewAfterHeading, sectionText } from "../lib/conversation-sections";
 import { AgentActivityFeed } from "./agents/AgentActivityFeed";
+import { normalizeSelectionText } from "../lib/clipboard";
+
+function copyConversationSelection(event: ReactClipboardEvent<HTMLDivElement>) {
+  const text = normalizeSelectionText(window.getSelection()?.toString() ?? "");
+  if (!text) return;
+  event.preventDefault();
+  event.clipboardData.setData("text/plain", text);
+}
 
 function useConversationSections(
   conversationRef: RefObject<HTMLDivElement | null>,
@@ -145,7 +153,7 @@ export function Chat() {
         if (disclosure?.dataset.collapsible === "true" && disclosure.dataset.open === "false") disclosure.querySelector<HTMLButtonElement>(".message-response-toggle")?.click();
       }}
     />}
-    <Conversation ref={ref} className="chat-conversation tessera-conversation">
+    <Conversation ref={ref} className="chat-conversation tessera-conversation" onCopy={copyConversationSelection}>
       <ConversationContent className="tessera-conversation-content">
         {messageGroups.map(group => {
           const active = group.indexes.includes(transcript.active);

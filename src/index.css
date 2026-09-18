@@ -50,6 +50,7 @@
   --sidebar-ring: oklch(0.708 0 0);
   --scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 34%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklch, var(--muted-foreground) 58%, transparent);
+  --selection-background: oklch(0.76 0.11 240 / 55%);
 }
 
 html[data-page-visible="false"] * {
@@ -90,6 +91,7 @@ html[data-theme="dark"] {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --selection-background: oklch(0.55 0.15 245 / 72%);
 }
 
 @theme inline {
@@ -202,7 +204,7 @@ html[data-theme="dark"] {
   }
 
   ::selection {
-    background: color-mix(in oklch, var(--primary) 35%, transparent);
+    background: var(--selection-background);
     color: var(--foreground);
   }
 

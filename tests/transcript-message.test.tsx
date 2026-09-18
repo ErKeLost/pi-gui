@@ -30,6 +30,7 @@ describe("transcript message actions", () => {
     expect(html).toContain('aria-label="复制消息"');
     expect(html).not.toContain("<time");
     expect(html).toContain('aria-label="分支到新聊天"');
+    expect(html).not.toContain("select-none");
   });
 
   test("does not turn transient provider errors into transcript cards", () => {
