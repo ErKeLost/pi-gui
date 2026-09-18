@@ -41,14 +41,14 @@ export default async function (pi: ExtensionAPI) {
     ctx.ui.setStatus('gui-runtime',JSON.stringify({compaction:settings.getCompactionSettings(),retry:settings.getRetrySettings(),providerRetry:settings.getProviderRetrySettings(),transport:settings.getTransport(),thinkingBudgets:settings.getThinkingBudgets(),projectTrusted:ctx.isProjectTrusted(),contextUsage:ctx.getContextUsage(),systemPrompt:ctx.getSystemPrompt(),scopedModels:ctx.scopedModels.map(item=>({model:item.model.id,provider:item.model.provider,thinkingLevel:item.thinkingLevel})),idle:ctx.isIdle(),pending:ctx.hasPendingMessages()}))
   }})
   const publishTools = (ctx: ExtensionCommandContext) => ctx.ui.setStatus('gui-tools', JSON.stringify({
-    active: ctx.getActiveTools(),
-    tools: ctx.getAllTools().map((tool) => ({name:tool.name,description:tool.description})),
+    active: pi.getActiveTools(),
+    tools: pi.getAllTools().map((tool) => ({name:tool.name,description:tool.description})),
   }));
   pi.registerCommand('gui-tools', {description:'GUI: list available tools',handler:async (_args: string,ctx: ExtensionCommandContext) => publishTools(ctx)});
   pi.registerCommand('gui-tools-set', {description:'GUI: change active tools',handler:async (args: string,ctx: ExtensionCommandContext) => {
     await ctx.waitForIdle(); const names=JSON.parse(args);
     if(!Array.isArray(names)||names.some((name:unknown)=>typeof name!=='string'))throw new Error('Expected tool names');
-    ctx.setActiveTools(names);publishTools(ctx);
+    pi.setActiveTools(names);publishTools(ctx);
   }});
   pi.registerCommand('gui-tree', {description:'GUI: navigate a session branch',handler:async (args: string,ctx: ExtensionCommandContext) => {
     await ctx.waitForIdle();const target=JSON.parse(args);const result=await ctx.navigateTree(target.id,{summarize:target.summarize ?? false,customInstructions:target.customInstructions,replaceInstructions:target.replaceInstructions,label:target.label});

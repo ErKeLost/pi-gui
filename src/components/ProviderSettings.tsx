@@ -1,4 +1,4 @@
-import { useMemo, useReducer } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   listProviderProfiles,
@@ -122,28 +122,33 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
   const online = useWorkspace((state) => state.connection === "online");
   const running = useWorkspace((state) => state.transcript.running);
   const [form, update] = useReducer((state: ProviderFormState, patch: Partial<ProviderFormState>) => ({ ...state, ...patch }), initialProfile, initialForm);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(initialProfile?.id ?? null);
   const { provider, name, baseUrl, modelsUrl, api, apiKey, defaultModelId, authHeader, models, search, busy } = form;
 
-  const selected = profiles.data?.find((item) => item.id === provider);
+  const selected = profiles.data?.find((item) => item.id === editingProfileId);
+  const providerConflict = profiles.data?.find(item => item.id === provider.trim() && item.id !== editingProfileId);
   const providerOptions = useMemo(() => {
     const saved = profiles.data ?? [];
     const seen = new Set(saved.map(item => item.id));
     const options = saved.map(item => ({ id: item.id, name: item.name || item.id, saved: true }));
     for (const preset of presets) if (!seen.has(preset.id)) options.push({ id: preset.id, name: preset.name, saved: false });
-    if (provider && !options.some(item => item.id === provider)) options.push({ id: provider, name: name || provider, saved: false });
     return options;
-  }, [name, profiles.data, provider]);
-  const currentProvider = providerOptions.find(item => item.id === provider);
+  }, [profiles.data]);
+  const currentProvider = providerOptions.find(item => item.id === editingProfileId);
   function selectProvider(id: string) {
     const profile = profiles.data?.find((item) => item.id === id);
-    update(profile ? { ...initialForm(profile), provider: id } : { provider: id, models: [] });
+    if (!profile) return;
+    setEditingProfileId(id);
+    update({ ...initialForm(profile), provider: id });
   }
 
   function newProvider() {
+    setEditingProfileId(null);
     update(initialForm());
   }
 
   function applyPreset(preset: (typeof presets)[number]) {
+    setEditingProfileId(null);
     update({ ...initialForm(), provider: preset.id, name: preset.name, baseUrl: preset.baseUrl, modelsUrl: `${preset.baseUrl}/models`, api: preset.api });
     gooeyToast.info(`已填入 ${preset.name} 官方端点`, { showTimestamp: false });
   }
@@ -160,6 +165,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
     update({ busy: "save" });
     try {
       const result = await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
+      setEditingProfileId(result.id);
       update({ provider: result.id, apiKey: "" });
       let synced: Awaited<ReturnType<typeof syncProviderModels>> = { provider: result.id, count: 0, previous: 0 };
       try {
@@ -229,8 +235,8 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
       <div className="provider-picker-block">
         <div className="provider-picker-heading"><ProviderFieldLabel icon="buildings">Provider</ProviderFieldLabel>{selected && <span className="provider-config-state saved"><Icon name="check" />已保存</span>}</div>
         <div className="provider-picker-row">
-          <Select value={provider || "__new__"} onValueChange={chooseProvider}>
-            <SelectTrigger aria-label="Provider" className="provider-main-select"><SelectValue><span className="provider-selected-value">{provider ? <ProviderMark id={provider} /> : <Icon name="plus" />}<span>{currentProvider?.name ?? "自定义 Provider"}</span></span></SelectValue></SelectTrigger>
+          <Select value={editingProfileId ?? "__new__"} onValueChange={chooseProvider}>
+            <SelectTrigger aria-label="Provider" className="provider-main-select"><SelectValue><span className="provider-selected-value">{editingProfileId ? <ProviderMark id={editingProfileId} /> : <Icon name="plus" />}<span>{currentProvider?.name ?? "新 Provider"}</span></span></SelectValue></SelectTrigger>
             <SelectContent align="start" className="provider-main-select-content">
               {providerOptions.map(item => <SelectItem key={item.id} value={item.id}><ProviderMark id={item.id} /><span>{item.name}</span>{item.saved && <small>已保存</small>}</SelectItem>)}
               <SelectSeparator />
@@ -242,7 +248,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
       </div>
       <div className="provider-editor">
        <section className="provider-form-section"><header><div><h2><Icon name="identification-card" />基本信息</h2><p>用于 Pi 配置和模型选择器。</p></div></header><div className="provider-form-grid">
-        <label><ProviderFieldLabel icon="identification-card">Provider ID</ProviderFieldLabel><Input value={provider} onChange={(event) => update({ provider: event.target.value })} placeholder="例如 my-gateway" /></label>
+        <label><ProviderFieldLabel icon="identification-card">Provider ID</ProviderFieldLabel><Input value={provider} onChange={(event) => update({ provider: event.target.value })} placeholder="例如 my-gateway" aria-invalid={Boolean(providerConflict)} />{providerConflict && <small className="provider-field-error">该 ID 已存在，请从上方选择器打开，或输入新的 ID。</small>}</label>
         <label><ProviderFieldLabel icon="article">显示名称</ProviderFieldLabel><Input value={name} onChange={(event) => update({ name: event.target.value })} placeholder="例如 Team Gateway" /></label>
        </div></section>
        <section className="provider-form-section"><header><div><h2><Icon name="link" />连接</h2><p>配置兼容协议和模型目录地址。</p></div></header><div className="provider-form-grid">
@@ -258,7 +264,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
         <label><ProviderFieldLabel icon="key">API Key</ProviderFieldLabel><Input type="password" value={apiKey} onChange={(event) => update({ apiKey: event.target.value })} placeholder={selected?.hasApiKey ? "已保存，留空保持不变" : "输入服务商 API Key"} autoComplete="off" /></label>
         <div className="provider-auth-row"><div><strong><Icon name="shield-check" />发送认证请求头</strong><p>关闭后，模型服务请求不会附带 API Key。</p></div><Switch aria-label="发送 API 认证请求头" checked={authHeader} onChange={(value) => update({ authHeader: value })} /><span className="provider-secret-state">{selected?.hasApiKey ? "凭据已保存" : "尚未保存凭据"}</span></div>
        </div></section>
-       <footer className="provider-actions"><div className="provider-save-note"><Icon name="arrows-clockwise"/><span>保存会更新 Pi 模型配置并重新连接当前项目。</span></div><div><Button variant="outline" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void probe()}><Icon name="play-circle" />{busy === "probe" ? "正在查询…" : "测试连接"}</Button><Button variant="default" disabled={!!busy || !provider.trim() || !baseUrl.trim()} onClick={() => void save()}><Icon name="floppy-disk" />{busy === "save" ? "正在保存并同步…" : "保存并同步"}</Button></div></footer>
+       <footer className="provider-actions"><div className="provider-save-note"><Icon name="arrows-clockwise"/><span>保存会更新 Pi 模型配置并重新连接当前项目。</span></div><div><Button variant="outline" disabled={!!busy || !provider.trim() || !baseUrl.trim() || Boolean(providerConflict)} onClick={() => void probe()}><Icon name="play-circle" />{busy === "probe" ? "正在查询…" : "测试连接"}</Button><Button variant="default" disabled={!!busy || !provider.trim() || !baseUrl.trim() || Boolean(providerConflict)} onClick={() => void save()}><Icon name="floppy-disk" />{busy === "save" ? "正在保存并同步…" : "保存并同步"}</Button></div></footer>
       </div>
       {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong><Icon name="cpu" />可用模型（{visibleModels.length}/{models.length}）</strong><label className="provider-catalog-search"><Icon name="magnifying-glass" /><Input aria-label="筛选模型" value={search} onChange={(event) => update({ search: event.target.value })} placeholder="筛选模型" /></label></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelDisplayName(model)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_length ?? model.context_window)}{typeof (model.context_length ?? model.context_window) === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
     </section>
