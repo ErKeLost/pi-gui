@@ -23,8 +23,7 @@ export default function App(){
  const sessions=useProjectSessions(cwd)
  useEffect(()=>{localStorage.setItem('pi-gui.sidebarOpen',String(sidebarOpen))},[sidebarOpen])
  const merged=useMemo(()=>mergeProjectSessions(cwd,sessions.data??[],liveSessions),[cwd,sessions.data,liveSessions])
- const recentSessions=merged.sessions.slice(0,8)
- const currentSession=recentSessions.find(session=>session.path===state?.sessionFile)
+ const currentSession=merged.sessions.find(session=>session.path===state?.sessionFile)
  const rawHeaderTitle=panel==='chat'?(currentSession?.name||currentSession?.firstMessage||''):panel==='settings'?'设置':panel==='commands'?'技能与命令':'Orbit'
  const headerTitle=panel==='chat'?compactTitle(rawHeaderTitle):rawHeaderTitle
  const toggleSidebar=()=>setSidebarOpen(value=>!value)
@@ -32,7 +31,7 @@ export default function App(){
    {panel==='settings'?<>
     <WorkspaceTitlebar variant="full" sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} title={headerTitle} rawTitle={rawHeaderTitle}/>
     <section className="settings-root"><MetricsSync/><Panel/></section>
-   </>:<WorkspaceLayout sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} online={online} panel={panel} title={headerTitle} rawTitle={rawHeaderTitle} sessions={recentSessions} listedPaths={merged.listedPaths} liveSessions={liveSessions} currentSessionFile={state?.sessionFile} onSessionsChanged={sessions.refetch}/>}
+   </>:<WorkspaceLayout sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} online={online} panel={panel} title={headerTitle} rawTitle={rawHeaderTitle} liveSessions={liveSessions} currentSessionFile={state?.sessionFile}/>}
    {dialogs[0]&&<ExtensionDialog key={dialogs[0].id} dialog={dialogs[0]}/>}
   </main>
 }

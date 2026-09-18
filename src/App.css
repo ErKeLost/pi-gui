@@ -4531,3 +4531,252 @@ body,
 .app-shell [data-slot="switch"][data-size="sm"][data-checked] [data-slot="switch-thumb"] {
   transform: translateX(12px);
 }
+
+/* Project tree sidebar: every saved directory owns its own Pi session list. */
+.sidebar-library {
+  --project-row-pad: 10px;
+  --project-icon-size: 19px;
+  --project-icon-gap: 10px;
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin-top: 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.sidebar-projects-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  height: 32px;
+  min-height: 32px;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  margin: 3px 0;
+  padding: 0 4px 0 var(--project-row-pad);
+  background: var(--sidebar);
+}
+.sidebar-projects-title > span {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: var(--project-icon-gap);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 18px;
+}
+.sidebar-projects-title > span svg {
+  display: block;
+  width: var(--project-icon-size);
+  height: var(--project-icon-size);
+  flex: 0 0 var(--project-icon-size);
+  color: var(--sidebar-foreground) !important;
+  transform: translateY(-1px);
+}
+.sidebar-projects-title [data-slot="button"] {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  align-self: center;
+  justify-self: center;
+  line-height: 0;
+}
+.sidebar-projects-title [data-slot="button"] svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+.sidebar-project-groups {
+  display: grid;
+  gap: 0;
+}
+.sidebar-project-group {
+  min-width: 0;
+}
+.sidebar-project-row {
+  display: block;
+  align-items: center;
+  min-width: 0;
+  border-radius: 7px;
+}
+.sidebar-project-group > [data-slot="context-menu-trigger"] {
+  display: block;
+  width: 100%;
+}
+.sidebar-project-row:hover,
+.sidebar-project-group.active > [data-slot="context-menu-trigger"] > .sidebar-project-row,
+.sidebar-project-group.active .sidebar-project-row {
+  background: color-mix(in oklch, var(--sidebar-accent) 72%, transparent);
+}
+.sidebar-project-main {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  align-items: center;
+  gap: var(--project-icon-gap);
+  padding: 0 var(--project-row-pad) 0 calc(var(--project-row-pad) - 3px);
+  border: 0;
+  background: transparent;
+  color: var(--sidebar-foreground);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 560;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-project-main:disabled {
+  opacity: 0.65;
+}
+.sidebar-project-main > svg {
+  display: block;
+  width: var(--project-icon-size);
+  height: var(--project-icon-size);
+  flex: 0 0 var(--project-icon-size);
+  color: var(--sidebar-foreground) !important;
+  opacity: 0.92;
+}
+.sidebar-project-main > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-project-main .session-working-indicator {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+}
+.sidebar-project-sessions {
+  position: relative;
+  display: grid;
+  gap: 1px;
+  margin: 0 0 4px 19px;
+  padding-left: 8px;
+}
+.sidebar-project-sessions::before {
+  position: absolute;
+  inset-block: 2px;
+  left: 0;
+  width: 1px;
+  background: color-mix(in oklch, var(--sidebar-foreground) 28%, transparent);
+  content: "";
+}
+.sidebar-project-sessions > p {
+  margin: 0;
+  padding: 6px 8px;
+  color: color-mix(in oklch, var(--muted-foreground) 82%, transparent);
+  font-size: 10.5px;
+}
+.sidebar-project-sessions .recent-session-row {
+  grid-template-columns: minmax(0, 1fr) 26px;
+}
+.sidebar-project-sessions .recent-session-main {
+  display: flex;
+  width: 100%;
+  height: 30px;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 0 7px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in oklch, var(--sidebar-foreground) 78%, var(--muted-foreground));
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-project-sessions .recent-session-row:hover,
+.sidebar-project-sessions .recent-session-row:focus-within,
+.sidebar-project-sessions .recent-session-row.active {
+  background: var(--sidebar-accent);
+}
+.sidebar-project-sessions .recent-session-row.active .recent-session-main,
+.sidebar-project-sessions .recent-session-row:hover .recent-session-main {
+  color: var(--sidebar-foreground);
+}
+.sidebar-project-sessions .recent-session-row.active .recent-session-main {
+  font-weight: 520;
+}
+.sidebar-project-sessions .recent-session-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 20px;
+}
+.sidebar-project-sessions .recent-session-glyph {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--sidebar-foreground) !important;
+  opacity: 0.88;
+}
+.sidebar-project-sessions .recent-session-delete {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+  opacity: 0;
+  pointer-events: none;
+}
+.sidebar-project-sessions .recent-session-row:hover .recent-session-delete,
+.sidebar-project-sessions .recent-session-row:focus-within .recent-session-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar-project-sessions .recent-session-delete:hover {
+  color: var(--destructive);
+}
+.sidebar-project-sessions .recent-session-delete svg {
+  width: 13px;
+  height: 13px;
+}
+.sidebar-project-empty {
+  padding: 7px 10px 10px 31px;
+  color: color-mix(in oklch, var(--muted-foreground) 78%, transparent);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+.sidebar-bottom {
+  display: grid;
+  gap: 1px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.sidebar-project-panel {
+  height: var(--collapsible-panel-height);
+  overflow: hidden;
+  contain: layout paint;
+  transition: height 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sidebar-project-panel[data-starting-style],
+.sidebar-project-panel[data-ending-style] {
+  height: 0;
+  will-change: height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-project-panel {
+    transition: none !important;
+  }
+}

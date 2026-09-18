@@ -10,15 +10,17 @@ export function ProcessingPanel({
   running,
   startedAt,
   durationMs,
+  defaultExpanded,
   children,
 }: {
   running: boolean;
   startedAt?: number;
   durationMs?: number;
+  defaultExpanded?: boolean;
   children: ReactNode;
 }) {
   const [expandedOverride, setExpandedOverride] = useState<boolean | null>(null);
-  const expanded = expandedOverride ?? running;
+  const expanded = expandedOverride ?? defaultExpanded ?? running;
   const panelId = useId();
 
   return (
@@ -39,7 +41,7 @@ export function ProcessingPanel({
           prefix={running ? "正在处理 " : "用时 "}
           shimmer={running}
         />
-        {!expanded && <Icon name="caret-right" className="turn-activity-chevron" aria-hidden="true" />}
+        <Icon name="caret-right" className="turn-activity-chevron" aria-hidden="true" />
       </Button>
       <span className="turn-activity-rule" aria-hidden="true" />
       <div id={panelId} className="turn-activity-panel" aria-hidden={!expanded} inert={!expanded}>

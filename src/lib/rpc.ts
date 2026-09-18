@@ -1,3 +1,4 @@
+import {findBranchEntry,type BranchEntry} from "./session-branch"
 import {emptyTelemetry,observe} from './telemetry'
 import {Channel,invoke,isTauri} from '@tauri-apps/api/core'
 import {QueryClient} from '@tanstack/react-query'
@@ -53,16 +54,16 @@ function firstUserTitle(transcript:Workspace['transcript']){
  }
  return ''
 }
-function sameLiveSessions(a:LiveSession[],b:LiveSession[]){return a.length===b.length&&a.every((item,index)=>item.path===b[index]?.path&&item.title===b[index]?.title&&item.running===b[index]?.running)}
+function sameLiveSessions(a:LiveSession[],b:LiveSession[]){return a.length===b.length&&a.every((item,index)=>item.path===b[index]?.path&&item.cwd===b[index]?.cwd&&item.title===b[index]?.title&&item.running===b[index]?.running)}
 function syncLiveSessions(){
  const items:LiveSession[]=[],seen=new Set<string>()
  const ids=new Set([...snapshots.keys(),useWorkspace.getState().connectionId].filter(Boolean))
  for(const id of ids){
-  const snap=current(id),path=snap.state?.sessionFile
+  const snap=current(id),path=snap.state?.sessionFile,cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd
   if(!path||seen.has(path))continue
   const running=snap.transcript.running||snap.transcript.compacting
   if(!running&&!snap.transcript.messages.some(item=>item.message.role==='user'))continue
-  seen.add(path);items.push({path,title:firstUserTitle(snap.transcript)||'新会话',running})
+  seen.add(path);items.push({path,cwd,title:firstUserTitle(snap.transcript)||'新会话',running})
  }
  if(!sameLiveSessions(useWorkspace.getState().liveSessions,items))useWorkspace.getState().set({liveSessions:items})
 }
@@ -232,5 +233,40 @@ export async function changeSession(command:RpcCommand){
   await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return
  }
  const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{}});if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'});await loadMessages(active);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
+}
+const branchingConnections = new Set<string>()
+export async function branchFromMessage(message: PiMessage) {
+ const workspace=useWorkspace.getState(),cwd=workspace.cwd,id=route(cwd)
+ if(workspace.connection!=='online'||current(id).transcript.running||current(id).transcript.compacting)throw new Error('请等待当前回复结束后再分支')
+ if(branchingConnections.has(id))throw new Error('正在创建分支，请稍候')
+ branchingConnections.add(id)
+ const sourceFile=current(id).state?.sessionFile
+ let cloned=false
+ try {
+  const entries=await request<{entries:BranchEntry[];leafId:string|null}>({type:'get_entries'},30000,id)
+  const entryId=findBranchEntry(entries.entries,entries.leafId,message)
+  if(current(id).state?.sessionFile!==sourceFile||current(id).transcript.running)throw new Error('当前会话已变化，请重试')
+  const result=await request<{cancelled?:boolean}>({type:'clone'},60000,id)
+  if(result.cancelled)throw new Error('扩展取消了创建分支')
+  cloned=true
+  // Navigate only in the clone so the original conversation keeps its current leaf.
+  await request({type:'prompt',message:`/gui-tree ${JSON.stringify({id:entryId,summarize:false})}`},60000,id)
+  const branch=await request<{leafId:string|null}>({type:'get_entries'},30000,id)
+  if(branch.leafId!==entryId)throw new Error('未能定位到所选回复，已创建的副本可在会话列表中查看')
+  patch(id,{error:null,telemetry:emptyTelemetry(),draft:'',dialogs:[],statuses:{},widgets:{}})
+  if(useWorkspace.getState().connectionId===id)useWorkspace.getState().set({panel:'chat'})
+ } catch(error) {
+  if(cloned&&sourceFile) {
+   const restored=await request<{cancelled?:boolean}>({type:'switch_session',sessionPath:sourceFile},60000,id)
+   if(restored.cancelled)throw new Error('分支操作失败，且扩展取消了返回原会话；请从侧栏选择原会话')
+  }
+  throw error
+ } finally {
+  try {
+   if(cloned)await loadMessages(id)
+   await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
+   await queryClient.invalidateQueries({queryKey:['pi','tree',cwd]})
+  } finally { branchingConnections.delete(id) }
+ }
 }
 export async function answerDialog(request:UiRequest,answer:{value?:string;confirmed?:boolean;cancelled?:boolean}){const id=useWorkspace.getState().connectionId||route();await invoke('pi_send',{project:id,command:{type:'extension_ui_response',id:request.id,...answer}});patch(id,{dialogs:current(id).dialogs.filter(item=>item.id!==request.id)})}

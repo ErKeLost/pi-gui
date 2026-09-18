@@ -17,7 +17,7 @@ import LoadingState from "./ai-elements/loading-state";
 import ProximitySidebar, { type ProximitySection } from "./ui/proximity-sidebar";
 import { ChatComposer } from "./chat/ChatComposer";
 import { ErrorOutput, TranscriptMessage } from "./chat/TranscriptMessage";
-import { messageKind } from "../lib/conversation-sections";
+import { hasSectionMedia, messageKind, sectionPreview, sectionText } from "../lib/conversation-sections";
 
 function useConversationSections(
   conversationRef: RefObject<HTMLDivElement | null>,
@@ -34,7 +34,7 @@ function useConversationSections(
         if (message.classList.contains("user")) return [message.querySelector<HTMLElement>(".ai-message-content") ?? message];
         const children = Array.from(message.querySelectorAll<HTMLElement>(
           ".turn-activity, .message-image, .transcript-error, .transcript-compaction, .bash-execution-card, .ai-message-response.markdown-static .streamdown-animated > *",
-        )).filter(element => !element.matches("style, script") && (element.textContent?.trim() || element.matches("img") || element.querySelector("img, svg, pre, table")));
+        )).filter(element => !element.matches("style, script") && Boolean(sectionText(element) || hasSectionMedia(element)));
         return children.length > 0 ? children : [message];
       });
       const next = blocks.map<ProximitySection>((block, index) => {
@@ -42,19 +42,25 @@ function useConversationSections(
         const heading = block.matches("h1, h2, h3") ? block : block.querySelector<HTMLElement>("h1, h2, h3");
         const level = heading?.tagName === "H1" ? 1 : heading?.tagName === "H2" ? 2 : heading?.tagName === "H3" ? 3 : undefined;
         block.id = id;
+        const text = sectionText(block);
+        const kind = messageKind(block);
+        const fallbackTitle = block.matches("img") || block.querySelector("img") ? "图片" : block.matches("pre") || block.querySelector("pre") ? "代码" : block.matches("table") || block.querySelector("table") ? "表格" : block.closest(".transcript-message.user") ? "你的消息" : ({ title: "标题", section: "运行记录", body: "助手回复" }[kind] ?? "助手回复");
+        const title = heading?.textContent?.replace(/\s+/g, " ").trim().slice(0, 48) || fallbackTitle;
         return {
           id,
-          label: block.textContent?.replace(/\s+/g, " ").trim().slice(0, 72) || `Section ${index + 1}`,
+          label: title,
+          preview: text && text !== title ? sectionPreview(block) : undefined,
+          previewVersion: block.innerHTML,
           ...(level ? { level: level as 1 | 2 | 3 } : { kind: messageKind(block) }),
         };
       });
-      setSections(current => current.length === next.length && current.every((section, index) => section.id === next[index]?.id && section.label === next[index]?.label) ? current : next);
+      setSections(current => current.length === next.length && current.every((section, index) => section.id === next[index]?.id && section.label === next[index]?.label && section.previewVersion === next[index]?.previewVersion) ? current : next);
     };
     const schedule = () => {
       if (!frame) frame = window.requestAnimationFrame(scan);
     };
     const observer = new MutationObserver(schedule);
-    observer.observe(conversation, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    observer.observe(conversation, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"] });
     schedule();
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
@@ -121,7 +127,10 @@ export function Chat() {
       side="left"
       className="conversation-proximity-sidebar"
       onSelectSection={id => {
-        const disclosure = document.getElementById(id)?.closest<HTMLElement>(".message-response-disclosure");
+        const target = document.getElementById(id);
+        const activity = target?.closest<HTMLElement>(".turn-activity");
+        if (activity?.dataset.open === "false") activity.querySelector<HTMLButtonElement>(".turn-activity-header")?.click();
+        const disclosure = target?.closest<HTMLElement>(".message-response-disclosure");
         if (disclosure?.dataset.collapsible === "true" && disclosure.dataset.open === "false") disclosure.querySelector<HTMLButtonElement>(".message-response-toggle")?.click();
       }}
     />}

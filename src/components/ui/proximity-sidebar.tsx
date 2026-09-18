@@ -1,4 +1,5 @@
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -21,6 +22,8 @@ type SectionLevel = 1 | 2 | 3 | 4 | 5 | 6
 export type ProximitySection = {
   id: string
   label: string
+  preview?: ReactNode
+  previewVersion?: string
   kind?: SectionKind
   level?: SectionLevel
 }
@@ -173,25 +176,30 @@ const Dash = ({
   })
 
   return (
-    <button
-      ref={ref}
-      type="button"
-      aria-current={active ? "location" : undefined}
-      aria-label={`Go to ${section.label}`}
-      title={section.label}
-      className="group flex h-2.5 w-9 items-center border-0 bg-transparent p-0 outline-none"
-      onClick={() => onSelect(section.id)}
-    >
-      <m.span
-        className={`block transition-colors duration-150 ease-out group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 ${active ? "bg-foreground" : preset.className}`}
-        style={{
-          height: preset.thickness,
-          scaleX,
-          transformOrigin: side === "left" ? "left center" : "right center",
-          width: MAX_DASH_WIDTH,
-        }}
-      />
-    </button>
+    <div className="proximity-item">
+      <button
+        ref={ref}
+        type="button"
+        aria-current={active ? "location" : undefined}
+        aria-label={`Go to ${section.label}`}
+        className="proximity-dash group flex h-2.5 w-9 items-center border-0 bg-transparent p-0 outline-none"
+        onClick={() => onSelect(section.id)}
+      >
+        <m.span
+          className={`block transition-colors duration-150 ease-out group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 ${active ? "bg-foreground" : preset.className}`}
+          style={{
+            height: preset.thickness,
+            scaleX,
+            transformOrigin: side === "left" ? "left center" : "right center",
+            width: MAX_DASH_WIDTH,
+          }}
+        />
+      </button>
+      <div className={`proximity-preview proximity-preview-${side}`} role="tooltip">
+        <strong>{section.label}</strong>
+        {section.preview && <div className="proximity-preview-body">{section.preview}</div>}
+      </div>
+    </div>
   )
 }
 
@@ -202,17 +210,18 @@ const ProximitySidebar = ({
   side = "left",
   sections,
 }: ProximitySidebarProps) => {
+  const visibleSections = useMemo(() => sections.filter(section => section.label.trim() !== "段落"), [sections])
   const mouseY = useMotionValue(Infinity)
   const shouldReduceMotion = useReducedMotion()
   const dashRefs = useRef(new Map<string, HTMLButtonElement>())
   const pointerInside = useRef(false)
   const resetTimer = useRef<number | null>(null)
   const selectFrame = useRef<number | null>(null)
-  const [activeId, setActiveId] = useState(sections[0]?.id)
+  const [activeId, setActiveId] = useState(visibleSections[0]?.id)
 
   const sectionIds = useMemo(
-    () => sections.map((section) => section.id).join("|"),
-    [sections]
+    () => visibleSections.map((section) => section.id).join("|"),
+    [visibleSections]
   )
 
   const registerDash = useCallback(
@@ -291,7 +300,7 @@ const ProximitySidebar = ({
     if (selectFrame.current) window.cancelAnimationFrame(selectFrame.current)
   }, [clearPendingReset])
 
-  const detectedKinds = useMemo(() => sections.reduce<Record<string, SectionKind>>(
+  const detectedKinds = useMemo(() => visibleSections.reduce<Record<string, SectionKind>>(
       (nextKinds, section) => {
         nextKinds[section.id] =
           section.kind || section.level
@@ -301,7 +310,7 @@ const ProximitySidebar = ({
         return nextKinds
       },
       {}
-    ), [sections])
+    ), [visibleSections])
 
   useEffect(() => {
     let frame = 0
@@ -311,10 +320,10 @@ const ProximitySidebar = ({
       frame = 0
 
       const anchorY = window.innerHeight * activeOffset
-      let nextActiveId = sections[0]?.id
+      let nextActiveId = visibleSections[0]?.id
       let shortestDistance = Number.POSITIVE_INFINITY
 
-      for (const section of sections) {
+      for (const section of visibleSections) {
         const element = getSectionElement(section.id)
         if (!element) continue
 
@@ -342,22 +351,22 @@ const ProximitySidebar = ({
       frame = window.requestAnimationFrame(updateActiveSection)
     }
 
-    for (const section of sections) {
+    for (const section of visibleSections) {
       const element = getSectionElement(section.id)
       if (element) scrollParents.add(getScrollParent(element))
     }
 
-    if (sections.length) {
+    if (visibleSections.length) {
       updateActiveSection()
     }
-    const unsubscribe = sections.length ? subscribeToScroll(scrollParents, scheduleUpdate) : () => undefined
+    const unsubscribe = visibleSections.length ? subscribeToScroll(scrollParents, scheduleUpdate) : () => undefined
 
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
       clearPendingReset()
       unsubscribe()
     }
-  }, [activeOffset, clearPendingReset, pulseDash, sectionIds, sections])
+  }, [activeOffset, clearPendingReset, pulseDash, sectionIds, visibleSections])
 
   return (
     <nav
@@ -370,7 +379,7 @@ const ProximitySidebar = ({
         className={`new-home_minimap__dDggR flex flex-col ${
           side === "right" ? "items-end" : "items-start"
         }`}
-        style={{ gap: sections.length > 64 ? 3 : sections.length > 40 ? 4 : 6 }}
+        style={{ gap: visibleSections.length > 64 ? 3 : visibleSections.length > 40 ? 4 : 6 }}
         onPointerMove={(event) => {
           clearPendingReset()
           pointerInside.current = true
@@ -381,7 +390,7 @@ const ProximitySidebar = ({
           mouseY.set(Infinity)
         }}
       >
-        {sections.map((section) => (
+        {visibleSections.map((section) => (
           <Dash
             key={section.id}
             active={section.id === activeId}

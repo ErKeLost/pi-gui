@@ -4,7 +4,7 @@ import { emptyTranscript, reduceEvent, type Event, type Transcript, type RpcSess
 export type Panel = 'chat' | 'sessions' | 'tree' | 'commands' | 'settings' | 'console' | 'changes' | 'pi-tools'
 export type SettingsPage = 'general' | 'providers' | 'sessions' | 'tree' | 'pi-tools' | 'changes' | 'console'
 export type WorkspaceMode = 'project' | 'home'
-export type LiveSession = { path: string; title: string; running: boolean }
+export type LiveSession = { path: string; cwd: string; title: string; running: boolean }
 export type Workspace = {
   telemetry:Telemetry; inspector:boolean; transcript: Transcript; state: RpcSessionState | null; connection: 'offline' | 'connecting' | 'online';
   cwd:string; connectionId:string; homeDir:string; workspaceMode:WorkspaceMode; piVersion:string; panel:Panel; settingsPage:SettingsPage; error:string | null; draft:string;

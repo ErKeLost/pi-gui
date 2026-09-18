@@ -2,6 +2,7 @@ import {test,expect} from 'bun:test'
 import {observe,emptyTelemetry} from '../src/lib/telemetry'
 import {getChange} from '../src/lib/changes'
 import {mergeProjects,removeProject} from '../src/lib/projects'
+import {mergeProjectSessions} from '../src/hooks/use-project-sessions'
 test('compaction keeps actual status and estimates, never invents progress percentages',()=>{
  let state=observe(emptyTelemetry(),{type:'compaction_start',reason:'threshold'},1000)
  expect(state.compaction?.status).toBe('running')
@@ -27,4 +28,12 @@ test('multiple project directories deduplicate by path, not by display name',()=
 test('removing a project only removes the exact workspace path',()=>{
  const projects=mergeProjects([] ,['/a/app','/b/app'])
  expect(removeProject(projects,'/a/app')).toEqual([{path:'/b/app',name:'app'}])
+})
+test('live sessions only appear under their owning project directory',()=>{
+ const live=[
+  {cwd:'/a/app',path:'/sessions/a.jsonl',title:'A task',running:true},
+  {cwd:'/b/app',path:'/sessions/b.jsonl',title:'B task',running:false},
+ ]
+ expect(mergeProjectSessions('/a/app',[],live).sessions.map(session=>session.path)).toEqual(['/sessions/a.jsonl'])
+ expect(mergeProjectSessions('/b/app',[],live).sessions.map(session=>session.path)).toEqual(['/sessions/b.jsonl'])
 })

@@ -80,13 +80,13 @@
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  min-height: 28px;
+  min-height: 32px;
   padding: 3px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: color-mix(in oklch, var(--muted-foreground) 72%, transparent);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   text-align: left;
 }
@@ -97,7 +97,7 @@
 .turn-activity-header .ai-elapsed-time-label { color: color-mix(in oklch, var(--muted-foreground) 72%, transparent); }
 .turn-activity-header .ai-elapsed-time-value { color: color-mix(in oklch, var(--muted-foreground) 72%, transparent); font-weight: 500; }
 .turn-activity-rule { display: block; width: 100%; height: 1px; margin: 5px 0 3px; background: color-mix(in oklch, var(--border) 72%, transparent); }
-.turn-activity-chevron { width: 14px; height: 14px; flex: none; align-self: center; margin-left: 0 !important; color: var(--thinking-ink-3); transition: transform 220ms var(--thinking-ease); }
+.turn-activity-chevron { width: 16px; height: 16px; flex: none; align-self: center; margin-left: 1px !important; color: var(--thinking-ink-3); transition: transform 220ms var(--thinking-ease); }
 .turn-activity-panel {
   display: grid;
   grid-template-rows: 0fr;
@@ -228,3 +228,11 @@
   .thinking-shimmer { background: none; color: CanvasText; }
   .pixel-loader-cell { background: CanvasText; }
 }
+
+/* Keep the expanded process compact while preserving every phase. */
+.turn-activity[data-open="true"] .turn-activity-chevron { transform: rotate(90deg); }
+.turn-activity-panel-inner { display: flex; flex-direction: column; gap: 6px; }
+.turn-activity-panel-inner .thinking-summary { padding: 2px 0; }
+.turn-activity-panel-inner .thinking-summary-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turn-activity-panel-inner > .tool-activity-group { margin: 0; }
+.turn-activity-panel-inner > .message-response-disclosure { margin: 2px 0; }
