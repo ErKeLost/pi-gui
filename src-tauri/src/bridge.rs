@@ -301,6 +301,9 @@ pub async fn list_provider_profiles() -> Result<Value, String> {
     let dir = agent_dir()?;
     let models = read_json_file(dir.join("models.json"), "Pi models.json").unwrap_or_else(|_| json!({"providers": {}}));
     let auth = read_json_file(dir.join("auth.json"), "Pi auth.json").unwrap_or_else(|_| json!({}));
+    let settings = read_json_file(dir.join("settings.json"), "Pi settings.json").unwrap_or_else(|_| json!({}));
+    let default_provider = settings.get("defaultProvider").and_then(Value::as_str);
+    let default_model = settings.get("defaultModel").and_then(Value::as_str);
     let store = load_provider_store(&dir).unwrap_or_else(|_| json!({"providers": {}}));
     let mut ids = std::collections::BTreeSet::new();
     if let Some(providers) = models.get("providers").and_then(Value::as_object) { ids.extend(providers.keys().cloned()); }
@@ -315,6 +318,8 @@ pub async fn list_provider_profiles() -> Result<Value, String> {
             "modelsUrl": saved.get("modelsUrl").and_then(Value::as_str).or_else(|| config.get("modelsUrl").and_then(Value::as_str)),
             "api": saved.get("api").and_then(Value::as_str).or_else(|| config.get("api").and_then(Value::as_str)),
             "authHeader": saved.get("authHeader").and_then(Value::as_bool).or_else(|| config.get("authHeader").and_then(Value::as_bool)),
+            "defaultModel": (default_provider == Some(id.as_str())).then(|| default_model).flatten(),
+            "models": config.get("models").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
             "hasApiKey": stored_api_key(&auth, &id).is_some(),
             "modelCount": config.get("models").and_then(Value::as_array).map(Vec::len).unwrap_or(0)
         })
@@ -390,13 +395,20 @@ pub async fn sync_provider_models(provider: String) -> Result<Value, String> {
 
 fn set_default_model_in(dir: &std::path::Path, provider: String, model_id: String) -> Result<Value, String> {
     if !valid_provider_id(&provider) || model_id.trim().is_empty() { return Err("Provider 和模型 ID 不能为空".into()); }
-    let models = read_json_file(dir.join("models.json"), "Pi models.json")?;
-    let exists = models.get("providers")
-        .and_then(|providers| providers.get(&provider))
-        .and_then(|config| config.get("models"))
-        .and_then(Value::as_array)
-        .is_some_and(|items| items.iter().any(|model| model.get("id").and_then(Value::as_str) == Some(model_id.as_str())));
-    if !exists { return Err(format!("Pi 未配置模型：{provider}/{model_id}")); }
+    let models_path = dir.join("models.json");
+    let mut models = read_json_file(models_path.clone(), "Pi models.json")?;
+    let provider_config = models.get_mut("providers")
+        .and_then(Value::as_object_mut)
+        .and_then(|providers| providers.get_mut(&provider))
+        .ok_or_else(|| format!("Pi 未配置 provider：{provider}"))?;
+    if !provider_config.get("models").is_some_and(Value::is_array) { provider_config["models"] = Value::Array(Vec::new()); }
+    let model_list = provider_config.get_mut("models").and_then(Value::as_array_mut).ok_or_else(|| format!("Pi provider 没有模型列表：{provider}"))?;
+    let exists = model_list.iter().any(|model| model.get("id").and_then(Value::as_str) == Some(model_id.as_str()));
+    if !exists {
+        model_list.push(json!({"id": model_id, "input": ["text"]}));
+        fs::write(&models_path, serde_json::to_string_pretty(&models).map_err(|e| e.to_string())? + "\n")
+            .map_err(|e| format!("写入 Pi 自定义模型失败：{e}"))?;
+    }
 
     let path = settings_path(&dir);
     let mut settings = if path.exists() { read_json_file(path.clone(), "Pi settings.json")? } else { json!({}) };
@@ -431,6 +443,22 @@ mod default_model_tests {
         assert_eq!(settings["theme"], "dark");
 
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn adds_a_manually_entered_default_model_to_the_provider() {
+        let dir = std::env::temp_dir().join(format!("pi-gui-manual-model-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("models.json"), r#"{"providers":{"relay":{"baseUrl":"https://example.com/v1"}}}"#).unwrap();
+
+        set_default_model_in(&dir, "relay".into(), "private-model-v2".into()).unwrap();
+        let models = read_json_file(dir.join("models.json"), "models").unwrap();
+        assert_eq!(models["providers"]["relay"]["models"][0]["id"], "private-model-v2");
+        let settings = read_json_file(dir.join("settings.json"), "settings").unwrap();
+        assert_eq!(settings["defaultProvider"], "relay");
+        assert_eq!(settings["defaultModel"], "private-model-v2");
+
+        let _ = fs::remove_dir_all(dir);
     }
 }
 

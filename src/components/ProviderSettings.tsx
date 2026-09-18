@@ -94,6 +94,7 @@ type ProviderFormState = {
   modelsUrl: string;
   api: (typeof apiTypes)[number];
   apiKey: string;
+  defaultModelId: string;
   authHeader: boolean;
   models: ProviderModel[];
   search: string;
@@ -108,8 +109,9 @@ function initialForm(profile?: ProviderProfile): ProviderFormState {
     modelsUrl: profile?.modelsUrl ?? "",
     api: (profile?.api as (typeof apiTypes)[number]) || "openai-completions",
     apiKey: "",
+    defaultModelId: profile?.defaultModel ?? "",
     authHeader: profile?.authHeader !== false,
-    models: [],
+    models: profile?.models ?? [],
     search: "",
     busy: null,
   };
@@ -120,7 +122,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
   const online = useWorkspace((state) => state.connection === "online");
   const running = useWorkspace((state) => state.transcript.running);
   const [form, update] = useReducer((state: ProviderFormState, patch: Partial<ProviderFormState>) => ({ ...state, ...patch }), initialProfile, initialForm);
-  const { provider, name, baseUrl, modelsUrl, api, apiKey, authHeader, models, search, busy } = form;
+  const { provider, name, baseUrl, modelsUrl, api, apiKey, defaultModelId, authHeader, models, search, busy } = form;
 
   const selected = profiles.data?.find((item) => item.id === provider);
   const providerOptions = useMemo(() => {
@@ -159,18 +161,21 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
     try {
       const result = await saveProvider({ provider: provider.trim(), name: name.trim() || undefined, baseUrl: baseUrl.trim(), modelsUrl: modelsUrl.trim() || undefined, api, apiKey: apiKey.trim() || undefined, authHeader });
       update({ provider: result.id, apiKey: "" });
-      let synced: Awaited<ReturnType<typeof syncProviderModels>>;
+      let synced: Awaited<ReturnType<typeof syncProviderModels>> = { provider: result.id, count: 0, previous: 0 };
       try {
         synced = await syncProviderModels(result.id);
       } catch (syncError) {
-        throw new Error(`Provider 已保存，但同步到 Pi 失败：${syncError instanceof Error ? syncError.message : String(syncError)}`);
+        if (!defaultModelId.trim()) throw new Error(`Provider 已保存，但同步到 Pi 失败：${syncError instanceof Error ? syncError.message : String(syncError)}`);
+        gooeyToast.warning("Provider 已保存，使用手动模型 ID", { description: syncError instanceof Error ? syncError.message : String(syncError), showTimestamp: false });
       }
       let switchedModel: { provider: string; id: string } | null = null;
       try {
+        const preferredModelId = defaultModelId.trim() || synced.firstModelId;
+        if (preferredModelId) await persistDefaultModel(result.id, preferredModelId);
         if (online) await disconnect();
         await connect(cwd);
         const available = await request<{ models: { provider: string; id: string }[] }>({ type: "get_available_models" }, 30_000, cwd);
-        const firstModel = available.models.find((model) => model.provider === result.id && model.id === synced.firstModelId)
+        const firstModel = available.models.find((model) => model.provider === result.id && model.id === preferredModelId)
           ?? available.models.find((model) => model.provider === result.id);
         if (firstModel) {
           await request({ type: "set_model", provider: firstModel.provider, modelId: firstModel.id }, 30_000, cwd);
@@ -186,7 +191,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
       } catch (activationError) {
         gooeyToast.warning("模型已同步，但暂时无法切换", { description: activationError instanceof Error ? activationError.message : String(activationError), showTimestamp: false });
       }
-      gooeyToast.success("已保存并同步到 Pi", { description: switchedModel ? `${synced.count} 个模型 · 已切换到 ${switchedModel.id}` : `${synced.count} 个模型已写入 Pi`, showTimestamp: false });
+      gooeyToast.success("Provider 已保存", { description: switchedModel ? `${synced.count} 个模型 · 默认 ${switchedModel.id}` : defaultModelId.trim() ? `默认 ${defaultModelId.trim()}` : `${synced.count} 个模型已写入 Pi`, showTimestamp: false });
       await queryClient.invalidateQueries({ queryKey: ["pi", "models", cwd] });
       await profiles.refetch();
     } catch (error) { report(error); } finally { update({ busy: null }); }
@@ -218,6 +223,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
   }
 
   const visibleModels = useMemo(() => models.filter((model) => `${model.id} ${modelDisplayName(model)}`.toLowerCase().includes(search.toLowerCase())), [models, search]);
+  const selectDefaultModel = (id: string) => update({ defaultModelId: id });
   return (
     <section className="provider-settings">
       <div className="provider-picker-block">
@@ -243,6 +249,10 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
         <label><ProviderFieldLabel icon="link">Base URL</ProviderFieldLabel><Input value={baseUrl} onChange={(event) => update({ baseUrl: event.target.value })} placeholder="https://example.com/v1" /></label>
         <label><ProviderFieldLabel icon="list-magnifying-glass">模型列表接口</ProviderFieldLabel><Input value={modelsUrl} onChange={(event) => update({ modelsUrl: event.target.value })} placeholder="留空则使用 Base URL/models" /></label>
         <label className="provider-form-wide"><ProviderFieldLabel icon="globe">API 类型</ProviderFieldLabel><CompactSelect aria-label="API 类型" value={api} onChange={(event) => update({ api: event.target.value as (typeof apiTypes)[number] })}>{apiTypes.map((item) => <option key={item} value={item}>{item}</option>)}</CompactSelect></label>
+       </div></section>
+       <section className="provider-form-section"><header><div><h2><Icon name="cpu" />默认模型</h2><p>可从已探测的模型中选择，也可以直接填写模型 ID。</p></div></header><div className="provider-form-grid">
+        <label><ProviderFieldLabel icon="list">模型目录</ProviderFieldLabel><CompactSelect aria-label="默认模型目录" value={defaultModelId} onChange={event => selectDefaultModel(event.target.value)}><option value="">手动填写或保存后使用首个模型</option>{models.map(model => <option key={model.id} value={model.id}>{modelDisplayName(model)}</option>)}</CompactSelect></label>
+        <label><ProviderFieldLabel icon="identification-card">模型 ID</ProviderFieldLabel><Input value={defaultModelId} onChange={event => update({ defaultModelId: event.target.value })} placeholder="例如 gpt-4.1-mini" spellCheck={false} /></label>
        </div></section>
        <section className="provider-form-section"><header><div><h2><Icon name="key" />凭据</h2><p>API Key 只写入本机 Pi 配置，不会回显。</p></div></header><div className="provider-credentials">
         <label><ProviderFieldLabel icon="key">API Key</ProviderFieldLabel><Input type="password" value={apiKey} onChange={(event) => update({ apiKey: event.target.value })} placeholder={selected?.hasApiKey ? "已保存，留空保持不变" : "输入服务商 API Key"} autoComplete="off" /></label>
