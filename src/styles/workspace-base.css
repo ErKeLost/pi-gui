@@ -263,7 +263,7 @@
   justify-content: flex-end;
   gap: 4px;
   margin-top: 4px;
-  color: color-mix(in oklch, var(--muted-foreground) 72%, transparent);
+  color: color-mix(in oklch, var(--foreground) 72%, transparent);
 }
 
 .message-response-footer time {
@@ -607,18 +607,34 @@ html[data-theme="dark"] .markdown-renderer .shiki span {
 .ai-message-response .md-autolink,
 .markdown-renderer .md-autolink {
   display: inline;
-  color: inherit;
-  text-decoration: none;
+  color: oklch(0.61 0.15 245);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   overflow-wrap: anywhere;
+  transition: color 140ms ease;
+}
+
+.ai-message-response .md-autolink:hover,
+.markdown-renderer .md-autolink:hover {
+  color: oklch(0.55 0.18 245);
+}
+
+.ai-message-response .md-autolink-label,
+.markdown-renderer .md-autolink-label {
+  color: inherit;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ai-message-response .md-autolink-icon,
 .markdown-renderer .md-autolink-icon {
   display: inline-block;
-  width: 1.05em;
-  height: 1.05em;
+  width: 1.1em;
+  height: 1.1em;
   margin-right: 0.28em;
-  vertical-align: -0.18em;
+  color: inherit;
+  vertical-align: -0.16em;
 }
 
 .ai-message-response .md-autolink-icon svg,
@@ -629,6 +645,47 @@ html[data-theme="dark"] .markdown-renderer .shiki span {
   width: 100%;
   height: 100%;
   border-radius: 2px;
+}
+
+.ai-message-response .md-autolink-icon[data-link-icon^="devicon:"]:not([data-link-icon="devicon:github"]) svg,
+.markdown-renderer .md-autolink-icon[data-link-icon^="devicon:"]:not([data-link-icon="devicon:github"]) svg {
+  filter: saturate(0.72) contrast(1.08);
+}
+
+.dark .ai-message-response .md-autolink-icon[data-link-icon^="devicon:"]:not([data-link-icon="devicon:github"]) svg,
+.dark .markdown-renderer .md-autolink-icon[data-link-icon^="devicon:"]:not([data-link-icon="devicon:github"]) svg {
+  filter: grayscale(0.35) invert(0.88) brightness(1.18);
+}
+
+.ai-message-response .md-autolink-icon[data-link-icon="devicon:github"] svg *,
+.markdown-renderer .md-autolink-icon[data-link-icon="devicon:github"] svg * {
+  fill: currentColor !important;
+}
+
+.ai-message-response .md-external-link,
+.markdown-renderer .md-external-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  color: oklch(0.61 0.15 245);
+  font-weight: 550;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.dark .ai-message-response :is(.md-autolink, .md-external-link),
+.dark .markdown-renderer :is(.md-autolink, .md-external-link),
+html[data-theme="dark"] .ai-message-response :is(.md-autolink, .md-external-link),
+html[data-theme="dark"] .markdown-renderer :is(.md-autolink, .md-external-link) {
+  color: oklch(0.79 0.1 235);
+}
+
+.dark .ai-message-response :is(.md-autolink, .md-external-link):hover,
+.dark .markdown-renderer :is(.md-autolink, .md-external-link):hover,
+html[data-theme="dark"] .ai-message-response :is(.md-autolink, .md-external-link):hover,
+html[data-theme="dark"] .markdown-renderer :is(.md-autolink, .md-external-link):hover {
+  color: oklch(0.84 0.1 235);
 }
 
 .ai-message-response .md-chip,

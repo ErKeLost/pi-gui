@@ -94,6 +94,7 @@ describe("shared Markdown renderer", () => {
 
     expect(html).toContain("md-autolink-icon");
     expect(html).toContain('data-link-icon="devicon:github"');
+    expect(externalLinkIcon("https://github.com/openai/codex")).toBe("devicon:github");
     expect(deviconFromHref("https://github.com/openai/codex")).toBe("github");
   });
 

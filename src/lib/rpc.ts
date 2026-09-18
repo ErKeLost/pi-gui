@@ -145,7 +145,7 @@ export function persistedSessionFile(project:string):string {
  const value=readSessionFiles()[project];return typeof value==='string'?value:''
 }
 const multiAgentModeCommand=(enabled=useWorkspace.getState().multiAgentEnabled)=>({type:'prompt' as const,message:`/gui-agent-mode ${JSON.stringify({enabled})}`})
-const syncMultiAgentMode=(target:string)=>request(multiAgentModeCommand(),30000,target)
+export const syncMultiAgentMode=(target:string,enabled=useWorkspace.getState().multiAgentEnabled)=>request(multiAgentModeCommand(enabled),30000,target)
 export async function refresh(target=useWorkspace.getState().cwd){const id=route(target),state=await request<RpcSessionState>({type:'get_state'},30000,id);patch(id,{state});const cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd;if(state.sessionFile&&projectActive.get(cwd)===id)persistSession(cwd,state.sessionFile);await queryClient.invalidateQueries({queryKey:['pi','live-stats',id]});return state}
 export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
 export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(!native) throw new Error('文件索引需要桌面应用'); return invoke<string[]>('list_project_files',{cwd:project}) }

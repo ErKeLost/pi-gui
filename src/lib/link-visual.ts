@@ -1,6 +1,7 @@
 import devicon from "@iconify-json/devicon/icons.json";
 
 const domainIcons: [string[], string][] = [
+  [["github.com"], "devicon:github"],
   [["youtube.com", "youtu.be"], "youtube-logo-fill"],
   [["x.com", "twitter.com"], "x-logo"],
   [["discord.com", "discord.gg"], "discord-logo"],

@@ -45,7 +45,10 @@ export function MessageActions({
   className,
   ...props
 }: MessageActionsProps) {
-  const buttonClassName = cn(ghostButton, "size-7");
+  const buttonClassName = cn(
+    ghostButton,
+    "size-8 text-foreground/70 hover:text-foreground",
+  );
 
   return (
     <div
@@ -67,14 +70,14 @@ export function MessageActions({
         <CopyIcon
           className={cn(
             iconSwap,
-            "size-3.5",
+            "size-4",
             copied ? iconSwapOut : iconSwapIn,
           )}
         />
         <CheckIcon
           className={cn(
             iconSwap,
-            "size-3.5",
+            "size-4",
             copied ? iconSwapIn : iconSwapOut,
           )}
         />
@@ -87,7 +90,7 @@ export function MessageActions({
         onClick={onBranch}
         className={cn(buttonClassName, "disabled:opacity-40 disabled:cursor-not-allowed")}
       >
-        <GitForkIcon className="size-3.5" />
+        <GitForkIcon className="size-4" />
       </button>}
       {onReactionChange && <>
       <button

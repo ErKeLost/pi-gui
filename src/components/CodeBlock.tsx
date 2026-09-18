@@ -113,11 +113,9 @@ const toText = (node: unknown): string => {
   return "";
 };
 
-function LinkBrandIcon({ href, fallback, file }: { href?: string; fallback: string; file?: string }) {
+function LinkBrandIcon({ icon, file }: { icon: string; file?: string }) {
   if (file) return <FileIcon path={file} />;
-  const colored = deviconFromHref(href);
-  if (colored) return <Icon name={`devicon:${colored}`} />;
-  return <Icon name={fallback} />;
+  return <Icon name={icon} />;
 }
 
 function fileNameFromHref(href?: string) {
@@ -148,7 +146,7 @@ export function MarkdownLink({
   const autolink = Boolean(href && (label === href || label === href.replace(/^https?:\/\//, "")));
   const brand = external ? externalLinkIcon(href) : "globe";
   const file = autolink ? fileNameFromHref(href) : "";
-  const colored = !file && external ? deviconFromHref(href) : "";
+  const colored = !file && external && brand === "globe" ? deviconFromHref(href) : "";
   const attrs = external ? { target: "_blank" as const, rel: "noreferrer" } : {};
   const iconName = file ? `file:${file}` : colored ? `devicon:${colored}` : brand;
 
@@ -156,14 +154,14 @@ export function MarkdownLink({
     return (
       <a {...rest} {...attrs} href={href} className={`md-autolink ${className}`.trim()}>
         <span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}>
-          {external ? <LinkBrandIcon href={href} fallback={brand} file={file} /> : file ? <FileIcon path={file} /> : <Icon name={brand} />}
+          {external ? <LinkBrandIcon icon={iconName} file={file} /> : file ? <FileIcon path={file} /> : <Icon name={brand} />}
         </span>
         <span className="md-autolink-label">{children}</span>
       </a>
     );
   }
 
-  if (external) return <a {...rest} {...attrs} href={href} className={`md-external-link ${className}`.trim()}><span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}><LinkBrandIcon href={href} fallback={brand} /></span>{children}</a>;
+  if (external) return <a {...rest} {...attrs} href={href} className={`md-external-link ${className}`.trim()}><span className="md-autolink-icon" aria-hidden="true" data-link-icon={iconName}><LinkBrandIcon icon={iconName} /></span>{children}</a>;
   return <a {...rest} {...attrs} href={href} className={className}>{children}</a>;
 }
 
