@@ -210,7 +210,7 @@ const ProximitySidebar = ({
   side = "left",
   sections,
 }: ProximitySidebarProps) => {
-  const visibleSections = useMemo(() => sections.filter(section => section.label.trim() !== "段落"), [sections])
+  const visibleSections = useMemo(() => sections.filter(section => section.level === 1 || section.level === 2), [sections])
   const mouseY = useMotionValue(Infinity)
   const shouldReduceMotion = useReducedMotion()
   const dashRefs = useRef(new Map<string, HTMLButtonElement>())

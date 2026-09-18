@@ -37,7 +37,11 @@ function useConversationSections(
         )).filter(element => !element.matches("style, script") && Boolean(sectionText(element) || hasSectionMedia(element)));
         return children.length > 0 ? children : [message];
       });
-      const next = blocks.map<ProximitySection>((block, index) => {
+      const contentBlocks = blocks.filter(block => {
+        const text = sectionText(block);
+        return Boolean(text || hasSectionMedia(block));
+      });
+      const next = contentBlocks.map<ProximitySection>((block, index) => {
         const id = `${proximityId}-section-${index + 1}`;
         const heading = block.matches("h1, h2, h3") ? block : block.querySelector<HTMLElement>("h1, h2, h3");
         const level = heading?.tagName === "H1" ? 1 : heading?.tagName === "H2" ? 2 : heading?.tagName === "H3" ? 3 : undefined;
@@ -53,7 +57,7 @@ function useConversationSections(
           previewVersion: block.innerHTML,
           ...(level ? { level: level as 1 | 2 | 3 } : { kind: messageKind(block) }),
         };
-      });
+      }).filter(section => section.level === 1 || section.level === 2);
       setSections(current => current.length === next.length && current.every((section, index) => section.id === next[index]?.id && section.label === next[index]?.label && section.previewVersion === next[index]?.previewVersion) ? current : next);
     };
     const schedule = () => {
