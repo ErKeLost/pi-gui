@@ -17,7 +17,7 @@ import LoadingState from "./ai-elements/loading-state";
 import ProximitySidebar, { type ProximitySection } from "./ui/proximity-sidebar";
 import { ChatComposer } from "./chat/ChatComposer";
 import { ErrorOutput, TranscriptMessage } from "./chat/TranscriptMessage";
-import { hasSectionMedia, messageKind, sectionPreview, sectionText } from "../lib/conversation-sections";
+import { hasSectionMedia, messageKind, sectionPreview, sectionPreviewAfterHeading, sectionText } from "../lib/conversation-sections";
 
 function useConversationSections(
   conversationRef: RefObject<HTMLDivElement | null>,
@@ -53,8 +53,8 @@ function useConversationSections(
         return {
           id,
           label: title,
-          preview: text && text !== title ? sectionPreview(block) : undefined,
-          previewVersion: block.innerHTML,
+          preview: heading ? sectionPreviewAfterHeading(heading) : text && text !== title ? sectionPreview(block) : undefined,
+          previewVersion: heading?.parentElement?.innerHTML ?? block.innerHTML,
           ...(level ? { level: level as 1 | 2 | 3 } : { kind: messageKind(block) }),
         };
       }).filter(section => section.level === 1 || section.level === 2);

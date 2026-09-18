@@ -21,6 +21,19 @@ export function hasSectionMedia(element: HTMLElement) {
 // Reuse the rendered Markdown structure without copying handlers, IDs or controls.
 const previewTags = new Set("p strong em del s code pre blockquote ul ol li h1 h2 h3 h4 h5 h6 table thead tbody tr th td br hr".split(" "));
 
+export function sectionPreviewAfterHeading(heading: HTMLElement): ReactNode {
+  const children: ReactNode[] = [];
+  let sibling = heading.nextElementSibling;
+  let index = 0;
+  while (sibling) {
+    if (/^H[1-6]$/.test(sibling.tagName)) break;
+    const preview = sectionPreview(sibling, `heading-preview-${index++}`);
+    if (preview) children.push(preview);
+    sibling = sibling.nextElementSibling;
+  }
+  return children.length ? createElement("div", { className: "proximity-preview-markdown" }, ...children) : null;
+}
+
 export function sectionPreview(node: Node, key = "preview"): ReactNode {
   if (node.nodeType === 3) return node.textContent;
   if (node.nodeType !== 1) return null;

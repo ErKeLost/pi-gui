@@ -193,7 +193,7 @@
 
 .proximity-preview > strong {
   overflow: hidden;
-  color: var(--foreground);
+  color: color-mix(in oklch, var(--foreground) 82%, var(--muted-foreground));
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
@@ -203,7 +203,7 @@
 
 .proximity-preview-body {
   min-width: 0;
-  max-height: 6em;
+  max-height: 8.2em;
   overflow: hidden;
   color: var(--muted-foreground);
   font-size: 12px;
@@ -712,3 +712,7 @@ html[data-theme="dark"] .markdown-renderer .shiki span {
 .markdown-renderer p:has(> br:only-child) {
   display: none;
 }
+
+.proximity-preview-markdown { min-width: 0; color: var(--muted-foreground); }
+.proximity-preview-markdown > :first-child { margin-top: 0 !important; }
+.proximity-preview-markdown > :last-child { margin-bottom: 0 !important; }

@@ -51,14 +51,6 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
     finally { setBusyProject(""); }
   }
 
-  async function chooseHome() {
-    if (!homeDir) return;
-    setBusyProject(homeDir);
-    try { await connect(homeDir, "home"); }
-    catch (error) { report(error); }
-    finally { setBusyProject(""); }
-  }
-
   async function addProjects() {
     if (!native) { report("请在桌面应用中选择文件夹"); return; }
     const selected = await open({ directory: true, multiple: true, title: "添加项目", defaultPath: cwd || undefined });
@@ -160,7 +152,6 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
       </div>
 
       <div className="sidebar-bottom">
-        <Button className={`nav-item ${workspaceMode === "home" ? "selected" : ""}`} disabled={!homeDir || busyProject === homeDir} onClick={() => void chooseHome()}><Icon name="desktop" />主目录</Button>
         <Button className="nav-item" onClick={() => useWorkspace.getState().set({ panel: "settings", settingsPage: "general" })}><Icon name="gear-six" />设置<kbd>⌘ ,</kbd></Button>
       </div>
     </aside>
