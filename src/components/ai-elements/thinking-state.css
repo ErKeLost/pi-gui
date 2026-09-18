@@ -236,3 +236,17 @@
 .turn-activity-panel-inner .thinking-summary-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .turn-activity-panel-inner > .tool-activity-group { margin: 0; }
 .turn-activity-panel-inner > .message-response-disclosure { margin: 2px 0; }
+
+/* Process history uses one muted visual tone in both running and settled states. */
+.turn-activity {
+  --thinking-ink: var(--muted-foreground);
+  --thinking-ink-2: var(--muted-foreground);
+  --thinking-ink-3: var(--muted-foreground);
+}
+.turn-activity .thinking-summary,
+.turn-activity .thinking-summary-text,
+.turn-activity[data-working="false"] .thinking-summary-text {
+  color: var(--muted-foreground) !important;
+  font-size: 13px;
+  font-weight: 400;
+}

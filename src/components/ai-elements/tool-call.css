@@ -133,3 +133,15 @@
   .tool-activity-target { font-size: 11px; }
   .tool-activity-details-inner { padding-left: 25px; }
 }
+
+/* Tool phases remain muted after completion, matching the thinking rows. */
+.turn-activity .tool-activity-group {
+  --tool-ink: var(--muted-foreground);
+  --tool-muted: var(--muted-foreground);
+  --tool-faint: var(--muted-foreground);
+}
+.turn-activity .tool-activity-group[data-open="true"] .tool-activity-icon,
+.turn-activity .tool-activity-group[data-open="true"] .tool-activity-action,
+.turn-activity .tool-activity-group .tool-activity-group-summary {
+  color: var(--muted-foreground);
+}
