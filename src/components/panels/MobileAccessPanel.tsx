@@ -8,7 +8,7 @@ export function MobileAccessPanel() {
   return <div className="mobile-access-panel">
     <div className="panel-heading">
       <div>
-        <h1><Icon name="plugs-connected" />链接手机</h1>
+        <h1><Icon name="plugs-connected" />移动端</h1>
         <p>{desktop ? "开启电脑 Host，把当前 Pi 工作区安全地连接到手机。" : "查看当前手机与电脑的连接状态。"}</p>
       </div>
     </div>
