@@ -69,6 +69,71 @@ fn pi_path() -> Result<PathBuf, String> {
     }
     launcher.canonicalize().map_err(|error| error.to_string())
 }
+
+/// Resolve the Pi CLI that belongs to a project before consulting PATH.
+///
+/// Orbit is shipped with the Pi package as a regular project dependency. A
+/// Finder-launched app may not inherit the user's shell PATH, and a globally
+/// installed CLI can silently drift from the RPC types bundled with Orbit.
+/// Walking ancestors also supports workspaces where the selected directory is
+/// a package nested below the repository root.
+fn bundled_pi_path(cwd: &std::path::Path) -> Option<PathBuf> {
+    let mut current = Some(cwd);
+    while let Some(directory) = current {
+        for relative in [
+            "node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js",
+            "node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+        ] {
+            let candidate = directory.join(relative);
+            if candidate.is_file() {
+                return candidate.canonicalize().ok().or(Some(candidate));
+            }
+        }
+        current = directory.parent();
+    }
+    None
+}
+
+fn app_pi_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .resolve("resources/pi-runtime/cli.js", BaseDirectory::Resource)
+        .ok()
+        .filter(|path| path.is_file())
+}
+
+fn pi_path_for_project(app: Option<&AppHandle>, cwd: &std::path::Path) -> Result<(PathBuf, &'static str), String> {
+    if let Some(path) = app.and_then(app_pi_path) {
+        return Ok((path, "bundled"));
+    }
+    if let Some(path) = bundled_pi_path(cwd) {
+        return Ok((path, "project"));
+    }
+    Ok((pi_path()?, "global"))
+}
+
+fn pi_version(node: &std::path::Path, pi: &std::path::Path) -> Option<String> {
+    let output = Command::new(node).arg(pi).arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+}
+fn node_runtime() -> Result<(PathBuf, String), String> {
+    const REQUIRED: (u32, u32) = (22, 19);
+    let node = executable("node")?;
+    let output = Command::new(&node).arg("--version").output().map_err(|error| error.to_string())?;
+    let version = String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string();
+    let mut parts = version.split('.').filter_map(|part| part.parse::<u32>().ok());
+    let detected = (parts.next().unwrap_or_default(), parts.next().unwrap_or_default());
+    if !output.status.success() || detected < REQUIRED {
+        return Err(format!("Orbit 内置 Pi 需要 Node >= {}.{}，当前为 {}", REQUIRED.0, REQUIRED.1, version));
+    }
+    Ok((node, version))
+}
 fn home_dir() -> Result<PathBuf, String> {
     std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).ok_or_else(|| "找不到用户目录".into())
 }
@@ -272,13 +337,13 @@ fn supported_api(api: &str) -> bool {
 }
 
 #[tauri::command]
-pub async fn discover() -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let pi = pi_path()?;
-        let node = executable("node")?;
-        let output = Command::new(&node).arg(&pi).arg("--version").output().map_err(|e| e.to_string())?;
+pub async fn discover(app: AppHandle) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
         let home = home_dir()?;
-        Ok(json!({"pi":pi,"node":node,"version":String::from_utf8_lossy(&output.stdout).trim(),"cwd":home.join("Desktop/pi-gui"),"home":home}))
+        let (pi, pi_source) = pi_path_for_project(Some(&app), &home)?;
+        let (node, node_version) = node_runtime()?;
+        let output = Command::new(&node).arg(&pi).arg("--version").output().map_err(|e| e.to_string())?;
+        Ok(json!({"pi":pi,"node":node,"nodeVersion":node_version,"piSource":pi_source,"version":String::from_utf8_lossy(&output.stdout).trim(),"cwd":home.join("Desktop/pi-gui"),"home":home}))
     }).await.map_err(|e|e.to_string())?
 }
 /// Query the OpenAI-compatible provider catalog configured in Pi's own files.
@@ -506,14 +571,28 @@ mod image_input_tests {
 pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, state: State<'_, Bridge>, connection_id: Option<String>) -> Result<Value, String> {
     let path = project(&cwd)?;
     append_image_input_to_custom_models(&agent_dir()?)?;
-    let pi = pi_path()?;
-    let node = executable("node")?;
+    let (pi, pi_source) = pi_path_for_project(Some(&app), &path)?;
+    let (node, _) = node_runtime()?;
+    let pi_version = pi_version(&node, &pi);
     // Explicit executable paths also work when Finder's PATH lacks the Node version manager.
     // Connection id lets one project keep multiple live Pi processes (one session each).
     let id = connection_id.filter(|value| !value.is_empty()).unwrap_or_else(|| cwd.clone());
     state.stop_project(&id);
     let extension = app.path().resolve("resources/gui-extension.ts", BaseDirectory::Resource).map_err(|e|e.to_string())?;
-    let mut child = Command::new(node).arg(&pi).args(["--mode", "rpc", "--offline"]).arg("--extension").arg(extension).current_dir(&path)
+    let mut command = Command::new(&node);
+    command
+        .arg(&pi)
+        .args(["--mode", "rpc", "--offline"])
+        .arg("--extension")
+        .arg(extension)
+        .current_dir(&path)
+        // Child-agent extensions can use these values to spawn the exact same
+        // CLI/runtime as the parent connection, without consulting PATH.
+        .env("ORBIT_PI_CLI_PATH", &pi)
+        .env("ORBIT_PI_NODE_PATH", &node)
+        .env("ORBIT_PI_SOURCE", pi_source);
+    if let Some(version) = &pi_version { command.env("ORBIT_PI_VERSION", version); }
+    let mut child = command
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e|e.to_string())?;
     let pid = child.id();
     let stdin = child.stdin.take().ok_or("Pi stdin unavailable")?;
@@ -544,7 +623,7 @@ pub async fn pi_connect(app: AppHandle, cwd: String, on_event: Channel<Value>, s
         if let Some(status) = status { let _=on_event.send(json!({"kind":"exit","code":status.code()})); break; }
         thread::sleep(Duration::from_millis(150));
     });
-    Ok(json!({"pid":pid,"cwd":path,"pi":pi,"connectionId":id}))
+    Ok(json!({"pid":pid,"cwd":path,"pi":pi,"node":node,"piSource":pi_source,"piVersion":pi_version,"connectionId":id}))
 }
 #[tauri::command]
 pub fn pi_send(project: String, command: Value, state: State<'_, Bridge>) -> Result<(), String> {
@@ -558,14 +637,15 @@ pub fn pi_send(project: String, command: Value, state: State<'_, Bridge>) -> Res
 #[tauri::command]
 pub fn pi_disconnect(project: String, state: State<'_, Bridge>) { state.stop_project(&project); }
 #[tauri::command]
-pub async fn list_sessions(cwd: String) -> Result<Value, String> {
+pub async fn list_sessions(app: AppHandle, cwd: String) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let path = project(&cwd)?;
-        let pi = pi_path()?;
+        let (pi, _) = pi_path_for_project(Some(&app), &path)?;
         let sdk = pi.parent().ok_or("Invalid Pi path")?.join("index.js");
         // SDK SessionManager.list is the documented session index, not a guessed JSONL parser.
         let code = "const {pathToFileURL}=require('node:url'); (async()=>{const {SessionManager}=await import(pathToFileURL(process.argv[1]).href);const sessions=await SessionManager.list(process.argv[2]);const result=sessions.map(({allMessagesText,...session})=>{let icon;try{const entries=SessionManager.open(session.path).getEntries();const meta=[...entries].reverse().find(entry=>entry.type==='custom'&&entry.customType==='pi-gui-session-meta');if(meta?.data&&typeof meta.data.icon==='string')icon=meta.data.icon}catch{}return {...session,...(icon?{icon}:{})}});console.log(JSON.stringify(result));})().catch(()=>process.exit(1));";
-        let output = Command::new(executable("node")?).args(["-e",code]).arg(sdk).arg(path).output().map_err(|e|e.to_string())?;
+        let (node, _) = node_runtime()?;
+        let output = Command::new(node).args(["-e",code]).arg(sdk).arg(path).output().map_err(|e|e.to_string())?;
         if !output.status.success() { return Err("Pi SDK 无法读取会话列表".into()); }
         serde_json::from_slice(&output.stdout).map_err(|e|e.to_string())
     }).await.map_err(|e|e.to_string())?
@@ -597,24 +677,26 @@ pub async fn session_turn_durations(session_path: String) -> Result<Value, Strin
         let target = PathBuf::from(&session_path).canonicalize().map_err(|_| "会话文件不存在".to_string())?;
         if target.extension().and_then(|value| value.to_str()) != Some("jsonl") || !target.starts_with(&root) { return Err("只能读取 Pi 会话目录中的 JSONL 文件".into()); }
         let code = r#"const fs=require('node:fs');const out={};let turn=null;const flush=()=>{if(turn?.id&&Number.isFinite(turn.start)&&Number.isFinite(turn.end)&&turn.end>=turn.start)out[turn.id]=turn.end-turn.start;turn=null};for(const line of fs.readFileSync(process.argv[1],'utf8').split('\n')){if(!line.trim())continue;let entry;try{entry=JSON.parse(line)}catch{continue}if(entry.type!=='message'||!entry.message)continue;const role=entry.message.role;const at=Date.parse(entry.timestamp);if(role==='user'){flush();turn={start:at,end:null,id:null};continue}if(role!=='assistant'||!turn)continue;if(!turn.id){const stamp=entry.message.timestamp;if(Number.isFinite(stamp))turn.id=`timestamp:${stamp}`;else{const call=Array.isArray(entry.message.content)&&entry.message.content.find(part=>part?.type==='toolCall'&&part.id);if(call)turn.id=`tool:${call.id}`}}if(Number.isFinite(at))turn.end=at}flush();process.stdout.write(JSON.stringify(out));"#;
-        let output = Command::new(executable("node")?).args(["-e", code]).arg(&target).output().map_err(|error| error.to_string())?;
+        let (node, _) = node_runtime()?;
+        let output = Command::new(node).args(["-e", code]).arg(&target).output().map_err(|error| error.to_string())?;
         if !output.status.success() { return Err("Pi 会话耗时读取失败".into()); }
         serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())
     }).await.map_err(|error| error.to_string())?
 }
 #[tauri::command]
-pub async fn open_pi_terminal(cwd: String, session: Option<String>, command: Option<String>) -> Result<(), String> {
+pub async fn open_pi_terminal(app: AppHandle, cwd: String, session: Option<String>, pi_args: Option<Vec<String>>) -> Result<(), String> {
     let path = project(&cwd)?;
-    let pi = pi_path()?;
-    let node = executable("node")?;
+    let (pi, _) = pi_path_for_project(Some(&app), &path)?;
+    let (node, _) = node_runtime()?;
+    let mut arguments = Vec::new();
+    if let Some(session) = session { arguments.extend(["--session".to_string(), session]); }
+    arguments.extend(pi_args.unwrap_or_default());
 
     #[cfg(windows)]
     {
         fn powershell_quote(value: &str) -> String { format!("'{}'", value.replace('\'', "''")) }
-        let custom_command = command.is_some();
-        let mut script = command.map(|value| format!("Set-Location -LiteralPath {}; {value}", powershell_quote(&path.to_string_lossy())))
-            .unwrap_or_else(|| format!("Set-Location -LiteralPath {}; & {} {}", powershell_quote(&path.to_string_lossy()), powershell_quote(&node.to_string_lossy()), powershell_quote(&pi.to_string_lossy())));
-        if !custom_command { if let Some(session) = session { script.push_str(&format!(" --session {}", powershell_quote(&session))); } }
+        let suffix = arguments.iter().map(|argument| powershell_quote(argument)).collect::<Vec<_>>().join(" ");
+        let script = format!("Set-Location -LiteralPath {}; & {} {} {}", powershell_quote(&path.to_string_lossy()), powershell_quote(&node.to_string_lossy()), powershell_quote(&pi.to_string_lossy()), suffix);
         Command::new("cmd.exe").args(["/C", "start", "", "powershell.exe", "-NoExit", "-Command", &script]).spawn().map_err(|e| e.to_string())?;
         return Ok(());
     }
@@ -622,9 +704,8 @@ pub async fn open_pi_terminal(cwd: String, session: Option<String>, command: Opt
     #[cfg(unix)]
     {
     fn shell_quote(value: &str) -> String { format!("'{}'",value.replace('\'',"'\\''")) }
-    let custom_command = command.is_some();
-    let mut command = command.map(|value| format!("cd -- {} && {}", shell_quote(&path.to_string_lossy()), value)).unwrap_or_else(|| format!("cd -- {} && {} {}", shell_quote(&path.to_string_lossy()), shell_quote(&node.to_string_lossy()), shell_quote(&pi.to_string_lossy())));
-    if !custom_command { if let Some(session) = session { command.push_str(&format!(" --session {}",shell_quote(&session))); } }
+    let suffix = arguments.iter().map(|argument| shell_quote(argument)).collect::<Vec<_>>().join(" ");
+    let command = format!("cd -- {} && {} {} {}", shell_quote(&path.to_string_lossy()), shell_quote(&node.to_string_lossy()), shell_quote(&pi.to_string_lossy()), suffix);
 
     #[cfg(target_os = "macos")]
     {
@@ -654,6 +735,46 @@ pub async fn open_pi_terminal(cwd: String, session: Option<String>, command: Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn temporary_root(label: &str) -> PathBuf {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("pi-gui-{label}-{}-{suffix}", std::process::id()))
+    }
+
+    #[test]
+    fn project_pi_resolution_prefers_the_bundled_cli_for_nested_workspaces() {
+        let root = temporary_root("pi-resolution");
+        let nested = root.join("packages/app/src");
+        let bundle = root.join("node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js");
+        fs::create_dir_all(&nested).unwrap();
+        fs::create_dir_all(bundle.parent().unwrap()).unwrap();
+        fs::write(&bundle, "#!/usr/bin/env node\n").unwrap();
+
+        let (resolved, source) = pi_path_for_project(None, &nested).unwrap();
+        assert_eq!(resolved, bundle.canonicalize().unwrap());
+        assert_eq!(source, "project");
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn project_pi_resolution_uses_bundle_entrypoint_when_both_builds_exist() {
+        let root = temporary_root("pi-resolution-order");
+        let nested = root.join("workspace");
+        let bundle = root.join("node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js");
+        let legacy = root.join("node_modules/@earendil-works/pi-coding-agent/dist/cli.js");
+        fs::create_dir_all(&nested).unwrap();
+        fs::create_dir_all(bundle.parent().unwrap()).unwrap();
+        fs::write(&bundle, "bundle").unwrap();
+        fs::write(&legacy, "legacy").unwrap();
+
+        assert_eq!(bundled_pi_path(&nested).unwrap(), bundle.canonicalize().unwrap());
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn worker() -> Worker {
         let mut child=Command::new("/bin/cat").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
         let stdin=child.stdin.take().unwrap();

@@ -1,12 +1,22 @@
-import {spawn} from 'node:child_process'
+import {spawn,spawnSync} from 'node:child_process'
 import {resolve} from 'node:path'
-import {mkdirSync,writeFileSync} from 'node:fs'
+import {cpSync,mkdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
 import assert from 'node:assert/strict'
 const root=resolve(import.meta.dirname,'..'),cwd=resolve(root,'work/smoke')
 mkdirSync(cwd,{recursive:true})
-const child=spawn(process.execPath,[resolve(root,'node_modules/@earendil-works/pi-coding-agent/dist/cli.js'),'--mode','rpc','--offline','--no-session','--extension',resolve(root,'src-tauri/resources/gui-extension.ts')],{cwd,stdio:['pipe','pipe','pipe']})
+const bundled=spawnSync(process.execPath,[resolve(root,'scripts/bundle-pi.mjs')],{cwd:root,stdio:'inherit'})
+if(bundled.status!==0)process.exit(bundled.status??1)
+const isolated=mkdtempSync(resolve(tmpdir(),'orbit-pi-smoke-')),resources=resolve(isolated,'resources')
+mkdirSync(resources,{recursive:true})
+cpSync(resolve(root,'src-tauri/resources/pi-runtime'),resolve(resources,'pi-runtime'),{recursive:true})
+cpSync(resolve(root,'src-tauri/resources/subagents'),resolve(resources,'subagents'),{recursive:true})
+cpSync(resolve(root,'src-tauri/resources/gui-extension.ts'),resolve(resources,'gui-extension.ts'))
+const cli=resolve(resources,'pi-runtime/cli.js'),extension=resolve(resources,'gui-extension.ts')
+const child=spawn(process.execPath,[cli,'--mode','rpc','--offline','--no-session','--extension',extension],{cwd,stdio:['pipe','pipe','pipe'],env:{...process.env,ORBIT_PI_CLI_PATH:cli,ORBIT_PI_NODE_PATH:process.execPath}})
 let buffer='',sequence=0,errors='',toolState,runtimeInfo
 const pending=new Map(),results=[]
+const collaborationTools=['spawn_agent','send_message','followup_task','wait_agent','interrupt_agent','list_agents']
 child.on('exit',code=>{for(const p of pending.values())p.reject(new Error('Pi exited: '+code));pending.clear()})
 child.stderr.on('data',chunk=>{errors+=chunk.toString()})
 child.stdout.setEncoding('utf8')
@@ -27,11 +37,13 @@ const req=(command)=>new Promise((resolve,reject)=>{const id=String(++sequence);
 const deadline=setTimeout(()=>{console.error('Pi smoke test timed out');child.kill();process.exit(1)},90000)
 try{
  await req({type:'prompt',message:'/gui-observe'});assert(runtimeInfo.compaction.reserveTokens>0);assert.equal(typeof runtimeInfo.systemPrompt,'string');results.push('SDK live context and compaction configuration')
- const state=await req({type:'get_state'});assert(state.model);assert.equal(typeof state.model.provider,'string');assert.equal(typeof state.model.id,'string');results.push(`state: ${state.model.provider}/${state.model.id} / ${state.thinkingLevel}`)
+ const state=await req({type:'get_state'});assert(state.model);assert.equal(typeof state.model.provider,'string');assert.equal(typeof state.model.id,'string');results.push('state: active model and thinking level returned')
  const models=await req({type:'get_available_models'});assert(models.models.some(m=>m.provider===state.model.provider&&m.id===state.model.id));results.push('current model returned by Pi model catalog')
  const levels=await req({type:'get_available_thinking_levels'});assert(levels.levels.includes(state.thinkingLevel));results.push('current thinking level returned by Pi capability API')
  await req({type:'prompt',message:'/gui-tools'});assert(toolState.tools.length>0);results.push('GUI extension: tool inventory')
  await req({type:'prompt',message:'/gui-tools-set ["read"]'});assert.deepEqual(toolState.active,['read']);results.push('GUI extension: active tools update')
+ await req({type:'prompt',message:'/gui-agent-mode {"enabled":true}'});assert(collaborationTools.every(name=>toolState.active.includes(name)));results.push('GUI extension: multi-agent tools enabled')
+ await req({type:'prompt',message:'/gui-agent-mode {"enabled":false}'});assert(collaborationTools.every(name=>!toolState.active.includes(name)));results.push('GUI extension: multi-agent tools disabled')
  const bash=await req({type:'bash',command:'printf "Orbit integration ok"',excludeFromContext:true});assert.equal(bash.exitCode,0);assert.equal(bash.output,'Orbit integration ok');results.push('real Bash execution through RPC')
  const commands=await req({type:'get_commands'});assert(commands.commands.some(c=>c.name==='gui-tree'));results.push('commands enumerated')
  if(process.argv.includes('--live')){
@@ -44,4 +56,4 @@ try{
  writeFileSync(resolve(root,'docs/pi-smoke-result.json'),JSON.stringify(report,null,2)+'\n')
  console.log(JSON.stringify(report,null,2))
 }catch(error){console.error(error.message);if(errors)console.error('Pi wrote diagnostics to stderr');process.exitCode=1}
-finally{clearTimeout(deadline);child.stdin.end();child.kill()}
+finally{clearTimeout(deadline);child.stdin.end();if(child.exitCode===null){child.kill();await new Promise(resolveExit=>child.once('exit',resolveExit))}rmSync(isolated,{recursive:true,force:true})}

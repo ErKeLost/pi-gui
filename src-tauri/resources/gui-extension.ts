@@ -2,6 +2,7 @@ import {dirname,join} from 'node:path'
 import {realpathSync} from 'node:fs'
 import {pathToFileURL} from 'node:url'
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent'
+import {registerSubagentTools,SUBAGENT_TOOL_NAMES} from './subagents/index.ts'
 // Pi official docs/extensions.md: registerCommand, getAllTools, setActiveTools,
 // ExtensionCommandContext.navigateTree and setLabel. Loaded only by this GUI.
 export function ensureImageInput(model: {input: ('text'|'image')[]} | undefined) {
@@ -33,6 +34,7 @@ function sessionText(ctx:ExtensionCommandContext){
   }).join('\n').slice(-6000)
 }
 export default async function (pi: ExtensionAPI) {
+  registerSubagentTools(pi)
   pi.on('model_select',(event)=>{ensureImageInput(event.model)})
   pi.on('input',(_event,ctx)=>{ensureImageInput(ctx.model);return {action:'continue'}})
   const {SettingsManager}=await import(pathToFileURL(join(dirname(realpathSync(process.argv[1])),'index.js')).href)
@@ -50,6 +52,12 @@ export default async function (pi: ExtensionAPI) {
     if(!Array.isArray(names)||names.some((name:unknown)=>typeof name!=='string'))throw new Error('Expected tool names');
     pi.setActiveTools(names);publishTools(ctx);
   }});
+  pi.registerCommand('gui-agent-mode',{description:'GUI: enable or disable dynamic child agents',handler:async(args:string,ctx:ExtensionCommandContext)=>{
+    const value=JSON.parse(args||'{}') as {enabled?:unknown};if(typeof value.enabled!=='boolean')throw new Error('Expected enabled boolean')
+    const collaboration=new Set<string>(SUBAGENT_TOOL_NAMES),active=new Set(pi.getActiveTools())
+    for(const name of collaboration){if(value.enabled)active.add(name);else active.delete(name)}
+    pi.setActiveTools([...active]);ctx.ui.setStatus('gui-agent-mode',value.enabled?'enabled':'disabled');publishTools(ctx)
+  }})
   pi.registerCommand('gui-tree', {description:'GUI: navigate a session branch',handler:async (args: string,ctx: ExtensionCommandContext) => {
     await ctx.waitForIdle();const target=JSON.parse(args);const result=await ctx.navigateTree(target.id,{summarize:target.summarize ?? false,customInstructions:target.customInstructions,replaceInstructions:target.replaceInstructions,label:target.label});
     if(result.cancelled)ctx.ui.notify('扩展取消了分支切换','warning');

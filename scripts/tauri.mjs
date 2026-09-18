@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs'
 import { resolve, delimiter } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 const root=resolve(import.meta.dirname,'..')
 const local=resolve(root,'work/toolchain')
 const env={...process.env}
+const bundle=spawnSync(process.execPath,[resolve(root,'scripts/bundle-pi.mjs')],{cwd:root,env,stdio:'inherit'})
+if(bundle.status!==0)process.exit(bundle.status??1)
 if(existsSync(resolve(local,'cargo/bin/rustup'))){
   env.RUSTUP_HOME=resolve(local,'rustup')
   env.CARGO_HOME=resolve(local,'cargo')

@@ -4,6 +4,7 @@ import {Channel,invoke,isTauri} from '@tauri-apps/api/core'
 import {QueryClient} from '@tanstack/react-query'
 import type {RpcCommand,RpcResponse} from '@earendil-works/pi-coding-agent'
 import {useWorkspace,type LiveSession,type Workspace,type WorkspaceMode} from './store'
+import {parseAgentSnapshot} from './agents'
 import {emptyTranscript,hydrate,reduceEvent,type Event,type PiMessage,type RpcSessionState,type UiRequest} from './protocol'
 export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000,gcTime:120000}}})
 export const native=isTauri()
@@ -30,13 +31,13 @@ export type ProviderModel={
   [key:string]:unknown
 }
 export type ProviderProfile={id:string;name?:string;baseUrl?:string;modelsUrl?:string;api?:string;authHeader?:boolean;defaultModel?:string;models?:ProviderModel[];hasApiKey:boolean;modelCount:number}
-type Snapshot=Pick<Workspace,'transcript'|'telemetry'|'state'|'connection'|'error'|'draft'|'dialogs'|'notices'|'statuses'|'widgets'>
+type Snapshot=Pick<Workspace,'transcript'|'telemetry'|'state'|'connection'|'error'|'draft'|'dialogs'|'notices'|'statuses'|'widgets'|'agents'>
 type Pending={project:string;resolve:(value:unknown)=>void;reject:(error:Error)=>void;timeout:ReturnType<typeof setTimeout>}
 const SESSION_FILES_KEY='pi-gui.sessionFiles.v1',LEGACY_SESSION_FILES_KEY=['pi-gui','sessionFiles'].join('.')
 const pending=new Map<string,Pending>(),snapshots=new Map<string,Snapshot>(),connections=new Map<string,{token:symbol;cwd:string}>(),projectActive=new Map<string,string>(),sessionOwners=new Map<string,string>(),eventQueues=new Map<string,Event[]>(),flushTimers=new Map<string,ReturnType<typeof setTimeout>>()
 const sessionMetadataPending=new Set<string>()
-const fresh=():Snapshot=>({transcript:emptyTranscript(),telemetry:emptyTelemetry(),state:null,connection:'offline',error:null,draft:'',dialogs:[],notices:[],statuses:{},widgets:{}})
-function snapshot():Snapshot{const s=useWorkspace.getState();return {transcript:s.transcript,telemetry:s.telemetry,state:s.state,connection:s.connection,error:s.error,draft:s.draft,dialogs:s.dialogs,notices:s.notices,statuses:s.statuses,widgets:s.widgets}}
+const fresh=():Snapshot=>({transcript:emptyTranscript(),telemetry:emptyTelemetry(),state:null,connection:'offline',error:null,draft:'',dialogs:[],notices:[],statuses:{},widgets:{},agents:null})
+function snapshot():Snapshot{const s=useWorkspace.getState();return {transcript:s.transcript,telemetry:s.telemetry,state:s.state,connection:s.connection,error:s.error,draft:s.draft,dialogs:s.dialogs,notices:s.notices,statuses:s.statuses,widgets:s.widgets,agents:s.agents}}
 function route(target=useWorkspace.getState().cwd){return projectActive.get(target)??target}
 function connectionsFor(cwd:string){return [...connections.entries()].flatMap(([id,meta])=>meta.cwd===cwd?[id]:[])}
 function readSessionFiles():Record<string,string>{try{return JSON.parse(localStorage.getItem(SESSION_FILES_KEY)??localStorage.getItem(LEGACY_SESSION_FILES_KEY)??'{}')}catch{return {}}}
@@ -102,7 +103,13 @@ function applyEvent(event:Event,project:string){
   if(['select','confirm','input','editor'].includes(request.method))patch(project,{dialogs:[...s.dialogs,request]})
   else if(request.method==='notify')patch(project,{notices:[...s.notices,request.message].slice(-5)})
   else if(request.method==='set_editor_text')patch(project,{draft:request.text})
-  else if(request.method==='setStatus')patch(project,{statuses:{...s.statuses,[request.statusKey]:request.statusText??''}})
+  else if(request.method==='setStatus'){
+   if(request.statusKey==='gui-agents'){
+    const statuses={...s.statuses};delete statuses['gui-agents']
+    const text=request.statusText??'',agents=parseAgentSnapshot(text)
+    patch(project,{statuses,...(!text?{agents:null}:agents?{agents}:{})})
+   }else patch(project,{statuses:{...s.statuses,[request.statusKey]:request.statusText??''}})
+  }
   else if(request.method==='setWidget')patch(project,{widgets:{...s.widgets,[request.widgetKey]:request.widgetLines??[]}})
   else if(request.method==='setTitle'&&useWorkspace.getState().connectionId===project)document.title=request.title
   return
@@ -137,6 +144,8 @@ export function report(error:unknown){useWorkspace.getState().set({error:String(
 export function persistedSessionFile(project:string):string {
  const value=readSessionFiles()[project];return typeof value==='string'?value:''
 }
+const multiAgentModeCommand=(enabled=useWorkspace.getState().multiAgentEnabled)=>({type:'prompt' as const,message:`/gui-agent-mode ${JSON.stringify({enabled})}`})
+const syncMultiAgentMode=(target:string)=>request(multiAgentModeCommand(),30000,target)
 export async function refresh(target=useWorkspace.getState().cwd){const id=route(target),state=await request<RpcSessionState>({type:'get_state'},30000,id);patch(id,{state});const cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd;if(state.sessionFile&&projectActive.get(cwd)===id)persistSession(cwd,state.sessionFile);await queryClient.invalidateQueries({queryKey:['pi','live-stats',id]});return state}
 export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
 export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(!native) throw new Error('文件索引需要桌面应用'); return invoke<string[]>('list_project_files',{cwd:project}) }
@@ -176,7 +185,7 @@ function activateConnection(id:string,cwd:string){
  const saved=snapshots.get(id)??fresh()
  useWorkspace.getState().set({...saved,cwd,connectionId:id,panel:'chat'})
  persistSession(cwd,saved.state?.sessionFile);syncLiveSessions()
- if(saved.connection==='online')void refresh(id).catch(error=>patch(id,{error:String(error)}))
+ if(saved.connection==='online')void Promise.all([refresh(id),syncMultiAgentMode(id)]).catch(error=>patch(id,{error:String(error)}))
 }
 async function startConnection(cwd:string,id:string,options?:{restoreLast?:boolean;sessionPath?:string}){
  const token=Symbol(id);connections.set(id,{token,cwd});projectActive.set(cwd,id);patch(id,{connection:'connecting',error:null})
@@ -192,12 +201,20 @@ async function startConnection(cwd:string,id:string,options?:{restoreLast?:boole
   const state=await request<RpcSessionState>({type:'get_state'},45000,id)
   if(connections.get(id)?.token!==token)return
   patch(id,{state})
+  await syncMultiAgentMode(id).catch(()=>{})
   if(options?.sessionPath){try{await request({type:'switch_session',sessionPath:options.sessionPath},45000,id)}catch{patch(id,{notices:['会话无法读取，已打开新会话']})}}
   else if(options?.restoreLast){const previousFile=persistedSessionFile(cwd)||undefined;if(previousFile&&previousFile!==state.sessionFile){try{await request({type:'switch_session',sessionPath:previousFile},45000,id)}catch{patch(id,{notices:['上次会话无法读取，已打开新会话']})}}}
   await loadMessages(id)
   if(connections.get(id)?.token!==token)return
   patch(id,{connection:'online'})
  }catch(error){connections.delete(id);if(projectActive.get(cwd)===id)projectActive.delete(cwd);failPending(id,'连接失败');await invoke('pi_disconnect',{project:id}).catch(()=>{});patch(id,{connection:'offline'});throw error}
+}
+export async function setMultiAgentMode(enabled:boolean){
+ const previous=useWorkspace.getState().multiAgentEnabled
+ useWorkspace.getState().set({multiAgentEnabled:enabled});localStorage.setItem('pi-gui.multiAgentEnabled',String(enabled))
+ if(useWorkspace.getState().connection!=='online')return
+ try{await request(multiAgentModeCommand(enabled),30000)}
+ catch(error){useWorkspace.getState().set({multiAgentEnabled:previous});localStorage.setItem('pi-gui.multiAgentEnabled',String(previous));throw error}
 }
 export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspace.getState().workspaceMode){
  if(!native)throw new Error('请在桌面应用中选择项目')
@@ -206,7 +223,7 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
  const saved=snapshots.get(id)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode,connectionId:id})
  localStorage.setItem('pi-gui.cwd',cwd)
  localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
- if(connections.has(id)&&saved.connection==='online'){await refresh(id);return}
+ if(connections.has(id)&&saved.connection==='online'){await Promise.all([refresh(id),syncMultiAgentMode(id)]);return}
  await startConnection(cwd,id,{restoreLast:true})
 }
 export async function disconnect(){const cwd=useWorkspace.getState().cwd;await Promise.all(connectionsFor(cwd).map(id=>closeConnection(id,'项目已断开')));projectActive.delete(cwd);useWorkspace.getState().set({...fresh(),cwd,connectionId:'',workspaceMode:useWorkspace.getState().workspaceMode})}
@@ -232,7 +249,7 @@ export async function changeSession(command:RpcCommand){
   await startConnection(cwd,id,command.type==='switch_session'?{sessionPath:command.sessionPath}:undefined)
   await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return
  }
- const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{}});if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'});await loadMessages(active);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
+ const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{},agents:null});if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'});await loadMessages(active);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
 }
 const branchingConnections = new Set<string>()
 export async function branchFromMessage(message: PiMessage) {
@@ -253,7 +270,7 @@ export async function branchFromMessage(message: PiMessage) {
   await request({type:'prompt',message:`/gui-tree ${JSON.stringify({id:entryId,summarize:false})}`},60000,id)
   const branch=await request<{leafId:string|null}>({type:'get_entries'},30000,id)
   if(branch.leafId!==entryId)throw new Error('未能定位到所选回复，已创建的副本可在会话列表中查看')
-  patch(id,{error:null,telemetry:emptyTelemetry(),draft:'',dialogs:[],statuses:{},widgets:{}})
+  patch(id,{error:null,telemetry:emptyTelemetry(),draft:'',dialogs:[],statuses:{},widgets:{},agents:null})
   if(useWorkspace.getState().connectionId===id)useWorkspace.getState().set({panel:'chat'})
  } catch(error) {
   if(cloned&&sourceFile) {

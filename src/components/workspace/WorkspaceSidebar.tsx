@@ -128,7 +128,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
                     <Icon name={isExpanded ? "folder-open" : "folder-simple"} /><span title={project.path}>{project.name}</span>{busyProject === project.path && <i className="session-working-indicator" aria-hidden />}
                   </CollapsibleTrigger>
                 </ContextMenuTrigger>
-                <ContextMenuContent className="w-44"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
+                <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
               </ContextMenu>
               <CollapsibleContent className="sidebar-project-panel"><div className="sidebar-project-sessions">
                 {merged.sessions.map(session => {
@@ -140,7 +140,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
                       <button type="button" className="recent-session-main" aria-busy={working} onClick={() => void openSession(project.path, session)}>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name={sessionGlyph(session.icon)} className="recent-session-glyph" />}<span className="recent-session-title">{label}</span></button>
                       {merged.listedPaths.has(session.path) && <button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${label}`} onClick={event => { event.stopPropagation(); setDeletingSession({ session, projectPath: project.path }); }}><Icon name="trash" /></button>}
                     </ContextMenuTrigger>
-                    <ContextMenuContent className="w-44"><ContextMenuItem onClick={() => void openSession(project.path, session)}><Icon name="chats" />打开会话</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(label)}><Icon name="copy" />复制标题</ContextMenuItem>{merged.listedPaths.has(session.path) && <><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingSession({ session, projectPath: project.path })}><Icon name="trash" />删除会话</ContextMenuItem></>}</ContextMenuContent>
+                    <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void openSession(project.path, session)}><Icon name="chats" />打开会话</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(label)}><Icon name="copy" />复制标题</ContextMenuItem>{merged.listedPaths.has(session.path) && <><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingSession({ session, projectPath: project.path })}><Icon name="trash" />删除会话</ContextMenuItem></>}</ContextMenuContent>
                   </ContextMenu>;
                 })}
                 {!group?.query.isLoading && !merged.sessions.length && <p>暂无会话</p>}

@@ -1,6 +1,6 @@
 # Pi 功能覆盖与边界
 
-以 Pi 0.85.1 官方 RPC / SDK / extensions 文档为基准（2026-09-15 复核）。这里区分原生 GUI、控制台和原始终端入口，不把“有个按钮”当作已支持。
+以 Pi 0.85.1 官方 RPC / SDK / extensions 文档为基准（2026-09-18 复核）。这里区分原生 GUI、控制台和原始终端入口，不把“有个按钮”当作已支持。
 
 ## 覆盖结论
 
@@ -33,6 +33,7 @@
 | Scoped Models、资源重载、快捷键、变更记录 | Pi 工具面板提供官方命令入口；需要 TUI 交互的命令打开原生 Pi 终端 |
 | Pi Package 管理 | Pi 工具面板使用官方 `pi install`、`pi remove`、`pi update --extensions` 命令 |
 | 分支摘要导航 | 会话树同时提供普通导航和 `navigateTree({ summarize: true })` |
+| 动态多 agent | 父 Pi 通过 `spawn_agent` 等协作工具动态派发；子进程复用 Orbit 内置 Pi，支持并行、嵌套、消息、跟进、等待、中止、状态树与持久化子会话。架构见 [MULTI_AGENT.md](MULTI_AGENT.md) |
 | OAuth 登录、安装/更新/移除包、终端主题与快捷键设置 | 设置中的“打开 Pi 终端”；使用原始 Pi 功能 |
 | 自定义 TUI 组件与终端专有扩展 | 原始 Pi 终端入口；RPC 的 custom() 无可移植的图形表示 |
 
@@ -42,7 +43,7 @@
 - RPC 文档明确指出 custom() 返回 undefined，多种终端 header/footer/editor 接口在 RPC 中为 no-op，主题 API 不可用。不能宣称任意第三方终端扩展都能原样显示在 React 中。
 - Pi 没有内置逐次工具审批；确认弹窗来自需要用户输入的扩展。本 GUI 不伪造内置审批能力。
 - 目前应用原生启动、终端入口按 **macOS** 实现。Tauri 支持其他平台不等于本应用已经在那些平台验证。
-- 本机必须已有可运行的 Node 与 Pi CLI。GUI 通过登录 shell 发现路径，显式使用 Node 启动 Pi；当前 App 不捆绑独立 Node 运行时。
+- 本机必须已有可运行的 Node。Orbit 捆绑锁定版本的 Pi runtime 并优先使用；项目/全局 Pi 仅作为开发与兼容回退。当前 App 不捆绑独立 Node 运行时。
 - GUI 使用 --offline 禁用 Pi 的启动更新和 catalog 联网；模型请求仍正常联网。更新 Pi/扩展后重新连接。
 - GUI 不信任自定义中转站缺失的图片能力声明。连接前会为 `models.json` 中每个自定义模型保留现有输入并追加 `image`，原文件首次修改前备份为 `models.json.pi-gui.bak`；真正不支持图片的端点可能返回服务端错误。
 - 项目信任沿用 Pi 保存的决定；未信任的项目本地资源可能被 Pi 忽略。可在原始 Pi 终端用 /trust 管理。
@@ -56,7 +57,7 @@
 - 实时压缩没有虚构百分比；测试确认压缩后 contextUsage 返回 null 时显示待更新。
 - LobeHub Markdown、AI Elements Conversation/PromptInput/Shimmer、assistant-ui ToolCall、组件库控件、Motion 交互动画及 Pierre 文件/差异视图已实际接入。连接提示、版本页脚、快捷键说明和原生 window.prompt 已从常用界面移除。
 
-## 上游未发布 API（2026-09-15）
+## 上游未发布 API（2026-09-18）
 
 Pi 的 npm / GitHub 最新正式版仍为 0.85.1。上游 `main` 在该标签之后新增了以下 API，但尚未发布，因此本项目没有把依赖切到 Git 提交：
 

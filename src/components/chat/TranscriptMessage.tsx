@@ -102,6 +102,7 @@ type TranscriptMessageProps = {
   streaming: boolean;
   thinking: boolean;
   savedDuration?: number;
+  activity?: ReactNode;
 };
 
 type ProjectedPart = { part: Part; key: string; active: boolean; messageIndex: number };
@@ -166,7 +167,7 @@ function responseText(content: ProjectedPart[]) {
 
 type MessageNodes = ReturnType<typeof buildNodes>;
 
-function TranscriptBody({ item, items, nodes, role, streaming, startedAt, elapsedMs, text, copied, onCopied }: {
+function TranscriptBody({ item, items, nodes, role, streaming, startedAt, elapsedMs, text, copied, onCopied, activity }: {
   item: DisplayMessage;
   items: DisplayMessage[];
   nodes: MessageNodes;
@@ -177,12 +178,14 @@ function TranscriptBody({ item, items, nodes, role, streaming, startedAt, elapse
   text: string;
   copied: boolean;
   onCopied: () => void;
+  activity?: ReactNode;
 }) {
-  const hasContent = nodes.progress.length > 0 || nodes.body.length > 0;
+  const hasProgress = nodes.progress.length > 0 || Boolean(activity);
+  const hasContent = hasProgress || nodes.body.length > 0;
   return <Message from={role}>
     {nodes.media.length > 0 && <div className="user-message-media">{nodes.media}</div>}
     {hasContent && <MessageContent>
-      {nodes.progress.length > 0 && <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} defaultExpanded={nodes.defaultExpanded} startedAt={startedAt} durationMs={elapsedMs}>{nodes.progress}</ProcessingPanel>}
+      {hasProgress && <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} defaultExpanded={nodes.defaultExpanded} startedAt={startedAt} durationMs={elapsedMs}>{nodes.progress}{activity}</ProcessingPanel>}
       {nodes.body}
     </MessageContent>}
     {text && (role === "user" || !streaming) && <MessageCopyFooter message={items.at(-1)!.message} role={role} text={text} time={role === "user" ? turnTime(items) : null} copied={copied} onCopied={onCopied} />}
@@ -194,7 +197,7 @@ function MessageContextActions({ text, role, onCopy }: { text: string; role: "us
   return <ContextMenuContent className="w-40"><ContextMenuItem onClick={onCopy}><Icon name="copy" />{role === "user" ? "复制消息" : "复制回复"}</ContextMenuItem></ContextMenuContent>;
 }
 
-function TranscriptMessageComponent({ items, tools, streaming, thinking, savedDuration }: TranscriptMessageProps) {
+function TranscriptMessageComponent({ items, tools, streaming, thinking, savedDuration, activity }: TranscriptMessageProps) {
   const item = items[0];
   const role = item.message.role === "user" ? "user" : "assistant";
   const [copied, setCopied] = useState(false);
@@ -204,21 +207,21 @@ function TranscriptMessageComponent({ items, tools, streaming, thinking, savedDu
   const nodes = buildNodes(content, items, tools, streaming, thinking, role);
   const finalOnly = role === "assistant" && !nodes.defaultExpanded;
   const text = responseText(finalOnly ? content.filter(part => part.messageIndex === items.length - 1) : content);
-  if (nodes.progress.length === 0 && nodes.body.length === 0 && nodes.media.length === 0) return null;
+  if (nodes.progress.length === 0 && nodes.body.length === 0 && nodes.media.length === 0 && !activity) return null;
   const startedAt = items.find(entry => entry.startedAt !== undefined)?.startedAt;
   const elapsedMs = [...items].reverse().find(entry => entry.elapsedMs !== undefined)?.elapsedMs ?? savedDuration;
   const markCopied = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1600); };
   const copy = () => void navigator.clipboard.writeText(text).then(markCopied).catch(() => undefined);
   return <ContextMenu>
     <ContextMenuTrigger render={<m.div className={`transcript-message ${role}`} initial={streaming ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }} />}>
-      <TranscriptBody item={item} items={items} nodes={nodes} role={role} streaming={streaming} startedAt={startedAt} elapsedMs={elapsedMs} text={text} copied={copied} onCopied={markCopied} />
+      <TranscriptBody item={item} items={items} nodes={nodes} role={role} streaming={streaming} startedAt={startedAt} elapsedMs={elapsedMs} text={text} copied={copied} onCopied={markCopied} activity={activity} />
     </ContextMenuTrigger>
     <MessageContextActions text={text} role={role} onCopy={copy} />
   </ContextMenu>;
 }
 
 export const TranscriptMessage = memo(TranscriptMessageComponent, (previous, next) => {
-  if (previous.streaming !== next.streaming || previous.thinking !== next.thinking || previous.savedDuration !== next.savedDuration || previous.items.length !== next.items.length || previous.items.some((item, index) => item !== next.items[index])) return false;
+  if (previous.streaming !== next.streaming || previous.thinking !== next.thinking || previous.savedDuration !== next.savedDuration || previous.activity !== next.activity || previous.items.length !== next.items.length || previous.items.some((item, index) => item !== next.items[index])) return false;
   const content = previous.items.flatMap(item => Array.isArray(item.message.content) ? item.message.content : []);
   return content.every(part => part.type !== "toolCall" || previous.tools[part.id ?? ""] === next.tools[part.id ?? ""]);
 });

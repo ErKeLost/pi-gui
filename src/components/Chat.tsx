@@ -1,9 +1,10 @@
 import { Wifi } from "lucide-react";
-import { useEffect, useId, useMemo, useState, type RefObject } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type RefObject } from "react";
 import { m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../lib/store";
-import { getSessionTurnDurations, native, persistedSessionFile } from "../lib/rpc";
+import { changeSession, getSessionTurnDurations, native, persistedSessionFile, report } from "../lib/rpc";
+import type { AgentNode } from "../lib/agents";
 import { formatTranscriptError, groupDisplayMessages, type Transcript } from "../lib/protocol";
 import type { Telemetry } from "../lib/telemetry";
 import { readTurnDurations, saveTurnDurations, turnDurationId } from "../lib/turn-duration";
@@ -18,6 +19,7 @@ import ProximitySidebar, { type ProximitySection } from "./ui/proximity-sidebar"
 import { ChatComposer } from "./chat/ChatComposer";
 import { ErrorOutput, TranscriptMessage } from "./chat/TranscriptMessage";
 import { hasSectionMedia, messageKind, sectionPreview, sectionPreviewAfterHeading, sectionText } from "../lib/conversation-sections";
+import { AgentActivityFeed } from "./agents/AgentActivityFeed";
 
 function useConversationSections(
   conversationRef: RefObject<HTMLDivElement | null>,
@@ -98,6 +100,7 @@ export function Chat() {
   const project = useWorkspace(state => state.cwd);
   const transcript = useWorkspace(state => state.transcript);
   const telemetry = useWorkspace(state => state.telemetry);
+  const agents = useWorkspace(state => state.agents);
   const { ref, atBottom, scrollToBottom } = useConversationScroll();
   const proximityId = useId().replace(/[^a-zA-Z0-9_-]/g, "") || "conversation";
   const proximitySections = useConversationSections(ref, proximityId);
@@ -114,6 +117,10 @@ export function Chat() {
     ...readTurnDurations(sessionFile),
   }), [historicalDurations.data, sessionFile]);
   const { retrying, retryDetail, compacting, compactionDetail, activeHasOutput } = deriveRunStatus(transcript, telemetry);
+  const openAgent = useCallback((agent: AgentNode) => {
+    if (!agent.sessionPath) return;
+    void changeSession({ type: "switch_session", sessionPath: agent.sessionPath }).catch(report);
+  }, []);
 
   useEffect(() => {
     if (!sessionFile || transcript.running) return;
@@ -140,14 +147,18 @@ export function Chat() {
     />}
     <Conversation ref={ref} className="chat-conversation tessera-conversation">
       <ConversationContent className="tessera-conversation-content">
-        {messageGroups.map(group => <TranscriptMessage
-          key={group.id}
-          items={group.items}
-          tools={transcript.tools}
-          streaming={transcript.running && group.indexes.includes(transcript.active)}
-          thinking={transcript.running && group.indexes.includes(transcript.active) && !group.items.at(-1)?.message.stopReason}
-          savedDuration={savedDurations[turnDurationId(group.items) ?? ""]}
-        />)}
+        {messageGroups.map(group => {
+          const active = group.indexes.includes(transcript.active);
+          return <TranscriptMessage
+            key={group.id}
+            items={group.items}
+            tools={transcript.tools}
+            streaming={transcript.running && active}
+            thinking={transcript.running && active && !group.items.at(-1)?.message.stopReason}
+            savedDuration={savedDurations[turnDurationId(group.items) ?? ""]}
+            activity={active && agents && (agents.active.length > 0 || agents.recent.length > 0) ? <AgentActivityFeed snapshot={agents} onOpenAgent={openAgent} /> : undefined}
+          />;
+        })}
         {transcript.error && !transcript.running && <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}><ErrorOutput error={transcript.error} /></m.div>}
         {(compacting || retrying || (transcript.running && !activeHasOutput)) && <LoadingState icon={retrying && !compacting ? <Wifi size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" /> : undefined} className="chat-loading-state" label={compacting ? "正在压缩上下文" : (transcript.phase || "正在处理")} detail={compacting ? compactionDetail : retryDetail} />}
       </ConversationContent>

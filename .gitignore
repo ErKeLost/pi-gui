@@ -36,3 +36,4 @@ dist-ssr
 work/
 outputs/
 src-tauri/target/
+src-tauri/resources/pi-runtime/

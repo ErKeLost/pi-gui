@@ -72,7 +72,7 @@ function ToolsSettings({ tools, running }: { tools: GuiTools; running: boolean }
 }
 
 function TerminalSettings({ cwd }: { cwd: string }) {
-  return <SettingRow title="原生终端环境" description="在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。"><Button variant="outline" disabled={!native || !cwd} onClick={() => void invoke("open_pi_terminal", { cwd, session: null }).catch(report)}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
+  return <SettingRow title="原生终端环境" description="在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。"><Button variant="outline" disabled={!native || !cwd} onClick={() => void invoke("open_pi_terminal", { cwd, session: null, piArgs: [] }).catch(report)}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
 }
 
 export function GeneralSettingsPanel() {

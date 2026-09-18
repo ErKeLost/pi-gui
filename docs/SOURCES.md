@@ -2,7 +2,7 @@
 
 Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beautifului.dev/) 的 Reasoning / Drive 组件，保留其 [MIT 许可](licenses/beautiful-ui.txt)。演示用固定阶段与示例文本已替换为 Pi 实际推理内容和运行事件；支持减少动态效果，计时器使用实际经过时间。
 
-核对日期：2026-09-15。使用官方文档、发布注册表和安装包自带源码作为依据。项目中的演示状态已移除，连接、模型、工具和会话数据均来自 Pi。
+核对日期：2026-09-18。使用官方文档、发布注册表和安装包自带源码作为依据。项目中的演示状态已移除，连接、模型、工具和会话数据均来自 Pi。
 
 | 编号 | 官方来源 | 已读取 / 核对的内容 | 实现位置 |
 | --- | --- | --- | --- |
@@ -17,6 +17,7 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 | P2 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md | SessionManager.list(cwd)、SessionInfo、会话树 | 原生会话索引 |
 | P3 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md | registerCommand、getAllTools、getActiveTools、setActiveTools、setLabel、ctx.navigateTree、waitForIdle | `gui-extension.ts` |
 | P4 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md 和 settings.md | 模型定义、reasoning 开关、动态可用 thinking levels、默认模型与 thinking | 复用已有 Pi 配置；GUI 不硬编码支持的 effort |
+| P5 | Pi 0.85.1 安装包 `examples/extensions/subagent/` | 独立 Pi 进程、JSON 事件、并行调度、取消与用量聚合的官方扩展示例 | `resources/subagents/` 的执行基础；Orbit 另加持久 RPC、父子通信和状态树 |
 | R1 | https://react.dev/reference/react | React hooks 与组件生命周期 | React 组件；事件订阅有清理 |
 | A1 | https://www.assistant-ui.com/docs/runtimes/custom/external-store.md | ExternalStoreRuntime、自有状态、convertMessage、onNew/onCancel | `Chat.tsx` |
 | A2 | https://www.assistant-ui.com/docs/primitives/thread.md | Root / Viewport / Messages 的 children render function、ScrollToBottom | `Chat.tsx` |
@@ -34,7 +35,7 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 
 Pi 的远端 main 分支会继续变化，因此实现同时核对了 **0.85.1 安装包**里的 docs/rpc.md、docs/sdk.md、docs/extensions.md、dist/modes/rpc/rpc-types.d.ts 和 dist/core/messages.d.ts；`src/lib/protocol.ts` 的回归测试覆盖这些实际结构。
 
-2026-09-15 再次核对 npm registry、GitHub 标签和上游 `main`：最新正式版仍为 **0.85.1**（标签提交 `d981de1229ef899957bbe968bc8dcda02a21f477`），正式 RPC 仍为 33 个且类型结构未变。`main` 的未发布 API 与 GUI 影响记录在 [CAPABILITIES.md](CAPABILITIES.md#上游未发布-api2026-09-15)；项目不把不可复现的分支提交冒充正式 SDK 更新。
+2026-09-18 再次核对 npm registry、GitHub 标签和上游 `main`：最新正式版仍为 **0.85.1**（标签提交 `d981de1229ef899957bbe968bc8dcda02a21f477`），正式 RPC 仍为 33 个且类型结构未变。`main` 的未发布 API 与 GUI 影响记录在 [CAPABILITIES.md](CAPABILITIES.md#上游未发布-api2026-09-18)；项目不把不可复现的分支提交冒充正式 SDK 更新。
 
 依赖精确版本与注册表 URL 保存在 `versions.json`。Bun 与 Cargo 的锁文件用于复现，不能用“包名相同”推断它们版本号应相同。Tauri CLI、JS API、Rust crate 各自发布。
 

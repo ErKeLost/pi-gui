@@ -6,12 +6,15 @@
       "name": "orbit",
       "dependencies": {
         "@base-ui/react": "^1.8.0",
+        "@dicebear/bottts": "9.4.2",
+        "@dicebear/core": "9.4.2",
         "@earendil-works/pi-coding-agent": "0.85.1",
         "@fontsource-variable/inter": "^5.3.0",
         "@fontsource/dm-mono": "^5.3.0",
         "@fontsource/inter": "^5.3.0",
         "@iconify-json/catppuccin": "^1.2.17",
         "@iconify-json/devicon": "^1.2.64",
+        "@iconify-json/fluent-color": "1.2.21",
         "@iconify-json/ph": "1.2.2",
         "@iconify-json/vscode-icons": "1.2.77",
         "@iconify/react": "6.0.2",
@@ -218,6 +221,10 @@
 
     "@cacheable/utils": ["@cacheable/utils@2.5.0", "", { "dependencies": { "hashery": "^1.5.1", "keyv": "^5.6.0" } }, "sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA=="],
 
+    "@dicebear/bottts": ["@dicebear/bottts@9.4.2", "", { "peerDependencies": { "@dicebear/core": "^9.0.0" } }, "sha512-tsx+dII7EFUCVA8URj66G1GqORCCVduCAx4dY2prEY2IeFianVpkntXuFsWZ9BBGx1NZFndvDith5oTwKMQPbQ=="],
+
+    "@dicebear/core": ["@dicebear/core@9.4.2", "", { "dependencies": { "@types/json-schema": "^7.0.15" } }, "sha512-MF0042+Z3s8PGZKZLySfhft28bUa3B1iq0e5NSjCvY8gfMi5aIH/iRJGRJa1N9Jz1BNkxYb4yvJ/N9KO8Z6Y+w=="],
+
     "@dnd-kit/accessibility": ["@dnd-kit/accessibility@3.1.1", "", { "dependencies": { "tslib": "^2.0.0" }, "peerDependencies": { "react": ">=16.8.0" } }, "sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw=="],
 
     "@dnd-kit/core": ["@dnd-kit/core@6.3.1", "", { "dependencies": { "@dnd-kit/accessibility": "^3.1.1", "@dnd-kit/utilities": "^3.2.2", "tslib": "^2.0.0" }, "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-xkGBRQQab4RLwgXxoqETICr6S5JlogafbhNsidmrkVv2YRs5MLwpjoF2qpiGjQt8S9AoxtIV603s0GIUpY5eYQ=="],
@@ -383,6 +390,8 @@
     "@iconify-json/catppuccin": ["@iconify-json/catppuccin@1.2.17", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-l1pFOADEUlw+j7V+yfFzBowdE4deeMuI4amqfKaN+7uTI9B0Ho24C86DitQk5zb62NkEM9poOyfuG7WS2bw6jg=="],
 
     "@iconify-json/devicon": ["@iconify-json/devicon@1.2.64", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-Q8LSueQOGu61gMhjErC+8UxdtEQSX1r1JowBYJQt3z1QTJNhN5vpg1HImmKYjQSpWKYW/ccEPCQkEeD71H+Vmg=="],
+
+    "@iconify-json/fluent-color": ["@iconify-json/fluent-color@1.2.21", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-VETjGx7BMpVsCR3HV5g5t6oBGZ92XKzIRClS5xUvDn1YHAkQTF9OyF/aFdtxYOC8JROoI1SNO/Ql6jZeK7mroA=="],
 
     "@iconify-json/ph": ["@iconify-json/ph@1.2.2", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-PgkEZNtqa8hBGjHXQa4pMwZa93hmfu8FUSjs/nv4oUU6yLsgv+gh9nu28Kqi8Fz9CCVu4hj1MZs9/60J57IzFw=="],
 

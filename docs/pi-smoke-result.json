@@ -1,12 +1,14 @@
 {
-  "checkedAt": "2026-09-15T14:11:54.788Z",
+  "checkedAt": "2026-09-18T07:51:03.032Z",
   "results": [
     "SDK live context and compaction configuration",
-    "state: openrouter/anthropic/claude-opus-4 / high",
+    "state: active model and thinking level returned",
     "current model returned by Pi model catalog",
     "current thinking level returned by Pi capability API",
     "GUI extension: tool inventory",
     "GUI extension: active tools update",
+    "GUI extension: multi-agent tools enabled",
+    "GUI extension: multi-agent tools disabled",
     "real Bash execution through RPC",
     "commands enumerated"
   ]
