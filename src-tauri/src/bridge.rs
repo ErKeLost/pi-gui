@@ -18,7 +18,23 @@ struct Worker {
     cwd: PathBuf,
 }
 #[derive(Default)]
-pub struct Bridge(Mutex<HashMap<String, Worker>>);
+pub struct Bridge(Arc<Mutex<HashMap<String, Worker>>>);
+fn remove_worker_if_current(
+    workers: &Mutex<HashMap<String, Worker>>,
+    project: &str,
+    child: &Arc<Mutex<Child>>,
+) -> bool {
+    let Ok(mut workers) = workers.lock() else {
+        return false;
+    };
+    let current = workers
+        .get(project)
+        .is_some_and(|worker| Arc::ptr_eq(&worker.child, child));
+    if current {
+        workers.remove(project);
+    }
+    current
+}
 impl Bridge {
     pub fn send(&self, project: &str, command: Value) -> Result<(), String> {
         if !command.is_object() || command.get("type").and_then(Value::as_str).is_none() {
@@ -1149,13 +1165,21 @@ pub async fn pi_connect(
                 }
             }
         });
+        let workers = state.0.clone();
+        let watched_child = child.clone();
+        let watched_id = id.clone();
+        let exit_app = app.clone();
         thread::spawn(move || loop {
-            let status = child
+            let status = watched_child
                 .lock()
                 .ok()
                 .and_then(|mut c| c.try_wait().ok().flatten());
             if let Some(status) = status {
-                let _ = on_event.send(json!({"kind":"exit","code":status.code()}));
+                let removed = remove_worker_if_current(&workers, &watched_id, &watched_child);
+                if removed {
+                    crate::remote::publish_connection_closed(&exit_app, &watched_id);
+                    let _ = on_event.send(json!({"kind":"exit","code":status.code()}));
+                }
                 break;
             }
             thread::sleep(Duration::from_millis(150));
@@ -1170,8 +1194,9 @@ pub fn pi_send(project: String, command: Value, state: State<'_, Bridge>) -> Res
     state.send(&project, command)
 }
 #[tauri::command]
-pub fn pi_disconnect(project: String, state: State<'_, Bridge>) {
+pub fn pi_disconnect(app: AppHandle, project: String, state: State<'_, Bridge>) {
     state.stop_project(&project);
+    crate::remote::publish_connection_closed(&app, &project);
 }
 #[tauri::command]
 pub async fn list_sessions(app: AppHandle, cwd: String) -> Result<Value, String> {
@@ -1429,5 +1454,34 @@ mod tests {
         assert!(b_child.lock().unwrap().try_wait().unwrap().is_none());
         bridge.stop();
         assert!(b_child.lock().unwrap().try_wait().unwrap().is_some());
+    }
+
+    #[test]
+    fn stale_exit_cannot_remove_a_replacement_worker() {
+        let bridge = Bridge::default();
+        let first = worker();
+        let first_child = first.child.clone();
+        bridge.0.lock().unwrap().insert("same".into(), first);
+        let replacement = worker();
+        let replacement_child = replacement.child.clone();
+        bridge.0.lock().unwrap().insert("same".into(), replacement);
+
+        assert!(!remove_worker_if_current(&bridge.0, "same", &first_child));
+        assert!(bridge.0.lock().unwrap().contains_key("same"));
+        assert!(remove_worker_if_current(
+            &bridge.0,
+            "same",
+            &replacement_child
+        ));
+        assert!(!bridge.0.lock().unwrap().contains_key("same"));
+
+        if let Ok(mut child) = first_child.lock() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        if let Ok(mut child) = replacement_child.lock() {
+            let _ = child.kill();
+            let _ = child.wait();
+        };
     }
 }

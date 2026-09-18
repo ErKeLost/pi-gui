@@ -7,6 +7,7 @@
 export const REMOTE_PROTOCOL = "orbit.remote.v1" as const
 
 export type RemoteJson = string | number | boolean | null | RemoteJson[] | { [key: string]: RemoteJson }
+export type RemoteTheme = "light" | "dark"
 
 export type RemoteHostOperation =
   | { name: "session.list"; cwd: string }
@@ -22,13 +23,15 @@ export type RemoteRequest =
   | { type: "pi.command"; requestId?: string; project: string; command: Record<string, RemoteJson> }
 
 export type RemoteConnection = { id: string; cwd: string }
-export type RemoteHostSnapshot = { protocol: typeof REMOTE_PROTOCOL; serverTime: number; connections: RemoteConnection[] }
+export type RemoteHostSnapshot = { protocol: typeof REMOTE_PROTOCOL; serverTime: number; theme?: RemoteTheme; machineName?: string; connections: RemoteConnection[] }
 
 export type RemoteEvent =
-  | { type: "host.hello"; protocol: typeof REMOTE_PROTOCOL; hostId: string; serverTime: number }
+  | { type: "host.hello"; protocol: typeof REMOTE_PROTOCOL; hostId: string; serverTime: number; theme?: RemoteTheme; machineName?: string }
+  | { type: "host.theme"; theme: RemoteTheme; serverTime: number }
   | { type: "host.pong"; requestId?: string; serverTime: number }
   | { type: "pi.event"; project: string; payload: RemoteJson }
   | { type: "pi.events"; project: string; payloads: RemoteJson[] }
+  | { type: "connection.closed"; project: string }
   | { type: "connection.invalidated"; project: string; command: string }
   | { type: "remote.result"; requestId?: string; ok: boolean; result?: RemoteJson; error?: string }
   | { type: "remote.error"; requestId?: string; error: string }
@@ -41,6 +44,15 @@ function record(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown): value is string {
   return typeof value === "string" && value.length > 0
+}
+
+export function isRemoteTheme(value: unknown): value is RemoteTheme {
+  return value === "light" || value === "dark"
+}
+
+export function isRemoteHostSnapshot(value: unknown): value is RemoteHostSnapshot {
+  if (!record(value) || value.protocol !== REMOTE_PROTOCOL || typeof value.serverTime !== "number" || (value.theme !== undefined && !isRemoteTheme(value.theme)) || (value.machineName !== undefined && !stringValue(value.machineName)) || !Array.isArray(value.connections)) return false
+  return value.connections.every(connection => record(connection) && stringValue(connection.id) && stringValue(connection.cwd))
 }
 
 export function isRemoteHostOperation(value: unknown): value is RemoteHostOperation {
@@ -67,13 +79,17 @@ export function isRemoteEvent(value: unknown): value is RemoteEvent {
   const requestId = value.requestId === undefined || typeof value.requestId === "string"
   switch (value.type) {
     case "host.hello":
-      return value.protocol === REMOTE_PROTOCOL && stringValue(value.hostId) && typeof value.serverTime === "number"
+      return value.protocol === REMOTE_PROTOCOL && stringValue(value.hostId) && typeof value.serverTime === "number" && (value.theme === undefined || isRemoteTheme(value.theme)) && (value.machineName === undefined || stringValue(value.machineName))
+    case "host.theme":
+      return isRemoteTheme(value.theme) && typeof value.serverTime === "number"
     case "host.pong":
       return requestId && typeof value.serverTime === "number"
     case "pi.event":
       return stringValue(value.project) && value.payload !== undefined
     case "pi.events":
       return stringValue(value.project) && Array.isArray(value.payloads)
+    case "connection.closed":
+      return stringValue(value.project)
     case "connection.invalidated":
       return stringValue(value.project) && stringValue(value.command)
     case "remote.result":

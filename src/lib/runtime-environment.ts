@@ -15,6 +15,9 @@ function isRuntimeEnvironment(value: unknown): value is RuntimeEnvironment {
 }
 
 export async function detectRuntimeEnvironment(): Promise<RuntimeEnvironment | { target: "browser"; platform: "browser" }> {
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("preview") === "mobile") {
+    return { target: "mobile", platform: "preview" }
+  }
   if (!isTauri()) return { target: "browser", platform: "browser" }
   const environment: unknown = await invoke("runtime_environment")
   if (!isRuntimeEnvironment(environment)) throw new Error("Orbit 返回了无效的运行环境")

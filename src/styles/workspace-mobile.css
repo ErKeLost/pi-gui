@@ -26,6 +26,7 @@
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: contain;
   border-color: var(--border);
   background: var(--background);
   color: var(--foreground);
@@ -109,6 +110,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .workspace-drawer-left,
@@ -127,7 +129,28 @@
 }
 
 .workspace-drawer .sidebar {
-  padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;
+  padding: 10px max(8px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)) !important;
+}
+
+/* Drawer rows share one inset and radius. Desktop sidebar selectors otherwise
+   leave different gutters around navigation, projects and session selection. */
+.workspace-drawer :is(.new-session, .nav-item, .sidebar-project-row, .recent-session-row) {
+  border-radius: 8px !important;
+}
+
+.workspace-drawer .sidebar-project-groups {
+  gap: 2px;
+}
+
+.workspace-drawer :is(.sidebar-project-main, .recent-session-main, .recent-session-delete):focus-visible {
+  outline: 2px solid var(--sidebar-ring);
+  outline-offset: -2px;
+}
+
+/* When a concrete session is selected, it owns the selected surface. The
+   parent project remains expanded without producing a second highlighted row. */
+.workspace-drawer .sidebar-project-group.active:has(.recent-session-row.active) > [data-slot="context-menu-trigger"] > .sidebar-project-row {
+  background: transparent;
 }
 
 .workspace-drawer .inspector {
@@ -406,8 +429,20 @@
     padding-left: max(8px, env(safe-area-inset-left));
   }
 
+  .workspace-drawer button,
+  .narrow-workspace .settings-nav-item {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   .workspace-drawer :is(.new-session, .nav-item, .sidebar-project-main) {
-    min-height: 44px;
+    min-height: 44px !important;
+  }
+
+  .workspace-drawer-close {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
   }
 
   .workspace-drawer .sidebar-project-sessions .recent-session-main {
@@ -419,6 +454,25 @@
     height: 40px;
     opacity: .72;
     pointer-events: auto;
+  }
+
+  /* Touch browsers can retain :hover after a tap. Keep selected/focus states,
+     but clear hover-only paint so rows do not appear doubly selected. */
+  .workspace-drawer .nav-item:not(.selected):hover,
+  .workspace-drawer .sidebar-project-group:not(.active) .sidebar-project-row:hover,
+  .workspace-drawer .sidebar-project-sessions .recent-session-row:not(.active):hover,
+  .narrow-workspace .settings-nav-item:not(.selected):hover {
+    background: transparent !important;
+  }
+
+  .workspace-drawer .nav-item:not(.selected):hover,
+  .workspace-drawer .sidebar-project-sessions .recent-session-row:not(.active):hover .recent-session-main,
+  .narrow-workspace .settings-nav-item:not(.selected):hover {
+    color: var(--muted-foreground) !important;
+  }
+
+  .workspace-drawer .sidebar-project-group.active:has(.recent-session-row.active) > [data-slot="context-menu-trigger"] > .sidebar-project-row:hover {
+    background: transparent !important;
   }
 }
 

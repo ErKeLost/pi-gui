@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core"
-import { REMOTE_PROTOCOL } from "./remote-protocol"
+import { REMOTE_PROTOCOL, type RemoteTheme } from "./remote-protocol"
 
 export type RemoteHostInfo = {
   running: true
@@ -10,6 +10,8 @@ export type RemoteHostInfo = {
   port: number
   token: string
   pairingUri: string
+  machineName: string
+  connectedClients: number
 }
 
 export function startRemoteHost(options: { bindAddress?: string; port?: number } = {}): Promise<RemoteHostInfo> {
@@ -25,4 +27,9 @@ export function getRemoteHost(): Promise<RemoteHostInfo | null> {
 
 export function stopRemoteHost(): Promise<void> {
   return invoke<void>("remote_host_stop")
+}
+
+/** Desktop-only source of truth for the theme mirrored to mobile clients. */
+export function setRemoteHostTheme(theme: RemoteTheme): Promise<void> {
+  return invoke<void>("remote_host_set_theme", { theme })
 }

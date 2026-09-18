@@ -1,4 +1,4 @@
-import { FolderClosed } from "lucide-react";
+import { FolderClosed, LoaderCircle, WifiOff } from "lucide-react";
 import { Button } from "../UI";
 import { Icon } from "../Icon";
 import { useWorkspace } from "../../lib/store";
@@ -23,6 +23,8 @@ type WorkspaceTitlebarProps = {
 
 export function WorkspaceTitlebar({ variant, sidebarOpen, onToggleSidebar, title, rawTitle, showMenu }: WorkspaceTitlebarProps) {
   const dragRef = useWindowDrag();
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
+  const connection = useWorkspace(state => state.connection);
   const showNavigation = variant === "sidebar" || variant === "full" || (variant === "workspace" && !sidebarOpen);
   const showContent = variant === "workspace" || variant === "full";
   const className = variant === "workspace" && !sidebarOpen
@@ -34,6 +36,7 @@ export function WorkspaceTitlebar({ variant, sidebarOpen, onToggleSidebar, title
     {showContent && <>
       <FolderClosed className="app-header-folder" strokeWidth={1.7} aria-hidden="true" />
       <strong className="app-header-title" title={rawTitle || title}>{title}</strong>
+      {runtimeTarget === "mobile" && connection !== "online" && <span className="titlebar-remote-status" aria-live="polite">{connection === "connecting" ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <WifiOff aria-hidden="true" />}{connection === "connecting" ? "正在重连电脑" : "电脑已断开"}</span>}
       {showMenu && <Button className="titlebar-button app-header-more" title="会话管理" onClick={() => useWorkspace.getState().set({ panel: "settings", settingsPage: "sessions" })}><Icon name="dots-three" /></Button>}
     </>}
   </header>;

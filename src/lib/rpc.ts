@@ -255,7 +255,9 @@ export async function connectRemoteConnection(connection:{id:string;cwd:string},
  localStorage.setItem('pi-gui.cwd',connection.cwd)
  localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
  localStorage.setItem(REMOTE_CONNECTION_KEY,connection.id)
- if(connections.has(connection.id)&&current(connection.id).connection==='online'){activateConnection(connection.id,connection.cwd);return}
+ // A cached online snapshot does not prove that the current WebSocket is
+ // attached to this project. Always attach and rehydrate after switching or
+ // reconnecting so events cannot keep flowing from a previously selected id.
  await startConnection(connection.cwd,connection.id)
 }
 export async function setMultiAgentMode(enabled:boolean){
@@ -269,6 +271,7 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
  if(!native&&!mobileRuntime())throw new Error('请在桌面应用中选择项目')
  if(mobileRuntime()){
   const snapshot=await remoteHostSnapshot(),connection=snapshot.connections.find(item=>item.cwd===cwd)
+  if(snapshot.theme||snapshot.machineName)useWorkspace.getState().set({...snapshot.theme?{remoteTheme:snapshot.theme}:{},...snapshot.machineName?{remoteMachineName:snapshot.machineName}:{}})
   if(!connection)throw new Error('电脑端没有这个项目的活动连接')
   await connectRemoteConnection(connection,workspaceMode)
   return

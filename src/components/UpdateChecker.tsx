@@ -1,8 +1,11 @@
 import { useEffect } from "react"
-import { isTauri } from "@tauri-apps/api/core"
+import { invoke, isTauri } from "@tauri-apps/api/core"
+import { getVersion } from "@tauri-apps/api/app"
 import { gooeyToast } from "goey-toast"
+import { useWorkspace } from "../lib/store"
+import { checkMobileUpdate, type MobileUpdate } from "../lib/mobile-update"
 
-let started = false
+const started = new Set<string>()
 
 async function installUpdate(update: import("@tauri-apps/plugin-updater").Update) {
   try {
@@ -23,10 +26,44 @@ async function installUpdate(update: import("@tauri-apps/plugin-updater").Update
   }
 }
 
+async function installMobileUpdate(update: MobileUpdate) {
+  const installation = invoke("mobile_update_install", {
+    url: update.downloadUrl,
+    version: update.version,
+  })
+  gooeyToast.promise(installation, {
+    loading: "正在下载 Android 更新",
+    success: "下载完成，请在系统界面确认安装",
+    error: "Android 更新安装失败",
+    showTimestamp: false,
+  })
+  await installation
+}
+
 export function UpdateChecker() {
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget)
   useEffect(() => {
-    if (started || import.meta.env.DEV || !isTauri()) return
-    started = true
+    if ((runtimeTarget !== "desktop" && runtimeTarget !== "mobile") || started.has(runtimeTarget) || import.meta.env.DEV || !isTauri()) return
+    started.add(runtimeTarget)
+
+    if (runtimeTarget === "mobile") {
+      void getVersion()
+        .then(checkMobileUpdate)
+        .then(update => {
+          if (!update) return
+          gooeyToast.info(`发现 Orbit ${update.version}`, {
+            description: update.body,
+            duration: Infinity,
+            showTimestamp: false,
+            action: {
+              label: "下载并安装",
+              onClick: () => void installMobileUpdate(update),
+            },
+          })
+        })
+        .catch(() => undefined)
+      return
+    }
 
     void import("@tauri-apps/plugin-updater")
       .then(({ check }) => check())
@@ -43,7 +80,7 @@ export function UpdateChecker() {
         })
       })
       .catch(() => undefined)
-  }, [])
+  }, [runtimeTarget])
 
   return null
 }

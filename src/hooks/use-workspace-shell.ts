@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useProjects } from "../lib/projects";
 import { changeSession, connect, connectRemoteConnection, dispatchRemoteEvent, loadMessages, report } from "../lib/rpc";
 import { detectRuntimeEnvironment } from "../lib/runtime-environment";
-import { openRemoteRuntime, storedPairingUri } from "../lib/remote-runtime";
+import { openRemoteRuntime, remoteHostSnapshot, storedPairingUri } from "../lib/remote-runtime";
+import type { RemoteConnection, RemoteHostSnapshot } from "../lib/remote-protocol";
 import { useWorkspace } from "../lib/store";
 
 type Discovery = { pi: string; node: string; version: string; cwd: string; home: string };
@@ -12,34 +13,74 @@ let runtimeStarted = false;
 
 type PairingState = { uri: string; required: boolean; connecting: boolean; error: string | null };
 
+function preferredRemoteConnection(snapshot: RemoteHostSnapshot, connectionId?: string, cwd?: string): RemoteConnection | undefined {
+  return snapshot.connections.find(item => item.id === connectionId)
+    ?? snapshot.connections.find(item => item.cwd === cwd)
+    ?? snapshot.connections[0];
+}
+
 export function useWorkspaceBootstrap() {
   const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const [pairing, setPairing] = useState<PairingState>(() => ({ uri: storedPairingUri(), required: false, connecting: false, error: null }));
   const [remoteRevision, setRemoteRevision] = useState(0);
+  const remoteReady = useRef(false);
+  const recoveringRemote = useRef(false);
   const discovery = useQuery({
     queryKey: ["discovery"],
     queryFn: () => invoke<Discovery>("discover"),
     enabled: runtimeTarget === "desktop",
   });
 
+  const recoverRemote = useCallback(async () => {
+    if (recoveringRemote.current) return;
+    recoveringRemote.current = true;
+    try {
+      const workspace = useWorkspace.getState();
+      const snapshot = await remoteHostSnapshot();
+      if (snapshot.theme || snapshot.machineName) useWorkspace.getState().set({ ...(snapshot.theme ? { remoteTheme: snapshot.theme } : {}), ...(snapshot.machineName ? { remoteMachineName: snapshot.machineName } : {}) });
+      const savedId = localStorage.getItem("orbit.remote.connection.v1") ?? workspace.connectionId;
+      const connection = preferredRemoteConnection(snapshot, savedId, workspace.cwd);
+      if (!connection) throw new Error("电脑端当前没有可用的 Pi 连接，请先在电脑打开工作区");
+      useProjects.getState().add(snapshot.connections.map(item => item.cwd));
+      await connectRemoteConnection(connection, workspace.workspaceMode);
+      setPairing(current => ({ ...current, connecting: false, required: false, error: null }));
+      setRemoteRevision(value => value + 1);
+    } catch (error) {
+      const message = String(error instanceof Error ? error.message : error);
+      useWorkspace.getState().set({ connection: "offline", error: message });
+      setPairing(current => ({ ...current, connecting: false, required: true, error: message }));
+    } finally {
+      recoveringRemote.current = false;
+    }
+  }, []);
+
   const attachRemote = useCallback(async (uri: string) => {
+    remoteReady.current = false;
     setPairing(current => ({ ...current, uri, connecting: true, required: true, error: null }));
     try {
       const snapshot = await openRemoteRuntime(uri, {
         onPiEvent: dispatchRemoteEvent,
         onEvent: event => {
+          if ((event.type === "host.theme" || event.type === "host.hello") && event.theme) useWorkspace.getState().set({ remoteTheme: event.theme });
+          if (event.type === "host.hello" && event.machineName) useWorkspace.getState().set({ remoteMachineName: event.machineName });
           if (event.type === "connection.invalidated") void loadMessages(event.project).catch(report);
-        },
-        onState: state => {
-          if (state === "offline" && useWorkspace.getState().runtimeTarget === "mobile") {
-            useWorkspace.getState().set({ connection: "offline", error: "电脑连接已断开" });
-            setPairing(current => ({ ...current, required: true, connecting: false, error: "电脑连接已断开" }));
+          if (event.type === "connection.closed" && event.project === useWorkspace.getState().connectionId) {
+            useWorkspace.getState().set({ connection: "connecting", error: null });
+            void recoverRemote();
           }
         },
-        onError: error => useWorkspace.getState().set({ error: error.message }),
+        onState: state => {
+          if (useWorkspace.getState().runtimeTarget !== "mobile" || !remoteReady.current) return;
+          if (state === "online") { void recoverRemote(); return; }
+          useWorkspace.getState().set({ connection: "connecting", error: null });
+          setPairing(current => ({ ...current, required: false, connecting: true, error: null }));
+        },
+        onError: error => { if (!remoteReady.current) useWorkspace.getState().set({ error: error.message }); },
       });
+      remoteReady.current = true;
+      if (snapshot.theme || snapshot.machineName) useWorkspace.getState().set({ ...(snapshot.theme ? { remoteTheme: snapshot.theme } : {}), ...(snapshot.machineName ? { remoteMachineName: snapshot.machineName } : {}) });
       const savedId = localStorage.getItem("orbit.remote.connection.v1");
-      const connection = snapshot.connections.find(item => item.id === savedId) ?? snapshot.connections[0];
+      const connection = preferredRemoteConnection(snapshot, savedId ?? undefined, useWorkspace.getState().cwd);
       if (!connection) throw new Error("电脑端当前没有可用的 Pi 连接，请先在电脑打开工作区");
       useWorkspace.getState().set({ runtimeTarget: "mobile", cwd: connection.cwd, connectionId: connection.id, workspaceMode: "project", error: null });
       useProjects.getState().add(snapshot.connections.map(item => item.cwd));
@@ -49,7 +90,7 @@ export function useWorkspaceBootstrap() {
     } catch (error) {
       setPairing(current => ({ ...current, connecting: false, required: true, error: String(error instanceof Error ? error.message : error) }));
     }
-  }, []);
+  }, [recoverRemote]);
 
   useEffect(() => {
     if (runtimeStarted) return;
@@ -58,7 +99,8 @@ export function useWorkspaceBootstrap() {
       useWorkspace.getState().set({ runtimeTarget: environment.target });
       if (environment.target === "mobile") {
         const uri = storedPairingUri();
-        if (uri) void attachRemote(uri);
+        const preview = environment.platform === "preview";
+        if (uri && !preview) void attachRemote(uri);
         else setPairing(current => ({ ...current, required: true }));
       }
     }).catch(report);

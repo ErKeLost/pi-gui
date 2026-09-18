@@ -17,10 +17,15 @@ release assets and `latest.json` to be signed with the configured public key. Th
 signing private key is stored only in the GitHub repository secrets
 `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
-The Android ARM64 APK is uploaded as `orbit-android-arm64-v0.2.15.apk`. It is a
+The Android ARM64 APK is uploaded as `orbit-android-arm64-<tag>.apk`. It is a
 signed Tauri mobile client and uses the desktop Orbit Host for Pi execution over
 a token-authenticated trusted-LAN/Tailscale WebSocket. It is not a standalone
 Pi runtime.
+
+The official Tauri updater is desktop-only. Orbit's Android client checks the
+latest GitHub release, downloads the matching signed ARM64 APK, and opens the
+system installer. Android still requires user confirmation. Releases must retain
+the same package identifier and signing key.
 
 To release a version, keep `package.json`, `src-tauri/Cargo.toml`, and
 `src-tauri/tauri.conf.json` aligned, commit the version bump, then push its tag:

@@ -37,7 +37,7 @@ the current in-memory pairing token. Treat the pairing URI as a secret.
 
 ## Install and use the Android build
 
-1. Download `orbit-android-arm64-v0.2.15.apk` from the Orbit GitHub Release and
+1. Download `orbit-android-arm64-<tag>.apk` from the Orbit GitHub Release and
    open it on an ARM64 Android phone. If Android asks, allow the browser or file
    manager to install an unknown app. The release APK is signed so later Orbit
    releases using the same upload key can update it.
@@ -54,6 +54,13 @@ the current in-memory pairing token. Treat the pairing URI as a secret.
 The phone does not start Pi or access the computer filesystem locally. If the
 computer Host is stopped, the phone returns to the pairing screen. Start Host
 again and pair with the newly generated URI.
+
+Theme ownership follows the same boundary: the desktop resolved light/dark
+theme is included in the Host snapshot and broadcast to connected phones when
+it changes. Mobile shows the theme as read-only “跟随电脑”; it never sends its
+local theme preference back to the Host. Older Hosts without the optional theme
+field remain connectable and simply leave the phone on its current theme until
+the next themed event.
 
 ## Android toolchain
 
@@ -77,6 +84,23 @@ The Android release is signed with a private upload keystore. The keystore and
 `keystore.properties` stay outside Git; a debug APK can be installed for local
 testing, while a signed release APK can be installed over time and upgraded by
 the same signing key.
+
+Tauri's official updater plugin does not support Android or iOS. Orbit therefore
+checks its signed GitHub release APK itself on Android, downloads it with Android's
+system download manager, and opens the system package installer. Android always
+requires the user to confirm a sideloaded update; silent installation is reserved
+for managed devices and app stores. The package identifier and signing key must
+stay the same for Android to accept the APK as an update.
+
+The canonical Android launcher assets live in `src-tauri/icons/android`. Tauri's
+generated Gradle project keeps a separate resource copy, so `bun run tauri android
+...` synchronizes those assets before builds. After running `tauri android init`
+directly, run `bun run icons:android` before building.
+
+For a browser-only layout preview, run `bun run dev` and open
+`http://127.0.0.1:5173/?preview=mobile`. This preview renders the pairing screen
+without connecting to a Host; the signed APK is required for device camera and
+Android install behavior.
 
 ## Sources
 

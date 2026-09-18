@@ -1,10 +1,13 @@
 mod bridge;
+mod mobile_update;
 mod remote;
 mod runtime;
 use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(mobile_update::init());
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     let builder = builder.on_web_content_process_terminate(|webview| {
         let _ = webview.reload();
@@ -41,9 +44,11 @@ pub fn run() {
             bridge::delete_session,
             bridge::session_turn_durations,
             bridge::open_pi_terminal,
+            mobile_update::mobile_update_install,
             remote::remote_host_start,
             remote::remote_host_status,
-            remote::remote_host_stop
+            remote::remote_host_stop,
+            remote::remote_host_set_theme
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

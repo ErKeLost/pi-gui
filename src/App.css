@@ -1924,6 +1924,15 @@ body,
 .sidebar { background: var(--sidebar) !important; border-color: var(--sidebar-border) !important; }
 .chat-toolbar { border-color: var(--border) !important; }
 .composer.studio-composer { background: var(--card) !important; border-color: var(--border) !important; }
+.light .composer.studio-composer,
+html[data-theme="light"] .composer.studio-composer {
+  border-color: color-mix(in oklch, var(--foreground) 18%, var(--border)) !important;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 5%, transparent);
+}
+.light .composer.studio-composer:focus-within,
+html[data-theme="light"] .composer.studio-composer:focus-within {
+  border-color: color-mix(in oklch, var(--foreground) 28%, var(--border)) !important;
+}
 .composer.studio-composer .composer-input { background: var(--background) !important; border-color: var(--border) !important; color: var(--foreground) !important; }
 .composer.studio-composer .composer-input::placeholder { color: var(--muted-foreground) !important; }
 .composer.studio-composer .composer-selectors [data-slot="select-trigger"] { background: var(--secondary) !important; border-color: var(--border) !important; color: var(--secondary-foreground) !important; }

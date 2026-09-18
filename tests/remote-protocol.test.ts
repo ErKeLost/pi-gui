@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { decodeRemoteMessage, encodeRemoteMessage, isRemoteEvent, isRemoteRequest, parsePairingUri, remoteWebSocketUrl, REMOTE_PROTOCOL } from "../src/lib/remote-protocol"
+import { decodeRemoteMessage, encodeRemoteMessage, isRemoteEvent, isRemoteHostSnapshot, isRemoteRequest, parsePairingUri, remoteWebSocketUrl, REMOTE_PROTOCOL } from "../src/lib/remote-protocol"
 
 describe("remote protocol", () => {
   test("round trips a Pi command without interpreting its payload", () => {
@@ -21,8 +21,21 @@ describe("remote protocol", () => {
 
   test("validates batched Pi events", () => {
     expect(isRemoteEvent({ type: "pi.events", project: "/workspace/demo", payloads: [{ type: "message_update" }] })).toBe(true)
+    expect(isRemoteEvent({ type: "connection.closed", project: "/workspace/demo" })).toBe(true)
+    expect(isRemoteEvent({ type: "host.hello", protocol: REMOTE_PROTOCOL, hostId: "desktop", serverTime: 1, theme: "dark" })).toBe(true)
+    expect(isRemoteEvent({ type: "host.hello", protocol: REMOTE_PROTOCOL, hostId: "desktop", serverTime: 1, theme: "system" })).toBe(false)
     expect(isRemoteEvent({ type: "host.hello", protocol: "old", hostId: "desktop", serverTime: 1 })).toBe(false)
     expect(decodeRemoteMessage('{"type":"unknown"}')).toBeNull()
+  })
+
+  test("carries the desktop theme in snapshots and one-way host events", () => {
+    expect(isRemoteHostSnapshot({ protocol: REMOTE_PROTOCOL, serverTime: 1, theme: "dark", connections: [] })).toBe(true)
+    expect(isRemoteHostSnapshot({ protocol: REMOTE_PROTOCOL, serverTime: 1, machineName: "studio", connections: [] })).toBe(true)
+    expect(isRemoteHostSnapshot({ protocol: REMOTE_PROTOCOL, serverTime: 1, connections: [] })).toBe(true)
+    expect(isRemoteHostSnapshot({ protocol: REMOTE_PROTOCOL, serverTime: 1, theme: "system", connections: [] })).toBe(false)
+    expect(isRemoteEvent({ type: "host.theme", theme: "light", serverTime: 2 })).toBe(true)
+    expect(isRemoteEvent({ type: "host.theme", theme: "system", serverTime: 2 })).toBe(false)
+    expect(decodeRemoteMessage('{"type":"host.theme","theme":"dark","serverTime":3}')).toEqual({ type: "host.theme", theme: "dark", serverTime: 3 })
   })
 
   test("supports discovery and explicit connection attachment", () => {

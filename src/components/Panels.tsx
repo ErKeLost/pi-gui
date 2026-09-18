@@ -9,12 +9,14 @@ const CommandsPanel = lazy(() => import("./panels/CommandsPanel").then(module =>
 const ChangesPanel = lazy(() => import("./panels/ChangesPanel").then(module => ({ default: module.ChangesPanel })));
 const PiToolsPanel = lazy(() => import("./panels/PiToolsPanel").then(module => ({ default: module.PiToolsPanel })));
 const ConsolePanel = lazy(() => import("./panels/ConsolePanel").then(module => ({ default: module.ConsolePanel })));
+const MobileAccessPanel = lazy(() => import("./panels/MobileAccessPanel").then(module => ({ default: module.MobileAccessPanel })));
 
 function panelComponent(panel: PanelName) {
   if (panel === "sessions") return <SessionsPanel />;
   if (panel === "tree") return <TreePanel />;
   if (panel === "commands") return <CommandsPanel />;
   if (panel === "settings") return <SettingsPanel />;
+  if (panel === "mobile-access") return <MobileAccessPanel />;
   if (panel === "changes") return <ChangesPanel />;
   if (panel === "pi-tools") return <PiToolsPanel />;
   return <ConsolePanel />;

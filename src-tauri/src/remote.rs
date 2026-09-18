@@ -9,6 +9,14 @@ use serde_json::Value;
 
 pub const PROTOCOL: &str = "orbit.remote.v1";
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RemoteTheme {
+    #[default]
+    Light,
+    Dark,
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "name")]
 enum RemoteHostOperation {
@@ -33,11 +41,13 @@ pub struct RemoteHostInfo {
     pub port: u16,
     pub token: String,
     pub pairing_uri: String,
+    pub machine_name: String,
+    pub connected_clients: usize,
 }
 
 #[cfg(desktop)]
 mod desktop {
-    use super::{RemoteHostInfo, PROTOCOL};
+    use super::{RemoteHostInfo, RemoteTheme, PROTOCOL};
     use crate::bridge::Bridge;
     use serde_json::{json, Value};
     use std::{
@@ -80,16 +90,65 @@ mod desktop {
         events: SyncSender<PiBroadcast>,
     }
 
-    #[derive(Default)]
-    pub struct RemoteHost(Mutex<Option<RunningHost>>);
+    pub struct RemoteHost {
+        running: Mutex<Option<RunningHost>>,
+        theme: Mutex<RemoteTheme>,
+    }
+
+    impl Default for RemoteHost {
+        fn default() -> Self {
+            Self {
+                running: Mutex::new(None),
+                theme: Mutex::new(RemoteTheme::default()),
+            }
+        }
+    }
 
     impl RemoteHost {
         fn info(&self) -> Option<RemoteHostInfo> {
-            self.0.lock().ok()?.as_ref().map(|host| host.info.clone())
+            let slot = self.running.lock().ok()?;
+            let host = slot.as_ref()?;
+            let mut info = host.info.clone();
+            info.connected_clients = host
+                .clients
+                .lock()
+                .map(|clients| clients.len())
+                .unwrap_or(0);
+            Some(info)
+        }
+
+        fn theme(&self) -> RemoteTheme {
+            self.theme.lock().map(|theme| *theme).unwrap_or_default()
+        }
+
+        fn set_theme(&self, theme: RemoteTheme) {
+            let changed = self.theme.lock().is_ok_and(|mut current| {
+                if *current == theme {
+                    false
+                } else {
+                    *current = theme;
+                    true
+                }
+            });
+            if !changed {
+                return;
+            }
+            let clients = self
+                .running
+                .lock()
+                .ok()
+                .and_then(|slot| slot.as_ref().map(|host| host.clients.clone()));
+            if let Some(clients) = clients {
+                broadcast_all(
+                    &clients,
+                    json!({"type":"host.theme","theme":theme,"serverTime":unix_millis()})
+                        .to_string(),
+                );
+            }
         }
 
         pub fn stop(&self) {
-            if let Ok(mut slot) = self.0.lock() {
+            if let Ok(mut slot) = self.running.lock() {
                 if let Some(host) = slot.take() {
                     host.stop.store(true, Ordering::Release);
                     host.clients.lock().ok().map(|mut clients| clients.clear());
@@ -98,7 +157,9 @@ mod desktop {
         }
 
         pub fn publish(&self, project: &str, payload: &Value) {
-            let Ok(slot) = self.0.lock() else { return };
+            let Ok(slot) = self.running.lock() else {
+                return;
+            };
             let Some(host) = slot.as_ref() else { return };
             let _ = host.events.try_send(PiBroadcast {
                 project: project.to_owned(),
@@ -115,6 +176,21 @@ mod desktop {
                 project: project.to_owned(),
                 payload: serde_json::json!({"type":"connection.invalidated","project":project,"command":payload.get("command").and_then(Value::as_str).unwrap_or_default()}),
             });
+            }
+        }
+
+        pub fn publish_connection_closed(&self, project: &str) {
+            let clients = self
+                .running
+                .lock()
+                .ok()
+                .and_then(|slot| slot.as_ref().map(|host| host.clients.clone()));
+            if let Some(clients) = clients {
+                broadcast(
+                    &clients,
+                    project,
+                    json!({"type":"connection.closed","project":project}).to_string(),
+                );
             }
         }
     }
@@ -174,6 +250,27 @@ mod desktop {
         format!("orbit://pair?host={address}&port={port}&token={token}&protocol={PROTOCOL}")
     }
 
+    fn machine_name() -> String {
+        if let Ok(value) = std::env::var("COMPUTERNAME") {
+            if !value.trim().is_empty() {
+                return value.trim().to_owned();
+            }
+        }
+        if let Ok(output) = std::process::Command::new("scutil")
+            .args(["--get", "LocalHostName"])
+            .output()
+        {
+            let value = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            if !value.is_empty() {
+                return value;
+            }
+        }
+        std::env::var("HOSTNAME")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "Orbit Desktop".into())
+    }
+
     fn broadcast(clients: &Clients, project: &str, frame: String) {
         let Ok(mut clients) = clients.lock() else {
             return;
@@ -190,6 +287,16 @@ mod desktop {
                 Ok(()) => true,
                 Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => false,
             }
+        });
+    }
+
+    fn broadcast_all(clients: &Clients, frame: String) {
+        let Ok(mut clients) = clients.lock() else {
+            return;
+        };
+        clients.retain(|_, client| match client.sender.try_send(frame.clone()) {
+            Ok(()) => true,
+            Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => false,
         });
     }
 
@@ -321,6 +428,8 @@ mod desktop {
                 Ok(json!({
                     "protocol": PROTOCOL,
                     "serverTime": unix_millis(),
+                    "theme": app.state::<RemoteHost>().theme(),
+                    "machineName": app.state::<RemoteHost>().info().map(|info| info.machine_name).unwrap_or_else(|| "Orbit Desktop".into()),
                     "connections": app.state::<Bridge>().connections(),
                 })),
             ),
@@ -421,7 +530,7 @@ mod desktop {
         let _ = socket
             .get_mut()
             .set_read_timeout(Some(SOCKET_POLL_INTERVAL));
-        let _ = socket.send(Message::text(json!({"type":"host.hello","protocol":PROTOCOL,"hostId":host_id,"serverTime":unix_millis()}).to_string()));
+        let _ = socket.send(Message::text(json!({"type":"host.hello","protocol":PROTOCOL,"hostId":host_id,"serverTime":unix_millis(),"theme":app.state::<RemoteHost>().theme(),"machineName":app.state::<RemoteHost>().info().map(|info| info.machine_name).unwrap_or_else(|| "Orbit Desktop".into())}).to_string()));
         let client_id = Uuid::new_v4();
         let (outbound, incoming) = mpsc::sync_channel::<String>(CLIENT_QUEUE_CAPACITY);
         let attached = Arc::new(Mutex::new(HashSet::new()));
@@ -495,6 +604,8 @@ mod desktop {
             port: local.port(),
             pairing_uri: pairing_uri(&advertised_address, local.port(), &token),
             token: token.clone(),
+            machine_name: machine_name(),
+            connected_clients: 0,
         };
         let stop = Arc::new(AtomicBool::new(false));
         let clients = Arc::new(Mutex::new(HashMap::new()));
@@ -524,7 +635,7 @@ mod desktop {
                 }
             }
         });
-        let mut slot = state.0.lock().map_err(|error| error.to_string())?;
+        let mut slot = state.running.lock().map_err(|error| error.to_string())?;
         *slot = Some(RunningHost {
             info: info.clone(),
             stop,
@@ -542,8 +653,16 @@ mod desktop {
         state.stop();
     }
 
+    pub(super) fn set_theme(theme: RemoteTheme, state: State<'_, RemoteHost>) {
+        state.set_theme(theme);
+    }
+
     pub(super) fn publish(app: &AppHandle, project: &str, payload: &Value) {
         app.state::<RemoteHost>().publish(project, payload);
+    }
+
+    pub(super) fn publish_connection_closed(app: &AppHandle, project: &str) {
+        app.state::<RemoteHost>().publish_connection_closed(project);
     }
 
     #[cfg(test)]
@@ -566,6 +685,37 @@ mod desktop {
             assert_eq!(
                 pairing_uri("192.168.1.5", 17777, "abc"),
                 "orbit://pair?host=192.168.1.5&port=17777&token=abc&protocol=orbit.remote.v1"
+            );
+        }
+
+        #[test]
+        fn theme_is_retained_before_the_host_starts() {
+            let host = RemoteHost::default();
+            assert_eq!(host.theme(), RemoteTheme::Light);
+            host.set_theme(RemoteTheme::Dark);
+            assert_eq!(host.theme(), RemoteTheme::Dark);
+            host.stop();
+            assert_eq!(host.theme(), RemoteTheme::Dark);
+        }
+
+        #[test]
+        fn theme_broadcast_reaches_clients_before_project_attachment() {
+            let (sender, receiver) = mpsc::sync_channel(1);
+            let clients = Arc::new(Mutex::new(HashMap::from([(
+                Uuid::new_v4(),
+                Client {
+                    sender,
+                    projects: Arc::new(Mutex::new(HashSet::new())),
+                },
+            )])));
+            broadcast_all(
+                &clients,
+                json!({"type":"host.theme","theme":"dark"}).to_string(),
+            );
+            let frame = receiver.try_recv().expect("theme frame");
+            assert_eq!(
+                serde_json::from_str::<Value>(&frame).unwrap()["theme"],
+                "dark"
             );
         }
     }
@@ -626,9 +776,24 @@ pub fn remote_host_stop(state: tauri::State<'_, RemoteHost>) {
     }
 }
 
+#[tauri::command]
+pub fn remote_host_set_theme(theme: RemoteTheme, state: tauri::State<'_, RemoteHost>) {
+    #[cfg(desktop)]
+    desktop::set_theme(theme, state);
+    #[cfg(mobile)]
+    let _ = (theme, state);
+}
+
 pub fn publish_pi_event(app: &tauri::AppHandle, project: &str, payload: &Value) {
     #[cfg(desktop)]
     desktop::publish(app, project, payload);
     #[cfg(mobile)]
     let _ = (app, project, payload);
+}
+
+pub fn publish_connection_closed(app: &tauri::AppHandle, project: &str) {
+    #[cfg(desktop)]
+    desktop::publish_connection_closed(app, project);
+    #[cfg(mobile)]
+    let _ = (app, project);
 }

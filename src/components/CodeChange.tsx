@@ -1,5 +1,6 @@
 import {Component,useMemo,useState,type ReactNode} from 'react'
 import {PatchDiff,MultiFileDiff,File} from '@pierre/diffs/react'
+import {useTheme} from 'next-themes'
 import type {Change} from '../lib/changes'
 import {Button} from './UI'
 class DiffBoundary extends Component<{children:ReactNode;fallback:string},{failed:boolean}>{
@@ -8,9 +9,11 @@ class DiffBoundary extends Component<{children:ReactNode;fallback:string},{faile
 }
 export function CodeChange({change}:{change:Change}){
  const [style,setStyle]=useState<'unified'|'split'>('unified')
- const options=useMemo(()=>({diffStyle:style,theme:'pierre-dark' as const,overflow:'scroll' as const}),[style])
+ const {resolvedTheme}=useTheme()
+ const diffTheme=resolvedTheme==='light'?('pierre-light' as const):('pierre-dark' as const)
+ const options=useMemo(()=>({diffStyle:style,theme:diffTheme,overflow:'scroll' as const}),[diffTheme,style])
  const oldFile=useMemo(()=>({name:change.name,contents:change.kind==='snippet'?change.before:''}),[change])
  const newFile=useMemo(()=>({name:change.name,contents:change.kind==='snippet'?change.after:change.kind==='file'?change.contents:''}),[change])
  const fallback=change.kind==='patch'?change.patch:change.kind==='snippet'?change.after:change.contents
- return <div className="code-change"><div className="diff-toolbar"><span>{change.kind==='snippet'?'替换片段（不是完整文件）':change.kind==='file'?'写入内容':change.name}</span>{change.kind!=='file'&&<Button onClick={()=>setStyle(s=>s==='split'?'unified':'split')}>{style==='split'?'切换统一视图':'切换并排视图'}</Button>}</div><DiffBoundary fallback={fallback}>{change.kind==='patch'?<PatchDiff patch={change.patch} options={options}/>:change.kind==='snippet'?<MultiFileDiff oldFile={oldFile} newFile={newFile} options={options}/>:<File file={newFile} options={{theme:'pierre-dark',overflow:'scroll'}}/>}</DiffBoundary></div>
+ return <div className="code-change"><div className="diff-toolbar"><span>{change.kind==='snippet'?'替换片段（不是完整文件）':change.kind==='file'?'写入内容':change.name}</span>{change.kind!=='file'&&<Button onClick={()=>setStyle(s=>s==='split'?'unified':'split')}>{style==='split'?'切换统一视图':'切换并排视图'}</Button>}</div><DiffBoundary fallback={fallback}>{change.kind==='patch'?<PatchDiff patch={change.patch} options={options}/>:change.kind==='snippet'?<MultiFileDiff oldFile={oldFile} newFile={newFile} options={options}/>:<File file={newFile} options={{theme:diffTheme,overflow:'scroll'}}/>}</DiffBoundary></div>
 }

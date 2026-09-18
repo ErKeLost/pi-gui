@@ -1,4 +1,4 @@
-name: Release desktop app
+name: Release Orbit
 
 on:
   push:
@@ -8,6 +8,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -65,10 +69,85 @@ jobs:
           tauriScript: bun run tauri
           tagName: v__VERSION__
           releaseName: Orbit v__VERSION__
-          releaseBody: Signed installers for macOS, Linux, and Windows. Linux auto-updates use the signed AppImage artifact.
+          releaseBody: Signed installers for macOS, Linux, Windows, and Android. Linux auto-updates use the signed AppImage artifact.
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+
+  android:
+    name: Android ARM64
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "ndk;29.0.13846066"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.13846066" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.13846066" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Restore Android signing key
+        env:
+          ORBIT_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORBIT_ANDROID_KEYSTORE_BASE64 }}
+          ORBIT_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORBIT_ANDROID_KEYSTORE_PASSWORD }}
+          ORBIT_ANDROID_KEY_ALIAS: ${{ secrets.ORBIT_ANDROID_KEY_ALIAS }}
+        run: |
+          test -n "$ORBIT_ANDROID_KEYSTORE_BASE64" || { echo "Missing ORBIT_ANDROID_KEYSTORE_BASE64" >&2; exit 1; }
+          test -n "$ORBIT_ANDROID_KEYSTORE_PASSWORD" || { echo "Missing ORBIT_ANDROID_KEYSTORE_PASSWORD" >&2; exit 1; }
+          test -n "$ORBIT_ANDROID_KEY_ALIAS" || { echo "Missing ORBIT_ANDROID_KEY_ALIAS" >&2; exit 1; }
+          key_path="$RUNNER_TEMP/orbit-android-release.jks"
+          printf '%s' "$ORBIT_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$key_path"
+          cat > src-tauri/gen/android/keystore.properties <<EOF
+          password=$ORBIT_ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ORBIT_ANDROID_KEY_ALIAS
+          storeFile=$key_path
+          EOF
+
+      - name: Build signed Android APK
+        run: bun run tauri android build --target aarch64 --apk
+
+      - name: Stage Android APK
+        run: cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk "orbit-android-arm64-${GITHUB_REF_NAME}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orbit-android-arm64-${{ github.ref_name }}
+          path: orbit-android-arm64-${{ github.ref_name }}.apk
+          if-no-files-found: error
+
+      - name: Upload Android APK to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          asset="orbit-android-arm64-${tag}.apk"
+          for attempt in $(seq 1 60); do
+            if gh release view "$tag" >/dev/null 2>&1; then break; fi
+            sleep 10
+          done
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Orbit $tag" --generate-notes
+          gh release upload "$tag" "$asset" --clobber

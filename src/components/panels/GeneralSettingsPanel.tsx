@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useTheme } from "next-themes";
 import { gooeyToast } from "goey-toast";
-import { Eye, EyeOff, LoaderCircle } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, ScanLine } from "lucide-react";
+import QRCode from "antd/es/qr-code";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
 import { connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
@@ -39,6 +40,12 @@ function SettingRow({ title, description, children, className = "" }: { title: s
 
 function ThemeSettings() {
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
+  const remoteTheme = useWorkspace(state => state.remoteTheme);
+  if (runtimeTarget === "mobile") {
+    const current = remoteTheme === "dark" ? "当前为深色" : remoteTheme === "light" ? "当前为浅色" : "等待电脑主题";
+    return <SettingRow title="跟随电脑" description="手机主题由当前连接的电脑控制，电脑切换主题后会自动同步。"><span className="remote-settings-note" aria-live="polite">{current}</span></SettingRow>;
+  }
   const preference = theme ?? "system";
   const label = preference === "system" ? "跟随系统" : resolvedTheme === "dark" ? "深色主题" : "浅色主题";
   return <SettingRow title={label} description="默认跟随系统设置，也可以固定使用浅色或深色主题。"><div className="theme-settings-controls"><Select aria-label="主题" value={preference} onChange={event => setTheme(event.target.value)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select><ModeToggle /></div></SettingRow>;
@@ -92,20 +99,33 @@ function DesktopHostSettings() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<"start" | "stop" | null>(null);
   const [revealed, setRevealed] = useState(false);
+  const [showQr, setShowQr] = useState(true);
+  const [connectionFeedback, setConnectionFeedback] = useState("");
+  const previousClients = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    void getRemoteHost()
-      .then(info => { if (mounted) setHost(info); })
-      .catch(report)
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
+    const refreshHost = () => void getRemoteHost().then(info => {
+      if (!mounted) return;
+      const clients = info?.connectedClients ?? 0;
+      if (previousClients.current !== null && clients !== previousClients.current) {
+        setConnectionFeedback(clients > previousClients.current ? `手机已连接 · 当前 ${clients} 台` : "手机已断开");
+      }
+      previousClients.current = clients;
+      setHost(info);
+      setShowQr(true);
+    }).catch(report).finally(() => { if (mounted) setLoading(false); });
+    refreshHost();
+    const timer = window.setInterval(refreshHost, 2000);
+    return () => { mounted = false; window.clearInterval(timer); };
   }, []);
 
   async function start() {
     setBusy("start");
     try {
       const info = await startRemoteHost();
+      previousClients.current = info.connectedClients;
+      setConnectionFeedback("");
       setHost(info);
       gooeyToast.success("移动访问已开启", { description: remoteAddress(info), showTimestamp: false });
     } catch (error) {
@@ -120,7 +140,10 @@ function DesktopHostSettings() {
     try {
       await stopRemoteHost();
       setHost(null);
+      previousClients.current = null;
+      setConnectionFeedback("");
       setRevealed(false);
+      setShowQr(false);
       gooeyToast.success("移动访问已关闭", { showTimestamp: false });
     } catch (error) {
       report(error);
@@ -140,16 +163,21 @@ function DesktopHostSettings() {
   }
 
   const statusLabel = loading ? "正在读取" : host ? "已开启" : "未开启";
+  const connectedLabel = host ? (host.connectedClients > 0 ? `手机已连接 · ${host.connectedClients}` : "等待手机连接") : "";
   return <>
     <SettingRow title="电脑 Host" description="让同一局域网中的手机连接这台电脑，并使用这里运行的 Pi。">
       <div className="remote-host-control">
-        <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}</span>
+        <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}{host && <small>{connectedLabel}</small>}</span>
         {host
           ? <Button variant="outline" disabled={Boolean(busy)} onClick={() => void stop()}>{busy === "stop" && <LoaderCircle className="animate-spin" />}关闭</Button>
           : <Button variant="default" disabled={loading || Boolean(busy)} onClick={() => void start()}>{busy === "start" && <LoaderCircle className="animate-spin" />}开启</Button>}
       </div>
     </SettingRow>
     {host && <div className="remote-host-details">
+      <div className="remote-host-detail">
+        <span>电脑</span>
+        <strong className="remote-host-machine">{host.machineName}</strong>
+      </div>
       <div className="remote-host-detail">
         <span>连接地址</span>
         <code title={remoteAddress(host)}>{remoteAddress(host)}</code>
@@ -160,14 +188,17 @@ function DesktopHostSettings() {
         <div className="remote-host-detail-actions">
           <Button variant="ghost" size="icon" title={revealed ? "隐藏配对链接" : "显示配对链接"} aria-pressed={revealed} onClick={() => setRevealed(value => !value)}>{revealed ? <EyeOff /> : <Eye />}</Button>
           <Button variant="ghost" size="icon" title="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
+          <Button variant="ghost" size="icon" title={showQr ? "隐藏二维码" : "显示二维码"} aria-pressed={showQr} onClick={() => setShowQr(value => !value)}><ScanLine /></Button>
         </div>
       </div>
+      {showQr && <div className="remote-host-qr"><QRCode value={host.pairingUri} size={176} bordered={false} color="var(--foreground)" bgColor="var(--card)" /><span>用手机 Orbit 扫描此二维码</span></div>}
+      {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
       <p className="remote-host-security"><Icon name="shield-check" />配对链接包含访问凭据，请只发送到自己的设备。</p>
     </div>}
   </>;
 }
 
-function MobileAccessSettings() {
+export function MobileAccessSettings() {
   const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const connection = useWorkspace(state => state.connection);
   if (runtimeTarget === "desktop") return <DesktopHostSettings />;
