@@ -7,6 +7,7 @@ import { Inspector } from "../Inspector";
 import { Panel } from "../Panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../ui/resizable";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import { WorkspaceInspectorDrawer } from "./WorkspaceDrawer";
 import { WorkspaceTitlebar } from "./WorkspaceTitlebar";
 
 type WorkspaceLayoutProps = {
@@ -18,34 +19,38 @@ type WorkspaceLayoutProps = {
   rawTitle: string;
   liveSessions: LiveSession[];
   currentSessionFile?: string;
+  narrow: boolean;
 };
 
 export function WorkspaceLayout(props: WorkspaceLayoutProps) {
-  const { sidebarOpen, onToggleSidebar, online, panel, title, rawTitle, liveSessions, currentSessionFile } = props;
+  const { sidebarOpen, onToggleSidebar, online, panel, title, rawTitle, liveSessions, currentSessionFile, narrow } = props;
   const cwd = useWorkspace(state => state.cwd);
   const connectionId = useWorkspace(state => state.connectionId);
   const inspector = useWorkspace(state => state.inspector);
   const statuses = useWorkspace(state => state.statuses);
-  return <ResizablePanelGroup key="workspace-layout-v4" id="workspace-layout" orientation="horizontal">
-    {sidebarOpen && <>
+  return <>
+    <ResizablePanelGroup key={`workspace-layout-v5-${narrow ? "narrow" : "wide"}`} id="workspace-layout" orientation="horizontal">
+    {!narrow && sidebarOpen && <>
       <ResizablePanel id="sidebar" defaultSize="260px" minSize="220px" maxSize="330px" groupResizeBehavior="preserve-pixel-size">
         <WorkspaceSidebar {...{ sidebarOpen, onToggleSidebar, online, panel, liveSessions, currentSessionFile }} />
       </ResizablePanel>
       <ResizableHandle />
     </>}
-    <ResizablePanel id="workspace" minSize="420px" groupResizeBehavior="preserve-relative-size">
+    <ResizablePanel id="workspace" minSize={narrow ? 0 : "420px"} groupResizeBehavior="preserve-relative-size">
       <section className="workspace">
-        <WorkspaceTitlebar variant="workspace" sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} title={title} rawTitle={rawTitle} showMenu={panel === "chat"} />
+        <WorkspaceTitlebar variant="workspace" sidebarOpen={narrow ? false : sidebarOpen} onToggleSidebar={onToggleSidebar} title={title} rawTitle={rawTitle} showMenu={panel === "chat"} />
         <MetricsSync />
         <div className="work-content"><div className="main-content"><div className="chat-host" hidden={panel !== "chat"}><Chat key={connectionId || cwd} /></div><AnimatePresence mode="wait">{panel !== "chat" && <Panel key={panel} />}</AnimatePresence></div></div>
         {Object.entries(statuses).flatMap(([key, value]) => !key.startsWith("gui-") && value ? [<div key={key} className="extension-status">{key}: {value}</div>] : [])}
       </section>
     </ResizablePanel>
-    {inspector && <>
+    {!narrow && inspector && <>
       <ResizableHandle />
       <ResizablePanel id="inspector" defaultSize="300px" minSize="260px" maxSize="380px" groupResizeBehavior="preserve-pixel-size">
         <section className="inspector-pane"><WorkspaceTitlebar variant="inspector" sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} /><Inspector /></section>
       </ResizablePanel>
     </>}
-  </ResizablePanelGroup>;
+    </ResizablePanelGroup>
+    {narrow && <WorkspaceInspectorDrawer open={inspector} onClose={() => useWorkspace.getState().set({ inspector: false })} />}
+  </>;
 }

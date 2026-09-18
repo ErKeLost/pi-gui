@@ -6,6 +6,8 @@ import type {RpcCommand,RpcResponse} from '@earendil-works/pi-coding-agent'
 import {useWorkspace,type LiveSession,type Workspace,type WorkspaceMode} from './store'
 import {parseAgentSnapshot} from './agents'
 import {emptyTranscript,hydrate,reduceEvent,type Event,type PiMessage,type RpcSessionState,type UiRequest} from './protocol'
+import {attachRemoteConnection,remoteHostSnapshot,runRemoteHostOperation,sendRemotePiCommand} from './remote-runtime'
+import type {RemoteJson} from './remote-protocol'
 export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000,gcTime:120000}}})
 export const native=isTauri()
 export type ProviderModel={
@@ -36,6 +38,7 @@ type Pending={project:string;resolve:(value:unknown)=>void;reject:(error:Error)=
 const SESSION_FILES_KEY='pi-gui.sessionFiles.v1',LEGACY_SESSION_FILES_KEY=['pi-gui','sessionFiles'].join('.')
 const pending=new Map<string,Pending>(),snapshots=new Map<string,Snapshot>(),connections=new Map<string,{token:symbol;cwd:string}>(),projectActive=new Map<string,string>(),sessionOwners=new Map<string,string>(),eventQueues=new Map<string,Event[]>(),flushTimers=new Map<string,ReturnType<typeof setTimeout>>()
 const sessionMetadataPending=new Set<string>()
+const REMOTE_CONNECTION_KEY='orbit.remote.connection.v1'
 const fresh=():Snapshot=>({transcript:emptyTranscript(),telemetry:emptyTelemetry(),state:null,connection:'offline',error:null,draft:'',dialogs:[],notices:[],statuses:{},widgets:{},agents:null})
 function snapshot():Snapshot{const s=useWorkspace.getState();return {transcript:s.transcript,telemetry:s.telemetry,state:s.state,connection:s.connection,error:s.error,draft:s.draft,dialogs:s.dialogs,notices:s.notices,statuses:s.statuses,widgets:s.widgets,agents:s.agents}}
 function route(target=useWorkspace.getState().cwd){return projectActive.get(target)??target}
@@ -94,7 +97,11 @@ function patch(id:string,value:Partial<Snapshot>){
 function failPending(project:string,message:string){for(const [id,p]of pending){if(p.project!==project)continue;clearTimeout(p.timeout);p.reject(new Error(message));pending.delete(id)}}
 function applyEvent(event:Event,project:string){
  if(event.type==='response'){
-  const response=event as unknown as RpcResponse;if(!response.id)return;const p=pending.get(response.id);if(!p||p.project!==project)return
+  const response=event as unknown as RpcResponse;if(!response.id)return;const p=pending.get(response.id)
+  if(!p){
+   if(response.success&&['new_session','switch_session'].includes(String(response.command)))void loadMessages(project).catch(error=>patch(project,{error:String(error)}))
+   return
+  }
   clearTimeout(p.timeout);pending.delete(response.id);if(response.success)p.resolve('data'in response?response.data:undefined);else p.reject(new Error(response.error));return
  }
  const s=current(project)
@@ -132,12 +139,22 @@ function dispatch(event:Event,project:string){
  const queue=eventQueues.get(project)??[];queue.push(event);eventQueues.set(project,queue)
  if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),32))
 }
+export function dispatchRemoteEvent(project:string,payload:unknown){
+ if(!project||typeof payload!=='object'||payload===null||typeof (payload as {type?:unknown}).type!=='string')return
+ dispatch(payload as Event,project)
+}
+function mobileRuntime(){return useWorkspace.getState().runtimeTarget==='mobile'}
+export function desktopRuntime(){return useWorkspace.getState().runtimeTarget==='desktop'}
+function asRemoteCommand(command:Record<string,unknown>){return command as unknown as Record<string,RemoteJson>}
+function sendCommand(project:string,command:Record<string,unknown>){
+ return mobileRuntime()?sendRemotePiCommand(project,asRemoteCommand(command)):invoke('pi_send',{project,command})
+}
 export function request<T=unknown>(command:RpcCommand,timeoutMs=30000,target=useWorkspace.getState().cwd):Promise<T>{
  const id=crypto.randomUUID(),project=route(target)
  return new Promise<T>((resolve,reject)=>{
   const timeout=setTimeout(()=>{pending.delete(id);reject(new Error(`Pi ${command.type} 响应超时`))},timeoutMs)
   pending.set(id,{project,resolve:value=>resolve(value as T),reject,timeout})
-  void invoke('pi_send',{project,command:{...command,id}}).catch(error=>{clearTimeout(timeout);pending.delete(id);reject(new Error(String(error)))})
+  void sendCommand(project,{...command,id}).catch(error=>{clearTimeout(timeout);pending.delete(id);reject(new Error(String(error)))})
  })
 }
 export function report(error:unknown){useWorkspace.getState().set({error:String(error instanceof Error?error.message:error)})}
@@ -147,14 +164,16 @@ export function persistedSessionFile(project:string):string {
 const multiAgentModeCommand=(enabled=useWorkspace.getState().multiAgentEnabled)=>({type:'prompt' as const,message:`/gui-agent-mode ${JSON.stringify({enabled})}`})
 export const syncMultiAgentMode=(target:string,enabled=useWorkspace.getState().multiAgentEnabled)=>request(multiAgentModeCommand(enabled),30000,target)
 export async function refresh(target=useWorkspace.getState().cwd){const id=route(target),state=await request<RpcSessionState>({type:'get_state'},30000,id);patch(id,{state});const cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd;if(state.sessionFile&&projectActive.get(cwd)===id)persistSession(cwd,state.sessionFile);await queryClient.invalidateQueries({queryKey:['pi','live-stats',id]});return state}
-export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
-export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(!native) throw new Error('文件索引需要桌面应用'); return invoke<string[]>('list_project_files',{cwd:project}) }
-export async function listProviderProfiles():Promise<ProviderProfile[]> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<ProviderProfile[]>('list_provider_profiles') }
-export async function probeProviderModels(provider:string,baseUrl:string,api:string,apiKey?:string,authHeader=true,modelsUrl?:string):Promise<{data:ProviderModel[]}> { if(!native) throw new Error('远端模型目录需要桌面应用'); return invoke<{data:ProviderModel[]}>('probe_provider_models',{provider,baseUrl,api,apiKey:apiKey||null,authHeader,modelsUrl:modelsUrl||null}) }
-export async function saveProvider(input:{provider:string;name?:string;baseUrl:string;modelsUrl?:string;api:string;apiKey?:string;authHeader:boolean}):Promise<{id:string;hasApiKey:boolean}> { if(!native) throw new Error('Provider 配置需要桌面应用'); return invoke<{id:string;hasApiKey:boolean}>('save_provider',{provider:input.provider,name:input.name||null,baseUrl:input.baseUrl,modelsUrl:input.modelsUrl||null,api:input.api,apiKey:input.apiKey||null,authHeader:input.authHeader}) }
-export async function deleteSession(sessionPath:string):Promise<void> { if(!native) throw new Error('删除会话需要桌面应用'); return invoke<void>('delete_session',{sessionPath}) }
+export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!desktopRuntime()) throw new Error('模型目录设置请在电脑端修改'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
+export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(mobileRuntime())return runRemoteHostOperation<string[]>({name:'project.files',cwd:project});if(!native)throw new Error('文件索引需要桌面应用');return invoke<string[]>('list_project_files',{cwd:project}) }
+export async function listProviderProfiles():Promise<ProviderProfile[]> { if(!desktopRuntime()) throw new Error('Provider 配置请在电脑端修改'); return invoke<ProviderProfile[]>('list_provider_profiles') }
+export async function probeProviderModels(provider:string,baseUrl:string,api:string,apiKey?:string,authHeader=true,modelsUrl?:string):Promise<{data:ProviderModel[]}> { if(!desktopRuntime()) throw new Error('模型目录设置请在电脑端修改'); return invoke<{data:ProviderModel[]}>('probe_provider_models',{provider,baseUrl,api,apiKey:apiKey||null,authHeader,modelsUrl:modelsUrl||null}) }
+export async function saveProvider(input:{provider:string;name?:string;baseUrl:string;modelsUrl?:string;api:string;apiKey?:string;authHeader:boolean}):Promise<{id:string;hasApiKey:boolean}> { if(!desktopRuntime()) throw new Error('Provider 配置请在电脑端修改'); return invoke<{id:string;hasApiKey:boolean}>('save_provider',{provider:input.provider,name:input.name||null,baseUrl:input.baseUrl,modelsUrl:input.modelsUrl||null,api:input.api,apiKey:input.apiKey||null,authHeader:input.authHeader}) }
+export async function listSessions(project:string){if(mobileRuntime())return runRemoteHostOperation<import('./protocol').Session[]>({name:'session.list',cwd:project});if(!native)return [];return invoke<import('./protocol').Session[]>('list_sessions',{cwd:project})}
+export async function deleteSession(sessionPath:string):Promise<void> { if(mobileRuntime()){await runRemoteHostOperation<null>({name:'session.delete',sessionPath});return}if(!native) throw new Error('删除会话需要桌面应用'); return invoke<void>('delete_session',{sessionPath}) }
 export async function retireSession(sessionPath:string){
  const cwd=useWorkspace.getState().cwd,owner=sessionOwners.get(sessionPath),wasActive=owner?useWorkspace.getState().connectionId===owner:useWorkspace.getState().state?.sessionFile===sessionPath
+ if(mobileRuntime()&&wasActive){await changeSession({type:'new_session'});await deleteSession(sessionPath);sessionOwners.delete(sessionPath);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return}
  if(owner&&connections.has(owner))await closeConnection(owner,'会话已关闭')
  await deleteSession(sessionPath);sessionOwners.delete(sessionPath)
  if(!wasActive)return
@@ -163,19 +182,28 @@ export async function retireSession(sessionPath:string){
  useWorkspace.getState().set({...fresh(),cwd,connectionId:cwd,panel:'chat'})
  await startConnection(cwd,cwd)
 }
-export async function getSessionTurnDurations(sessionPath:string):Promise<Record<string,number>> { if(!native) return {}; return invoke<Record<string,number>>('session_turn_durations',{sessionPath}) }
-export async function syncProviderModels(provider:string):Promise<{provider:string;count:number;previous:number;firstModelId?:string}> { if(!native) throw new Error('同步模型需要桌面应用'); return invoke<{provider:string;count:number;previous:number;firstModelId?:string}>('sync_provider_models',{provider}) }
-export async function persistDefaultModel(provider:string,modelId:string):Promise<{provider:string;id:string}> { if(!native) throw new Error('设置默认模型需要桌面应用'); return invoke<{provider:string;id:string}>('set_default_model',{provider,modelId}) }
+export async function getSessionTurnDurations(sessionPath:string):Promise<Record<string,number>> { if(mobileRuntime())return runRemoteHostOperation<Record<string,number>>({name:'session.turnDurations',sessionPath});if(!native) return {}; return invoke<Record<string,number>>('session_turn_durations',{sessionPath}) }
+export async function syncProviderModels(provider:string):Promise<{provider:string;count:number;previous:number;firstModelId?:string}> { if(!desktopRuntime()) throw new Error('同步模型请在电脑端执行'); return invoke<{provider:string;count:number;previous:number;firstModelId?:string}>('sync_provider_models',{provider}) }
+export async function persistDefaultModel(provider:string,modelId:string):Promise<{provider:string;id:string}> { if(!desktopRuntime()) throw new Error('默认模型请在电脑端设置'); return invoke<{provider:string;id:string}>('set_default_model',{provider,modelId}) }
 export type ProjectTrustMode = 'ask' | 'always' | 'never'
-export async function getProjectTrustMode():Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('get_project_trust_mode') }
-export async function setProjectTrustMode(mode:ProjectTrustMode):Promise<ProjectTrustMode> { if(!native) throw new Error('项目权限设置需要桌面应用'); return invoke<ProjectTrustMode>('set_project_trust_mode',{mode}) }
-export async function loadMessages(target=useWorkspace.getState().cwd){const id=route(target),data=await request<{messages:PiMessage[]}>({type:'get_messages'},30000,id);patch(id,{transcript:hydrate(data.messages)});await refresh(id)}
+export async function getProjectTrustMode():Promise<ProjectTrustMode> { if(!desktopRuntime()) throw new Error('项目权限请在电脑端设置'); return invoke<ProjectTrustMode>('get_project_trust_mode') }
+export async function setProjectTrustMode(mode:ProjectTrustMode):Promise<ProjectTrustMode> { if(!desktopRuntime()) throw new Error('项目权限请在电脑端设置'); return invoke<ProjectTrustMode>('set_project_trust_mode',{mode}) }
+export async function loadMessages(target=useWorkspace.getState().cwd){
+ const id=route(target),data=await request<{messages:PiMessage[]}>({type:'get_messages'},30000,id)
+ patch(id,{transcript:hydrate(data.messages)})
+ const state=await refresh(id),currentTranscript=current(id).transcript
+ if(state.isStreaming||state.isCompacting){
+  const transcript={...currentTranscript,running:state.isStreaming,compacting:state.isCompacting,phase:state.isCompacting?'正在压缩上下文':'正在运行',active:[...currentTranscript.messages].map((item,index)=>item.message.role==='assistant'?index:-1).findLast(index=>index>=0)??-1}
+  patch(id,{transcript})
+ }
+}
 async function closeConnection(id:string,message='连接已关闭'){
  const cwd=connections.get(id)?.cwd,s=current(id)
  if(s.transcript.running){try{await request({type:'clear_queue'},30000,id);await request({type:'abort'},60000,id)}catch{/* process may already be gone */}}
  clearEvents(id);connections.delete(id);failPending(id,message);snapshots.delete(id)
  if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd)
  for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file)
+ if(mobileRuntime()){if(useWorkspace.getState().connectionId===id){useWorkspace.getState().set({connection:'offline',connectionId:''})};syncLiveSessions();return}
  await invoke('pi_disconnect',{project:id}).catch(()=>{});syncLiveSessions()
 }
 function activateConnection(id:string,cwd:string){
@@ -189,6 +217,16 @@ function activateConnection(id:string,cwd:string){
 }
 async function startConnection(cwd:string,id:string,options?:{restoreLast?:boolean;sessionPath?:string}){
  const token=Symbol(id);connections.set(id,{token,cwd});projectActive.set(cwd,id);patch(id,{connection:'connecting',error:null})
+ if(mobileRuntime()){
+  try{
+   await attachRemoteConnection(id)
+   const state=await request<RpcSessionState>({type:'get_state'},45000,id)
+   patch(id,{state})
+   await loadMessages(id)
+   patch(id,{connection:'online'})
+  }catch(error){connections.delete(id);projectActive.delete(cwd);failPending(id,'连接失败');patch(id,{connection:'offline'});throw error}
+  return
+ }
  const onEvent=new Channel<{kind:string;payload?:Event;message?:string;code?:number}>()
  onEvent.onmessage=event=>{
   if(connections.get(id)?.token!==token)return
@@ -209,6 +247,17 @@ async function startConnection(cwd:string,id:string,options?:{restoreLast?:boole
   patch(id,{connection:'online'})
  }catch(error){connections.delete(id);if(projectActive.get(cwd)===id)projectActive.delete(cwd);failPending(id,'连接失败');await invoke('pi_disconnect',{project:id}).catch(()=>{});patch(id,{connection:'offline'});throw error}
 }
+export async function connectRemoteConnection(connection:{id:string;cwd:string},workspaceMode:WorkspaceMode='project'){
+ if(!mobileRuntime())throw new Error('远程 connection 只能在移动端使用')
+ const previous=useWorkspace.getState();if(previous.connectionId&&previous.connectionId!==connection.id)snapshots.set(previous.connectionId,snapshot())
+ projectActive.set(connection.cwd,connection.id)
+ useWorkspace.getState().set({...snapshots.get(connection.id)??fresh(),runtimeTarget:'mobile',cwd:connection.cwd,workspaceMode,connectionId:connection.id})
+ localStorage.setItem('pi-gui.cwd',connection.cwd)
+ localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
+ localStorage.setItem(REMOTE_CONNECTION_KEY,connection.id)
+ if(connections.has(connection.id)&&current(connection.id).connection==='online'){activateConnection(connection.id,connection.cwd);return}
+ await startConnection(connection.cwd,connection.id)
+}
 export async function setMultiAgentMode(enabled:boolean){
  const previous=useWorkspace.getState().multiAgentEnabled
  useWorkspace.getState().set({multiAgentEnabled:enabled});localStorage.setItem('pi-gui.multiAgentEnabled',String(enabled))
@@ -217,7 +266,13 @@ export async function setMultiAgentMode(enabled:boolean){
  catch(error){useWorkspace.getState().set({multiAgentEnabled:previous});localStorage.setItem('pi-gui.multiAgentEnabled',String(previous));throw error}
 }
 export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspace.getState().workspaceMode){
- if(!native)throw new Error('请在桌面应用中选择项目')
+ if(!native&&!mobileRuntime())throw new Error('请在桌面应用中选择项目')
+ if(mobileRuntime()){
+  const snapshot=await remoteHostSnapshot(),connection=snapshot.connections.find(item=>item.cwd===cwd)
+  if(!connection)throw new Error('电脑端没有这个项目的活动连接')
+  await connectRemoteConnection(connection,workspaceMode)
+  return
+ }
  const previous=useWorkspace.getState();if(previous.connectionId)snapshots.set(previous.connectionId,snapshot())
  const id=projectActive.get(cwd)??cwd
  const saved=snapshots.get(id)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode,connectionId:id})
@@ -241,6 +296,15 @@ export async function changeSession(command:RpcCommand){
   if(useWorkspace.getState().state?.sessionFile===command.sessionPath){useWorkspace.getState().set({panel:'chat'});return}
   const owner=sessionOwners.get(command.sessionPath)
   if(owner&&connections.has(owner)){activateConnection(owner,cwd);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return}
+ }
+ if(mobileRuntime()){
+  const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active)
+  if(result?.cancelled)throw new Error('扩展取消了会话切换')
+  patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{},agents:null})
+  if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'})
+  await loadMessages(active)
+  await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
+  return
  }
  if((command.type==='new_session'||command.type==='switch_session')&&running){
   const id=`${cwd}#${crypto.randomUUID()}`
@@ -286,4 +350,4 @@ export async function branchFromMessage(message: PiMessage) {
   } finally { branchingConnections.delete(id) }
  }
 }
-export async function answerDialog(request:UiRequest,answer:{value?:string;confirmed?:boolean;cancelled?:boolean}){const id=useWorkspace.getState().connectionId||route();await invoke('pi_send',{project:id,command:{type:'extension_ui_response',id:request.id,...answer}});patch(id,{dialogs:current(id).dialogs.filter(item=>item.id!==request.id)})}
+export async function answerDialog(request:UiRequest,answer:{value?:string;confirmed?:boolean;cancelled?:boolean}){const id=useWorkspace.getState().connectionId||route();await sendCommand(id,{type:'extension_ui_response',id:request.id,...answer});patch(id,{dialogs:current(id).dialogs.filter(item=>item.id!==request.id)})}

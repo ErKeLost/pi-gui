@@ -3,14 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useTheme } from "next-themes";
 import { gooeyToast } from "goey-toast";
+import { Eye, EyeOff, LoaderCircle } from "lucide-react";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
-import { connect, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
+import { connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
+import { getRemoteHost, startRemoteHost, stopRemoteHost, type RemoteHostInfo } from "../../lib/remote-host";
 import { Button, Input, Select, Switch } from "../UI";
 import { usePrompt } from "../../lib/prompt";
 import { Icon } from "../Icon";
 import { ModeToggle } from "../mode-toggle";
 import { Card, CardContent } from "../ui/card";
+import "../../styles/remote-access.css";
 
 async function applySetting(command: RpcCommand) {
   await request(command);
@@ -45,8 +48,8 @@ function ProjectDirectorySettings({ path, setPath, busy, running, status, onReco
   return <SettingRow title="项目目录" description="Pi 以此目录为工作区，并沿用现有的模型与凭据配置。" className="settings-item-directory"><div className="settings-directory-control"><Input value={path} onChange={event => setPath(event.target.value)} aria-label="工作目录" /><div className="settings-directory-actions"><Button variant="default" disabled={busy || running || !native} onClick={() => void onReconnect()}>{busy ? "连接中…" : "连接"}</Button><Button variant="outline" disabled={status !== "online"} onClick={() => void disconnect().catch(report)}>断开</Button></div></div></SettingRow>;
 }
 
-function TrustSettings({ mode, busy, onChange }: { mode: ProjectTrustMode; busy: boolean; onChange: (mode: ProjectTrustMode) => Promise<void> }) {
-  return <SettingRow title="项目资源信任" description={<>控制是否加载项目本地的设置、扩展、技能和主题。切换后会重启 Pi 连接。</>}><Select aria-label="项目资源信任" disabled={busy || !native} value={mode} onChange={event => void onChange(event.target.value as ProjectTrustMode)}><option value="always">完全访问</option><option value="ask">每次询问</option><option value="never">禁止加载</option></Select></SettingRow>;
+function TrustSettings({ mode, busy, desktop, onChange }: { mode: ProjectTrustMode; busy: boolean; desktop: boolean; onChange: (mode: ProjectTrustMode) => Promise<void> }) {
+  return <SettingRow title="项目资源信任" description={desktop ? "控制是否加载项目本地的设置、扩展、技能和主题。切换后会重启 Pi 连接。" : "项目资源信任由电脑端管理，请在电脑端查看和修改。"}>{desktop ? <Select aria-label="项目资源信任" disabled={busy} value={mode} onChange={event => void onChange(event.target.value as ProjectTrustMode)}><option value="always">完全访问</option><option value="ask">每次询问</option><option value="never">禁止加载</option></Select> : <span className="remote-settings-note">电脑端设置</span>}</SettingRow>;
 }
 
 function ContextSettings({ cwd, status, running, state, onCompact }: { cwd: string; status: string; running: boolean; state: RpcSessionState | null; onCompact: () => Promise<void> }) {
@@ -71,8 +74,104 @@ function ToolsSettings({ tools, running }: { tools: GuiTools; running: boolean }
   return <>{tools.tools.map(tool => <SettingRow key={tool.name} title={tool.name} description={tool.description}><Switch aria-label={tool.name} checked={active.has(tool.name)} disabled={running} onChange={checked => { const next = checked ? [...tools.active, tool.name] : tools.active.filter(name => name !== tool.name); void request({ type: "prompt", message: `/gui-tools-set ${JSON.stringify(next)}` }).catch(report); }} /></SettingRow>)}{!tools.tools.length && <p className="settings-empty-note">连接 Pi 后读取工具列表。</p>}</>;
 }
 
-function TerminalSettings({ cwd }: { cwd: string }) {
-  return <SettingRow title="原生终端环境" description="在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。"><Button variant="outline" disabled={!native || !cwd} onClick={() => void invoke("open_pi_terminal", { cwd, session: null, piArgs: [] }).catch(report)}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
+function TerminalSettings({ cwd, desktop }: { cwd: string; desktop: boolean }) {
+  return <SettingRow title="原生终端环境" description={desktop ? "在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。" : "原生终端需要在电脑端打开。"}><Button variant="outline" disabled={!desktop || !cwd} onClick={() => { if (desktopRuntime()) void invoke("open_pi_terminal", { cwd, session: null, piArgs: [] }).catch(report); }}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
+}
+
+function remoteAddress(host: RemoteHostInfo) {
+  const address = host.advertisedAddress.includes(":") ? `[${host.advertisedAddress}]` : host.advertisedAddress;
+  return `${address}:${host.port}`;
+}
+
+function hiddenPairingUri(uri: string) {
+  return uri.replace(/([?&]token=)[^&]*/i, "$1********");
+}
+
+function DesktopHostSettings() {
+  const [host, setHost] = useState<RemoteHostInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<"start" | "stop" | null>(null);
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    void getRemoteHost()
+      .then(info => { if (mounted) setHost(info); })
+      .catch(report)
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  async function start() {
+    setBusy("start");
+    try {
+      const info = await startRemoteHost();
+      setHost(info);
+      gooeyToast.success("移动访问已开启", { description: remoteAddress(info), showTimestamp: false });
+    } catch (error) {
+      report(error);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function stop() {
+    setBusy("stop");
+    try {
+      await stopRemoteHost();
+      setHost(null);
+      setRevealed(false);
+      gooeyToast.success("移动访问已关闭", { showTimestamp: false });
+    } catch (error) {
+      report(error);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function copyPairingUri() {
+    if (!host) return;
+    try {
+      await navigator.clipboard.writeText(host.pairingUri);
+      gooeyToast.success("配对链接已复制", { showTimestamp: false });
+    } catch (error) {
+      report(error);
+    }
+  }
+
+  const statusLabel = loading ? "正在读取" : host ? "已开启" : "未开启";
+  return <>
+    <SettingRow title="电脑 Host" description="让同一局域网中的手机连接这台电脑，并使用这里运行的 Pi。">
+      <div className="remote-host-control">
+        <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}</span>
+        {host
+          ? <Button variant="outline" disabled={Boolean(busy)} onClick={() => void stop()}>{busy === "stop" && <LoaderCircle className="animate-spin" />}关闭</Button>
+          : <Button variant="default" disabled={loading || Boolean(busy)} onClick={() => void start()}>{busy === "start" && <LoaderCircle className="animate-spin" />}开启</Button>}
+      </div>
+    </SettingRow>
+    {host && <div className="remote-host-details">
+      <div className="remote-host-detail">
+        <span>连接地址</span>
+        <code title={remoteAddress(host)}>{remoteAddress(host)}</code>
+      </div>
+      <div className="remote-host-detail remote-host-pairing">
+        <span>配对链接</span>
+        <code title={revealed ? host.pairingUri : "配对凭据已隐藏"}>{revealed ? host.pairingUri : hiddenPairingUri(host.pairingUri)}</code>
+        <div className="remote-host-detail-actions">
+          <Button variant="ghost" size="icon" title={revealed ? "隐藏配对链接" : "显示配对链接"} aria-pressed={revealed} onClick={() => setRevealed(value => !value)}>{revealed ? <EyeOff /> : <Eye />}</Button>
+          <Button variant="ghost" size="icon" title="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
+        </div>
+      </div>
+      <p className="remote-host-security"><Icon name="shield-check" />配对链接包含访问凭据，请只发送到自己的设备。</p>
+    </div>}
+  </>;
+}
+
+function MobileAccessSettings() {
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
+  const connection = useWorkspace(state => state.connection);
+  if (runtimeTarget === "desktop") return <DesktopHostSettings />;
+  return <SettingRow title="电脑连接" description="移动访问地址和配对凭据由电脑端管理，请在电脑端开启或关闭 Host。"><span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={connection === "online"} />{connection === "online" ? "已连接电脑" : connection === "connecting" ? "正在连接电脑" : "未连接电脑"}</span></SettingRow>;
 }
 
 export function GeneralSettingsPanel() {
@@ -82,6 +181,8 @@ export function GeneralSettingsPanel() {
   const state = useWorkspace(workspace => workspace.state);
   const running = useWorkspace(workspace => workspace.transcript.running);
   const toolStatus = useWorkspace(workspace => workspace.statuses["gui-tools"]);
+  const runtimeTarget = useWorkspace(workspace => workspace.runtimeTarget);
+  const desktop = runtimeTarget === "desktop";
   const [path, setPath] = useState(cwd);
   const [busy, setBusy] = useState(false);
   const [trustMode, setTrustMode] = useState<ProjectTrustMode>("ask");
@@ -95,7 +196,7 @@ export function GeneralSettingsPanel() {
       if (data.commands.some(command => command.name === "gui-tools")) return request({ type: "prompt", message: "/gui-tools" });
     }).catch(report);
   }, [status]);
-  useEffect(() => { if (native) void getProjectTrustMode().then(setTrustMode).catch(report); }, []);
+  useEffect(() => { if (desktop) void getProjectTrustMode().then(setTrustMode).catch(report); }, [desktop]);
 
   async function manualCompact() {
     const instructions = await ask({ title: "压缩说明（可以留空）", multiline: true });
@@ -108,6 +209,7 @@ export function GeneralSettingsPanel() {
     finally { setBusy(false); }
   }
   async function changeTrustMode(mode: ProjectTrustMode) {
+    if (!desktopRuntime()) return;
     setTrustBusy(true);
     try {
       await setProjectTrustMode(mode);
@@ -121,9 +223,10 @@ export function GeneralSettingsPanel() {
   return <>
     <div className="panel-heading"><div><h1><Icon name="gear-six" />常规</h1></div></div>
     <SettingsGroup title="外观" icon="palette"><ThemeSettings /></SettingsGroup>
-    <SettingsGroup title="工作区" icon="folder-simple"><ProjectDirectorySettings path={path} setPath={setPath} busy={busy} running={running} status={status} onReconnect={reconnect} /><TrustSettings mode={trustMode} busy={trustBusy} onChange={changeTrustMode} /></SettingsGroup>
+    <SettingsGroup title="工作区" icon="folder-simple"><ProjectDirectorySettings path={path} setPath={setPath} busy={busy} running={running} status={status} onReconnect={reconnect} /><TrustSettings mode={trustMode} busy={trustBusy} desktop={desktop} onChange={changeTrustMode} /></SettingsGroup>
+    <SettingsGroup title="移动访问" icon="plugs-connected" description={desktop ? "从手机连接到这台电脑。" : "连接运行 Pi 的电脑。"}><MobileAccessSettings /></SettingsGroup>
     <SettingsGroup title="上下文" icon="brain" description="管理当前会话的容量与压缩方式。"><ContextSettings cwd={cwd} status={status} running={running} state={state} onCompact={manualCompact} /></SettingsGroup>
     <SettingsGroup title="消息队列" icon="chats"><QueueSettings status={status} state={state} /></SettingsGroup>
-    <SettingsGroup title="工具与终端" icon="wrench"><ToolsSettings tools={tools} running={running} /><TerminalSettings cwd={cwd} /></SettingsGroup>
+    <SettingsGroup title="工具与终端" icon="wrench"><ToolsSettings tools={tools} running={running} /><TerminalSettings cwd={cwd} desktop={desktop} /></SettingsGroup>
   </>;
 }

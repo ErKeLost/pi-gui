@@ -13,16 +13,16 @@ const ChangesPanel = lazy(() => import("./ChangesPanel").then(module => ({ defau
 const ConsolePanel = lazy(() => import("./ConsolePanel").then(module => ({ default: module.ConsolePanel })));
 const ProviderSettings = lazy(() => import("../ProviderSettings").then(module => ({ default: module.ProviderSettings })));
 
-const settingsGroups: { label: string; items: { id: SettingsPage; label: string; icon: string }[] }[] = [
-  { label: "个人", items: [{ id: "general", label: "常规", icon: "gear-six" }, { id: "providers", label: "Provider", icon: "database" }] },
+const settingsGroups: { label: string; items: { id: SettingsPage; label: string; icon: string; desktopOnly?: boolean }[] }[] = [
+  { label: "个人", items: [{ id: "general", label: "常规", icon: "gear-six" }, { id: "providers", label: "Provider", icon: "database", desktopOnly: true }] },
   { label: "会话", items: [{ id: "sessions", label: "所有会话", icon: "chats" }, { id: "tree", label: "会话树", icon: "tree-structure" }] },
   { label: "高级", items: [{ id: "pi-tools", label: "常用工具", icon: "wrench" }, { id: "changes", label: "代码变更", icon: "code" }, { id: "console", label: "控制台", icon: "terminal-window" }] },
 ];
 
-function SettingsContent({ page }: { page: SettingsPage }) {
+function SettingsContent({ page, desktop }: { page: SettingsPage; desktop: boolean }) {
   let content: ReactNode;
   if (page === "general") content = <GeneralSettingsPanel />;
-  else if (page === "providers") content = <><div className="panel-heading"><div><h1><Icon name="database" />Provider</h1><p>管理模型服务端点、凭据和模型目录。</p></div></div><ProviderSettings /></>;
+  else if (page === "providers") content = desktop ? <><div className="panel-heading"><div><h1><Icon name="database" />Provider</h1><p>管理模型服务端点、凭据和模型目录。</p></div></div><ProviderSettings /></> : <><div className="panel-heading"><div><h1><Icon name="database" />Provider</h1></div></div><div className="empty-panel"><Icon name="desktop" /><h3>请在电脑端管理 Provider</h3><p>Provider 端点和 API Key 保存在运行 Pi 的电脑上。</p></div></>;
   else if (page === "sessions") content = <SessionsPanel />;
   else if (page === "tree") content = <TreePanel />;
   else if (page === "pi-tools") content = <PiToolsPanel />;
@@ -33,6 +33,7 @@ function SettingsContent({ page }: { page: SettingsPage }) {
 
 export function SettingsPanel() {
   const page = useWorkspace(state => state.settingsPage);
+  const desktop = useWorkspace(state => state.runtimeTarget === "desktop");
   const mainRef = useRef<HTMLElement>(null);
   const [search, setSearch] = useState("");
   useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [page]);
@@ -42,8 +43,8 @@ export function SettingsPanel() {
     <aside className="settings-sidebar">
       <Button variant="ghost" size="lg" className="settings-back" onClick={() => useWorkspace.getState().set({ panel: "chat" })}><Icon name="arrow-left" /><span>返回应用</span></Button>
       <label className="settings-search"><Icon name="magnifying-glass" /><Input aria-label="搜索设置" placeholder="搜索设置…" value={search} onChange={event => setSearch(event.target.value)} /></label>
-      <nav aria-label="设置分类">{visibleGroups.map(group => <section key={group.label}><h2>{group.label}</h2>{group.items.map(item => <Button variant="ghost" size="lg" key={item.id} className={`settings-nav-item ${page === item.id ? "selected" : ""}`} aria-current={page === item.id ? "page" : undefined} onClick={() => useWorkspace.getState().set({ settingsPage: item.id })}><Icon name={item.icon} /><span>{item.label}</span></Button>)}</section>)}{!visibleGroups.length && <p className="settings-search-empty">没有匹配的设置</p>}</nav>
+      <nav aria-label="设置分类">{visibleGroups.map(group => <section key={group.label}><h2>{group.label}</h2>{group.items.map(item => { const disabled = Boolean(item.desktopOnly && !desktop); return <Button variant="ghost" size="lg" key={item.id} className={`settings-nav-item ${page === item.id ? "selected" : ""}`} aria-current={page === item.id ? "page" : undefined} disabled={disabled} title={disabled ? "请在电脑端管理" : undefined} onClick={() => useWorkspace.getState().set({ settingsPage: item.id })}><Icon name={item.icon} /><span>{item.label}</span></Button>; })}</section>)}{!visibleGroups.length && <p className="settings-search-empty">没有匹配的设置</p>}</nav>
     </aside>
-    <main ref={mainRef} className="settings-main"><div key={page} className={`settings-content settings-${page}-page`}><SettingsContent page={page} /></div></main>
+    <main ref={mainRef} className="settings-main"><div key={page} className={`settings-content settings-${page}-page`}><SettingsContent page={page} desktop={desktop} /></div></main>
   </div>;
 }

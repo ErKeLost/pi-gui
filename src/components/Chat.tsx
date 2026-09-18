@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useState, type ClipboardEvent a
 import { m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../lib/store";
-import { changeSession, getSessionTurnDurations, native, persistedSessionFile, report } from "../lib/rpc";
+import { changeSession, getSessionTurnDurations, persistedSessionFile, report } from "../lib/rpc";
 import type { AgentNode } from "../lib/agents";
 import { formatTranscriptError, groupDisplayMessages, type Transcript } from "../lib/protocol";
 import type { Telemetry } from "../lib/telemetry";
@@ -106,6 +106,7 @@ function deriveRunStatus(transcript: Transcript, telemetry: Telemetry) {
 
 export function Chat() {
   const project = useWorkspace(state => state.cwd);
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const transcript = useWorkspace(state => state.transcript);
   const telemetry = useWorkspace(state => state.telemetry);
   const agents = useWorkspace(state => state.agents);
@@ -117,7 +118,7 @@ export function Chat() {
   const historicalDurations = useQuery({
     queryKey: ["pi", "turn-durations", sessionFile],
     queryFn: () => getSessionTurnDurations(sessionFile),
-    enabled: native && Boolean(sessionFile),
+    enabled: (runtimeTarget === "desktop" || runtimeTarget === "mobile") && Boolean(sessionFile),
     staleTime: Infinity,
   });
   const savedDurations = useMemo(() => ({

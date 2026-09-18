@@ -37,15 +37,13 @@ button.agent-feed-line:focus-visible { outline: 2px solid var(--ring); outline-o
 
 .agent-feed-avatar {
   display: grid;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   place-items: center;
-  overflow: hidden;
-  border-radius: 50%;
-  background: var(--muted);
+  color: var(--foreground);
 }
 
-.agent-feed-avatar img { display: block; width: 22px; height: 22px; }
+.agent-feed-avatar svg { display: block; width: 20px; height: 20px; }
 
 .agent-feed-copy {
   display: flex;

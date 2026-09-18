@@ -1,0 +1,44 @@
+import { describe, expect, test } from "bun:test"
+import { decodeRemoteMessage, encodeRemoteMessage, isRemoteEvent, isRemoteRequest, parsePairingUri, remoteWebSocketUrl, REMOTE_PROTOCOL } from "../src/lib/remote-protocol"
+
+describe("remote protocol", () => {
+  test("round trips a Pi command without interpreting its payload", () => {
+    const message = { type: "pi.command" as const, requestId: "r1", project: "/workspace/demo", command: { type: "prompt", message: "hello" } }
+    expect(decodeRemoteMessage(encodeRemoteMessage(message))).toEqual(message)
+    expect(isRemoteRequest(message)).toBe(true)
+  })
+
+  test("builds a tokenized websocket endpoint", () => {
+    expect(remoteWebSocketUrl({ host: "192.168.1.8", port: 17890, token: "a b" })).toBe("ws://192.168.1.8:17890/ws?token=a%20b")
+    expect(remoteWebSocketUrl({ host: "2001:db8::8", port: 17890, token: "abc" })).toBe("ws://[2001:db8::8]:17890/ws?token=abc")
+  })
+
+  test("rejects malformed requests", () => {
+    expect(decodeRemoteMessage("{bad")).toBeNull()
+    expect(isRemoteRequest({ type: "pi.command", project: "/tmp", command: "not-object" })).toBe(false)
+    expect(REMOTE_PROTOCOL).toBe("orbit.remote.v1")
+  })
+
+  test("validates batched Pi events", () => {
+    expect(isRemoteEvent({ type: "pi.events", project: "/workspace/demo", payloads: [{ type: "message_update" }] })).toBe(true)
+    expect(isRemoteEvent({ type: "host.hello", protocol: "old", hostId: "desktop", serverTime: 1 })).toBe(false)
+    expect(decodeRemoteMessage('{"type":"unknown"}')).toBeNull()
+  })
+
+  test("supports discovery and explicit connection attachment", () => {
+    expect(isRemoteRequest({ type: "host.snapshot", requestId: "snapshot" })).toBe(true)
+    expect(isRemoteRequest({ type: "connection.attach", requestId: "attach", connectionId: "/workspace/demo" })).toBe(true)
+    expect(isRemoteRequest({ type: "connection.attach", connectionId: "" })).toBe(false)
+  })
+
+  test("parses IPv4 and IPv6 pairing URIs", () => {
+    expect(parsePairingUri("orbit://pair?host=192.168.1.8&port=17890&token=1234567890abcdef&protocol=orbit.remote.v1")).toEqual({ host: "192.168.1.8", port: 17890, token: "1234567890abcdef" })
+    expect(parsePairingUri("orbit://pair?host=2001%3Adb8%3A%3A8&port=443&token=1234567890abcdef&protocol=orbit.remote.v1")).toEqual({ host: "2001:db8::8", port: 443, token: "1234567890abcdef" })
+    expect(() => parsePairingUri("orbit://pair?host=127.0.0.1&port=0&token=short&protocol=old")).toThrow()
+  })
+
+  test("validates typed host operations", () => {
+    expect(isRemoteRequest({ type: "host.operation", operation: { name: "session.list", cwd: "/workspace/demo" } })).toBe(true)
+    expect(isRemoteRequest({ type: "host.operation", operation: { name: "arbitrary.command", cwd: "/workspace/demo" } })).toBe(false)
+  })
+})

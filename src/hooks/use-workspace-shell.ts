@@ -1,23 +1,71 @@
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useProjects } from "../lib/projects";
-import { changeSession, connect, native, report } from "../lib/rpc";
+import { changeSession, connect, connectRemoteConnection, dispatchRemoteEvent, loadMessages, report } from "../lib/rpc";
+import { detectRuntimeEnvironment } from "../lib/runtime-environment";
+import { openRemoteRuntime, storedPairingUri } from "../lib/remote-runtime";
 import { useWorkspace } from "../lib/store";
 
 type Discovery = { pi: string; node: string; version: string; cwd: string; home: string };
-let started = false;
+let runtimeStarted = false;
+
+type PairingState = { uri: string; required: boolean; connecting: boolean; error: string | null };
 
 export function useWorkspaceBootstrap() {
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
+  const [pairing, setPairing] = useState<PairingState>(() => ({ uri: storedPairingUri(), required: false, connecting: false, error: null }));
+  const [remoteRevision, setRemoteRevision] = useState(0);
   const discovery = useQuery({
     queryKey: ["discovery"],
     queryFn: () => invoke<Discovery>("discover"),
-    enabled: native,
+    enabled: runtimeTarget === "desktop",
   });
 
+  const attachRemote = useCallback(async (uri: string) => {
+    setPairing(current => ({ ...current, uri, connecting: true, required: true, error: null }));
+    try {
+      const snapshot = await openRemoteRuntime(uri, {
+        onPiEvent: dispatchRemoteEvent,
+        onEvent: event => {
+          if (event.type === "connection.invalidated") void loadMessages(event.project).catch(report);
+        },
+        onState: state => {
+          if (state === "offline" && useWorkspace.getState().runtimeTarget === "mobile") {
+            useWorkspace.getState().set({ connection: "offline", error: "电脑连接已断开" });
+            setPairing(current => ({ ...current, required: true, connecting: false, error: "电脑连接已断开" }));
+          }
+        },
+        onError: error => useWorkspace.getState().set({ error: error.message }),
+      });
+      const savedId = localStorage.getItem("orbit.remote.connection.v1");
+      const connection = snapshot.connections.find(item => item.id === savedId) ?? snapshot.connections[0];
+      if (!connection) throw new Error("电脑端当前没有可用的 Pi 连接，请先在电脑打开工作区");
+      useWorkspace.getState().set({ runtimeTarget: "mobile", cwd: connection.cwd, connectionId: connection.id, workspaceMode: "project", error: null });
+      useProjects.getState().add(snapshot.connections.map(item => item.cwd));
+      await connectRemoteConnection(connection);
+      setPairing(current => ({ ...current, uri, connecting: false, required: false, error: null }));
+      setRemoteRevision(value => value + 1);
+    } catch (error) {
+      setPairing(current => ({ ...current, connecting: false, required: true, error: String(error instanceof Error ? error.message : error) }));
+    }
+  }, []);
+
   useEffect(() => {
-    if (!discovery.data || started) return;
-    started = true;
+    if (runtimeStarted) return;
+    runtimeStarted = true;
+    void detectRuntimeEnvironment().then(environment => {
+      useWorkspace.getState().set({ runtimeTarget: environment.target });
+      if (environment.target === "mobile") {
+        const uri = storedPairingUri();
+        if (uri) void attachRemote(uri);
+        else setPairing(current => ({ ...current, required: true }));
+      }
+    }).catch(report);
+  }, [attachRemote]);
+
+  useEffect(() => {
+    if (!discovery.data) return;
     useWorkspace.getState().set({ homeDir: discovery.data.home, piVersion: discovery.data.version });
     if (localStorage.getItem("pi-gui.workspaceMode") === "home") {
       void connect(discovery.data.home, "home").catch(report);
@@ -37,6 +85,8 @@ export function useWorkspaceBootstrap() {
   useEffect(() => {
     if (discovery.error) useWorkspace.getState().set({ error: String(discovery.error) });
   }, [discovery.error]);
+
+  return { runtimeTarget, pairing, remoteRevision, setPairingUri: (uri: string) => setPairing(current => ({ ...current, uri, error: null })), connectPairing: attachRemote };
 }
 
 export function useWorkspaceShortcuts(

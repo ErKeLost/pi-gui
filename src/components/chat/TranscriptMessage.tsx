@@ -125,6 +125,7 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
   const progress: ReactNode[] = [];
   const media: ReactNode[] = [];
   const body: ReactNode[] = [];
+  let activityIndex: number | undefined;
   const lastMessage = items.at(-1)?.message;
   // A settled tool request, interrupted answer or error is not a final response.
   const hasFinalResponse = role === "assistant" && !streaming
@@ -138,6 +139,7 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
     const group = pendingTools;
     pendingTools = [];
     progress.push(<ToolActivityGroup key={`${group[0].key}-tools`} toolNames={group.map(({ part }) => part.name ?? tools[part.id ?? ""]?.name ?? "工具")} running={group.some(({ part }) => tools[part.id ?? ""]?.running)}>{group.map(({ part, key, active }) => <PartView key={key} part={part} tools={tools} running={active} thinking={false} />)}</ToolActivityGroup>);
+    if (activityIndex === undefined && group.some(({ part }) => (part.name ?? tools[part.id ?? ""]?.name) === "spawn_agent")) activityIndex = progress.length;
   };
   for (const { part, key, active, messageIndex } of content) {
     if (part.type === "toolCall" && role === "assistant") {
@@ -158,7 +160,7 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
     }
   }
   flushTools();
-  return { progress, media, body, defaultExpanded: !hasFinalResponse };
+  return { progress, media, body, defaultExpanded: !hasFinalResponse, activityIndex };
 }
 
 function responseText(content: ProjectedPart[]) {
@@ -182,10 +184,11 @@ function TranscriptBody({ item, items, nodes, role, streaming, startedAt, elapse
 }) {
   const hasProgress = nodes.progress.length > 0 || Boolean(activity);
   const hasContent = hasProgress || nodes.body.length > 0;
+  const activityIndex = nodes.activityIndex ?? nodes.progress.length;
   return <Message from={role}>
     {nodes.media.length > 0 && <div className="user-message-media">{nodes.media}</div>}
     {hasContent && <MessageContent>
-      {hasProgress && <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} defaultExpanded={nodes.defaultExpanded} startedAt={startedAt} durationMs={elapsedMs}>{nodes.progress}{activity}</ProcessingPanel>}
+      {hasProgress && <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} defaultExpanded={nodes.defaultExpanded} startedAt={startedAt} durationMs={elapsedMs}>{nodes.progress.slice(0, activityIndex)}{activity}{nodes.progress.slice(activityIndex)}</ProcessingPanel>}
       {nodes.body}
     </MessageContent>}
     {text && (role === "user" || !streaming) && <MessageCopyFooter message={items.at(-1)!.message} role={role} text={text} time={role === "user" ? turnTime(items) : null} copied={copied} onCopied={onCopied} />}

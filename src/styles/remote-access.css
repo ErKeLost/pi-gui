@@ -1,0 +1,254 @@
+.remote-host-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.remote-host-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.remote-settings-note {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.remote-host-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border: 1px solid color-mix(in oklch, var(--muted-foreground) 68%, transparent);
+  border-radius: 50%;
+}
+
+.remote-host-status-dot[data-online="true"] {
+  border-color: var(--foreground);
+  background: var(--foreground);
+}
+
+.remote-host-details {
+  border-top: 1px solid var(--border);
+}
+
+.remote-host-detail {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+}
+
+.remote-host-detail + .remote-host-detail {
+  border-top: 1px solid var(--border);
+}
+
+.remote-host-detail > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.remote-host-detail code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font: 500 10.5px/1.5 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-host-pairing {
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+}
+
+.remote-host-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.remote-host-detail-actions [data-slot="button"] {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.remote-host-security {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 1px 18px 13px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.remote-host-security svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.remote-pairing-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  overflow: auto;
+  padding: max(38px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right)) max(30px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.remote-pairing-content {
+  width: min(100%, 420px);
+}
+
+.remote-pairing-emblem {
+  position: relative;
+  width: 55px;
+  height: 55px;
+  margin-bottom: 32px;
+  color: var(--foreground);
+  font: 46px/55px Georgia, serif;
+}
+
+.remote-pairing-emblem > i {
+  position: absolute;
+  right: -5px;
+  bottom: -1px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 2px solid var(--background);
+  border-radius: 50%;
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.remote-pairing-emblem svg {
+  width: 12px;
+  height: 12px;
+}
+
+.remote-pairing-heading > p {
+  margin: 0 0 8px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.remote-pairing-heading h1 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 560;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.remote-pairing-heading > span {
+  display: block;
+  margin-top: 11px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.remote-pairing-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.remote-pairing-form > label {
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.remote-pairing-form [data-slot="input"] {
+  height: 43px;
+  border-radius: var(--radius-lg);
+  padding-inline: 12px;
+  font: 11px/1.5 var(--font-mono);
+}
+
+.remote-pairing-form [data-slot="button"] {
+  width: 100%;
+  height: 43px;
+  margin-top: 8px;
+  border-radius: var(--radius-lg);
+}
+
+.remote-pairing-help,
+.remote-pairing-error,
+.remote-pairing-security {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.remote-pairing-error,
+.remote-pairing-security {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.remote-pairing-error {
+  color: var(--destructive);
+}
+
+.remote-pairing-error svg,
+.remote-pairing-security svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.remote-pairing-security {
+  margin-top: 22px;
+}
+
+@media (max-width: 680px) {
+  .remote-host-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .remote-host-detail,
+  .remote-host-pairing {
+    grid-template-columns: 1fr auto;
+    gap: 6px 10px;
+  }
+
+  .remote-host-detail > span {
+    grid-column: 1 / -1;
+  }
+
+  .remote-host-detail code {
+    grid-column: 1;
+  }
+
+  .remote-host-detail-actions {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-pairing-screen .animate-spin,
+  .remote-host-control .animate-spin {
+    animation: none !important;
+  }
+}

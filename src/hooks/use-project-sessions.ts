@@ -1,23 +1,25 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import type { Session } from "../lib/protocol";
 import type { LiveSession } from "../lib/store";
-import { native } from "../lib/rpc";
+import { listSessions } from "../lib/rpc";
+import { useWorkspace } from "../lib/store";
 
 export function useProjectSessions(cwd: string) {
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   return useQuery({
     queryKey: ["pi", "sessions", cwd],
-    queryFn: () => invoke<Session[]>("list_sessions", { cwd }),
-    enabled: native && Boolean(cwd),
+    queryFn: () => listSessions(cwd),
+    enabled: (runtimeTarget === "desktop" || runtimeTarget === "mobile") && Boolean(cwd),
   });
 }
 
 export function useProjectSessionGroups(projects: string[]) {
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const queries = useQueries({
     queries: projects.map(cwd => ({
       queryKey: ["pi", "sessions", cwd],
-      queryFn: () => invoke<Session[]>("list_sessions", { cwd }),
-      enabled: native && Boolean(cwd),
+      queryFn: () => listSessions(cwd),
+      enabled: (runtimeTarget === "desktop" || runtimeTarget === "mobile") && Boolean(cwd),
     })),
   });
   return projects.map((cwd, index) => ({ cwd, query: queries[index] }));

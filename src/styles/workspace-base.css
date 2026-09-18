@@ -216,9 +216,12 @@
   min-width: 0;
   max-height: 8.2em;
   overflow: hidden;
-  color: var(--muted-foreground);
+  color: color-mix(in oklch, var(--muted-foreground) 52%, var(--background));
   font-size: 12px;
   line-height: 1.6;
+}
+.proximity-preview-body :is(p, li, ul, ol, span, strong, em, del, s, a, code, pre, blockquote, h1, h2, h3, h4, h5, h6, table, thead, tbody, tr, th, td) {
+  color: inherit;
 }
 
 .proximity-preview-body :is(p, pre, blockquote, ul, ol, table, h1, h2, h3, h4, h5, h6) { margin: 0 0 6px; }
@@ -781,6 +784,6 @@ html[data-theme="dark"] .markdown-renderer :is(.md-autolink, .md-external-link):
   display: none;
 }
 
-.proximity-preview-markdown { min-width: 0; color: var(--muted-foreground); }
+.proximity-preview-markdown { min-width: 0; color: inherit; }
 .proximity-preview-markdown > :first-child { margin-top: 0 !important; }
 .proximity-preview-markdown > :last-child { margin-bottom: 0 !important; }

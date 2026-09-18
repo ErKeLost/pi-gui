@@ -5,7 +5,7 @@ import type { Session } from "../../lib/protocol";
 import type { LiveSession, Panel } from "../../lib/store";
 import { useWorkspace } from "../../lib/store";
 import { mergeProjects, useProjects, type Project } from "../../lib/projects";
-import { changeSession, connect, forgetProject, native, queryClient, report, retireSession } from "../../lib/rpc";
+import { changeSession, connect, desktopRuntime, forgetProject, queryClient, report, retireSession } from "../../lib/rpc";
 import { mergeProjectSessions, useProjectSessionGroups } from "../../hooks/use-project-sessions";
 import { sessionGlyph } from "../../lib/session-visual";
 import { Button, Modal } from "../UI";
@@ -20,18 +20,20 @@ const navigation: { id: Panel; label: string; icon: string }[] = [
   { id: "commands", label: "技能与命令", icon: "puzzle-piece" },
 ];
 
-type WorkspaceSidebarProps = {
+export type WorkspaceSidebarProps = {
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   online: boolean;
   panel: Panel;
   liveSessions: LiveSession[];
   currentSessionFile?: string;
+  hideTitlebar?: boolean;
+  onNavigate?: () => void;
 };
 
 type SessionTarget = { session: Session; projectPath: string };
 
-export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, liveSessions, currentSessionFile }: WorkspaceSidebarProps) {
+export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, liveSessions, currentSessionFile, hideTitlebar = false, onNavigate }: WorkspaceSidebarProps) {
   const cwd = useWorkspace(state => state.cwd);
   const workspaceMode = useWorkspace(state => state.workspaceMode);
   const homeDir = useWorkspace(state => state.homeDir);
@@ -46,13 +48,13 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
   async function chooseProject(path: string) {
     setBusyProject(path);
     setCollapsed(current => { const next = new Set(current); next.delete(path); return next; });
-    try { await connect(path, "project"); }
+    try { await connect(path, "project"); onNavigate?.(); }
     catch (error) { report(error); }
     finally { setBusyProject(""); }
   }
 
   async function addProjects() {
-    if (!native) { report("请在桌面应用中选择文件夹"); return; }
+    if (!desktopRuntime()) { report("请在电脑端选择文件夹"); return; }
     const selected = await open({ directory: true, multiple: true, title: "添加项目", defaultPath: cwd || undefined });
     if (!selected) return;
     const paths = (Array.isArray(selected) ? selected : [selected]).map(path => path.replace(/\/+$/, "") || "/");
@@ -66,6 +68,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
     try {
       if (cwd !== projectPath || workspaceMode !== "project" || !online) await connect(projectPath, "project");
       await changeSession({ type: "switch_session", sessionPath: session.path });
+      onNavigate?.();
     } catch (error) { report(error); }
     finally { setBusyProject(""); }
   }
@@ -108,13 +111,13 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
   }
 
   return <div className="sidebar-pane">
-    <WorkspaceTitlebar variant="sidebar" sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
+    {!hideTitlebar && <WorkspaceTitlebar variant="sidebar" sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />}
     <aside className="sidebar">
-      <Button variant="outline" className="new-session" disabled={!online} onClick={() => void changeSession({ type: "new_session" }).catch(report)}><Icon name="plus" />新建会话<kbd>⌘ N</kbd></Button>
-      <nav aria-label="主导航">{navigation.map(item => <Button key={item.id} className={`nav-item ${panel === item.id ? "selected" : ""}`} onClick={() => useWorkspace.getState().set({ panel: item.id })}><Icon name={item.icon} /><span>{item.label}</span>{item.id === "commands" && <Icon name="arrow-up-right" />}</Button>)}</nav>
+      <Button variant="outline" className="new-session" disabled={!online} onClick={() => { onNavigate?.(); void changeSession({ type: "new_session" }).catch(report); }}><Icon name="plus" />新建会话<kbd>⌘ N</kbd></Button>
+      <nav aria-label="主导航">{navigation.map(item => <Button key={item.id} className={`nav-item ${panel === item.id ? "selected" : ""}`} onClick={() => { useWorkspace.getState().set({ panel: item.id }); onNavigate?.(); }}><Icon name={item.icon} /><span>{item.label}</span>{item.id === "commands" && <Icon name="arrow-up-right" />}</Button>)}</nav>
 
       <div className="sidebar-library">
-        <div className="sidebar-section-title sidebar-projects-title"><span><Icon name="folder-simple" />项目</span><Button title="添加项目" disabled={!native} onClick={() => void addProjects().catch(report)}><Icon name="plus" /></Button></div>
+        <div className="sidebar-section-title sidebar-projects-title"><span><Icon name="folder-simple" />项目</span><Button title="添加项目" disabled={!desktopRuntime()} onClick={() => void addProjects().catch(report)}><Icon name="plus" /></Button></div>
         <div className="sidebar-project-groups">
           {visibleProjects.map((project, index) => {
             const group = sessionGroups[index];
@@ -152,7 +155,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
       </div>
 
       <div className="sidebar-bottom">
-        <Button className="nav-item" onClick={() => useWorkspace.getState().set({ panel: "settings", settingsPage: "general" })}><Icon name="gear-six" />设置<kbd>⌘ ,</kbd></Button>
+        <Button className="nav-item" onClick={() => { useWorkspace.getState().set({ panel: "settings", settingsPage: "general" }); onNavigate?.(); }}><Icon name="gear-six" />设置<kbd>⌘ ,</kbd></Button>
       </div>
     </aside>
     <DeleteSessionDialog open={Boolean(deletingSession)} sessionName={deletingSession?.session.name || deletingSession?.session.firstMessage || "未命名会话"} onCancel={() => setDeletingSession(null)} onConfirm={() => void deleteSelectedSession()} />

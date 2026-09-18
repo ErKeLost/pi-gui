@@ -104,4 +104,24 @@ describe("whole-turn process history", () => {
     expect(html).not.toContain('class="turn-activity"');
     expect(readableMarkup(html)).toContain("直接回复");
   });
+
+  test("places child-agent activity after the spawn tool and before later parent work", () => {
+    const items: DisplayMessage[] = [
+      { id: "spawn", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "text", text: "准备启动子任务" },
+        { type: "toolCall", id: "spawn-agent", name: "spawn_agent", arguments: { task_name: "repo", message: "inspect" } },
+      ] } },
+      { id: "continue", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "text", text: "父任务继续读取" },
+        { type: "toolCall", id: "read-after", name: "read", arguments: { path: "README.md" } },
+      ] } },
+    ];
+    const html = readableMarkup(renderToStaticMarkup(<TranscriptMessage items={items} tools={{
+      "spawn-agent": { name: "spawn_agent", running: false, result: "started" },
+      "read-after": { name: "read", running: true },
+    }} streaming thinking={false} activity={<div>子 agent timeline</div>} />));
+
+    expect(html.indexOf("准备启动子任务")).toBeLessThan(html.indexOf("子 agent timeline"));
+    expect(html.indexOf("子 agent timeline")).toBeLessThan(html.indexOf("父任务继续读取"));
+  });
 });

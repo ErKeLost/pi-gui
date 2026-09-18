@@ -4,7 +4,7 @@ import {Popover,PopoverContent,PopoverTrigger} from '@/components/ui/popover'
 import {open} from '@tauri-apps/plugin-dialog'
 import {useProjects,type Project} from '../lib/projects'
 import {useWorkspace} from '../lib/store'
-import {connect,forgetProject,native,report} from '../lib/rpc'
+import {connect,desktopRuntime,forgetProject,report} from '../lib/rpc'
 import {Button,Input,Modal} from './UI'
 import {Icon} from './Icon'
 import {gooeyToast} from 'goey-toast'
@@ -31,7 +31,7 @@ export function ProjectPicker({compact=false}:{compact?:boolean}){
  const name=workspaceMode==='home'?'不在目录中工作':projects.find(p=>p.path===cwd)?.name||cwd.split('/').filter(Boolean).at(-1)||'选择项目'
  async function choose(path:string){setVisible(false);setBusy(true);try{await connect(path,'project')}catch(e){report(e)}finally{setBusy(false)}}
  async function chooseHome(){if(!homeDir)return;setVisible(false);setBusy(true);try{await connect(homeDir,'home')}catch(e){report(e)}finally{setBusy(false)}}
- async function addProjects(){if(!native){report('请在桌面应用中选择文件夹');return}const selected=await open({directory:true,multiple:true,title:'添加项目',defaultPath:cwd||undefined});if(!selected)return;const paths=Array.isArray(selected)?selected:[selected];add(paths);await choose(paths[0].replace(/\/+$/,'')||'/')}
+ async function addProjects(){if(!desktopRuntime()){report('请在电脑端选择文件夹');return}const selected=await open({directory:true,multiple:true,title:'添加项目',defaultPath:cwd||undefined});if(!selected)return;const paths=Array.isArray(selected)?selected:[selected];add(paths);await choose(paths[0].replace(/\/+$/,'')||'/')}
  async function removeWorkspace(){
   if(!deleting)return
   const target=deleting
@@ -58,7 +58,7 @@ export function ProjectPicker({compact=false}:{compact?:boolean}){
     <label className="project-search"><Icon name="magnifying-glass"/><Input autoFocus aria-label="搜索项目" placeholder="搜索项目" value={search} onChange={e=>setSearch(e.target.value)}/></label>
     <div className="project-options">{visibleProjects.map(project=><ProjectOption key={project.path} project={project} selected={workspaceMode==='project'&&project.path===cwd} busy={busy} onChoose={()=>void choose(project.path)} onDelete={()=>{setDeleting(project);setVisible(false)}}/>)}</div>
     {visibleProjects.length===0&&<p className="project-empty">没有匹配的项目</p>}
-    <Button className="add-project" onClick={()=>void addProjects().catch(report)}><Icon name="plus"/><span>添加项目</span></Button>
+    <Button className="add-project" disabled={!desktopRuntime()} onClick={()=>void addProjects().catch(report)}><Icon name="plus"/><span>添加项目</span></Button>
    </PopoverContent>
   </Popover>
   <Modal open={!!deleting} title="移除工作区" onCancel={()=>setDeleting(null)} onOk={()=>void removeWorkspace()} okText="从列表移除" cancelText="取消" destructive><div className="remove-workspace-copy"><strong>{deleting?.name}</strong><code>{deleting?.path}</code><p>只会从工作区列表移除，不会删除磁盘上的项目文件。</p>{workspaceMode==='project'&&deleting?.path===cwd&&<p>{projects.length>1?'这是当前工作区，移除后会自动切换到另一个工作区。':'这是当前工作区，移除后会回到空的工作区状态。'}</p>}</div></Modal>
