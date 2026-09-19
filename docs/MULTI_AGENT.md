@@ -38,7 +38,7 @@ Pi's delta-only `message_update`, `tool_execution_*`, `message_end`, `agent_end`
 
 ## Lifecycle and communication
 
-`spawn_agent` returns as soon as Pi accepts the child prompt. This lets the parent launch independent tasks without serial waiting. `wait_agent` waits on event-driven settlement rather than polling. Completed children keep their RPC context for `followup_task`; all child processes are reclaimed when the next top-level run begins or the parent session shuts down.
+`spawn_agent` returns as soon as Pi accepts the child prompt, so the parent can dispatch independent tasks without serially waiting for completion. The parent then enters a supervisor barrier: Orbit waits for every active child at `agent_end` before Pi can start another parent run, allowing the children to execute in parallel while preventing parent exploration or synthesis from racing ahead. `wait_agent` remains available for explicit status collection and waits on event-driven settlement rather than polling. Completed children keep their RPC context for `followup_task`; all child processes are reclaimed when the next top-level run begins or the parent session shuts down.
 
 Cancellation sends Pi's `clear_queue` and `abort` commands before terminating the process. Child sessions are persisted and become openable from the activity panel after settlement.
 

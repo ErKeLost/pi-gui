@@ -33,15 +33,20 @@ afterEach(async () => {
 describe("sub-agent RPC lifecycle", () => {
   test("exposes the Codex-style collaboration surface and injects orchestration only when enabled", async () => {
     const tools: string[] = []
+    let spawnExecutionMode: string | undefined
     const handlers = new Map<string, (event: { systemPrompt: string }) => unknown>()
     let active: string[] = []
     const pi = {
-      registerTool: (tool: { name: string }) => tools.push(tool.name),
+      registerTool: (tool: { name: string; executionMode?: string }) => {
+        tools.push(tool.name)
+        if (tool.name === "spawn_agent") spawnExecutionMode = tool.executionMode
+      },
       on: (name: string, handler: (event: { systemPrompt: string }) => unknown) => handlers.set(name, handler),
       getActiveTools: () => active,
     }
     registerSubagentTools(pi as never)
     expect(tools).toEqual([...SUBAGENT_TOOL_NAMES])
+    expect(spawnExecutionMode).toBe("sequential")
     const beforeStart = handlers.get("before_agent_start")!
     expect(await beforeStart({ systemPrompt: "base" })).toBeUndefined()
     active = [...SUBAGENT_TOOL_NAMES]
@@ -64,12 +69,14 @@ describe("sub-agent RPC lifecycle", () => {
 
     const spawned = await runtime.spawn({ name: "worker", task: "inspect", cwd: paths.cwd })
     expect(spawned.agent.status).toBe("running")
+    expect(runtime.hasActiveChildren()).toBe(true)
     expect(spawned.agent.sessionId).toBe("fixture-session")
     expect(spawned.agent.sessionPath).toContain("/subagents/")
 
     await Bun.sleep(40)
     expect(runtime.snapshot().active[0]?.summary).toContain("working")
     await runtime.wait(spawned.agent.id)
+    expect(runtime.hasActiveChildren()).toBe(false)
     expect(runtime.snapshot().recent[0]).toMatchObject({ id: spawned.agent.id, status: "completed", summary: "result-1" })
     expect(runtime.output(spawned.agent.id)).toBe("result-1")
 

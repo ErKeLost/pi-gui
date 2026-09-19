@@ -567,6 +567,10 @@ export class SubagentRuntime {
     return this.snapshot()
   }
 
+  hasActiveChildren(): boolean {
+    return [...this.nodes.values()].some((node) => !TERMINAL_STATUSES.has(node.status))
+  }
+
   async interrupt(agentId: string): Promise<AgentNode> {
     const node = this.nodes.get(agentId)
     const handle = this.children.get(agentId)

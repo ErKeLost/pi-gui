@@ -9,11 +9,11 @@ type ToolResult = AgentToolResult<AgentSnapshot & { agent?: AgentNode; output?: 
 export const SUBAGENT_TOOL_NAMES = ["spawn_agent", "send_message", "followup_task", "wait_agent", "interrupt_agent", "list_agents"] as const
 const ROOT_ORCHESTRATION_INSTRUCTIONS = `
 <multi_agent_mode>
-Collaboration mode is selected for this turn. For every non-trivial request that requires repository exploration, documentation research, implementation, review, or several tool calls, you must spawn at least one bounded child task before substantive work. Choose the number and shape of child tasks from the problem itself. Continue useful parent work while children run; use send_message or followup_task to refine assignments, wait_agent when a result is needed, and synthesize child results into the final response. Only a direct factual reply or one-step action should stay entirely in the parent.
+Collaboration mode is selected for this turn. For every non-trivial request that requires repository exploration, documentation research, implementation, review, or several tool calls, you must spawn at least one bounded child task before substantive work. Choose the number and shape of child tasks from the problem itself. After dispatching children, wait for all of them to settle before doing parent exploration, edits, or synthesis. You may use send_message or followup_task while they run, but do not call ordinary repository tools or produce the final answer until wait_agent has returned their results. Only a direct factual reply or one-step action should stay entirely in the parent.
 </multi_agent_mode>`
 const CHILD_ORCHESTRATION_INSTRUCTIONS = `
 <multi_agent_mode>
-Collaboration tools are available. Delegate further only when your assigned task itself contains independent workstreams that materially benefit from parallel execution. Return a focused result to your parent.
+Collaboration tools are available. Delegate further only when your assigned task itself contains independent workstreams that materially benefit from parallel execution. After dispatching nested children, wait for all of them to settle before continuing your assigned work or returning a result to your parent.
 </multi_agent_mode>`
 
 const ThinkingSchema = { type: "string", enum: ["off", "minimal", "low", "medium", "high", "xhigh", "max"] } as const
@@ -53,9 +53,11 @@ export function registerSubagentTools(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "spawn_agent",
     label: "Spawn agent",
-    description: "Spawn one independent Pi child agent and return its agent id immediately. Call spawn_agent multiple times for independent work, then use wait_agent to collect results.",
-    promptGuidelines: ["Use spawn_agent for bounded work that can proceed independently. Continue useful parent work while children run, then use wait_agent only when their result is needed."],
-    executionMode: "parallel",
+    description: "Spawn one independent Pi child agent and return its agent id immediately. Dispatch all independent work first, then use wait_agent before ordinary parent work or synthesis.",
+    promptGuidelines: ["Use spawn_agent for bounded work that can proceed independently. After dispatching children, wait for all of them before calling repository tools or producing a result."],
+    // Serialize the dispatch batch so a sibling repository tool cannot start
+    // before the newly spawned child is visible to the supervisor barrier.
+    executionMode: "sequential",
     parameters: TaskSchema,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const input = params as SpawnInput
@@ -160,6 +162,32 @@ export function registerSubagentTools(pi: ExtensionAPI): void {
     if (!pi.getActiveTools().includes("spawn_agent")) return
     const instructions = process.env.PI_GUI_SUBAGENT === "1" ? CHILD_ORCHESTRATION_INSTRUCTIONS : ROOT_ORCHESTRATION_INSTRUCTIONS
     return { systemPrompt: `${event.systemPrompt}\n\n${instructions}` }
+  })
+
+  // Also guard individual tool calls in case a model ignores the injected
+  // instruction. Collaboration controls remain available so a parent can
+  // message, inspect, interrupt, or wait for its workers while they run.
+  pi.on("tool_call", async (event, ctx) => {
+    if (!state.runtime?.hasActiveChildren()) return
+    if ((SUBAGENT_TOOL_NAMES as readonly string[]).includes(event.toolName)) return
+    try {
+      await state.runtime.wait(undefined, ctx.signal)
+    } catch (error) {
+      if (!ctx.signal?.aborted) throw error
+    }
+  })
+
+  // A child can run concurrently with the parent while it is being
+  // dispatched, but the parent must not start another Pi run until every
+  // dispatched child has settled. Pi awaits lifecycle handlers before it
+  // polls queued continuations, so this is the supervisor barrier.
+  pi.on("agent_end", async (_event, ctx) => {
+    if (!state.runtime || !state.runtime.hasActiveChildren()) return
+    try {
+      await state.runtime.wait(undefined, ctx.signal)
+    } catch (error) {
+      if (!ctx.signal?.aborted) throw error
+    }
   })
 
   pi.on("session_shutdown", async () => {
