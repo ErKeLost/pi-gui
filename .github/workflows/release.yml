@@ -106,8 +106,6 @@ jobs:
           echo "PATH=$PATH" >> "$GITHUB_ENV"
           sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-36" "build-tools;35.0.0" "ndk;29.0.13846066"
-          echo "NDK_HOME=$android_home/ndk/29.0.13846066" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$android_home/ndk/29.0.13846066" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
