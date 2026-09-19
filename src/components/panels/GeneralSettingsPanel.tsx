@@ -95,7 +95,6 @@ function hiddenPairingUri(uri: string) {
 }
 
 export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean } = {}) {
-  const { resolvedTheme } = useTheme();
   const [host, setHost] = useState<RemoteHostInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<"start" | "stop" | null>(null);
@@ -165,8 +164,6 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
 
   const statusLabel = loading ? "正在读取" : host ? "已开启" : "未开启";
   const connectedLabel = host ? (host.connectedClients > 0 ? `手机已连接 · ${host.connectedClients}` : "等待手机连接") : "";
-  const qrColor = resolvedTheme === "dark" ? "#f5f5f5" : "#111111";
-  const qrBackground = resolvedTheme === "dark" ? "#2b2b2b" : "#ffffff";
   if (pageMode) {
     return <>
       <section className="mobile-access-host-card" aria-label="电脑 Host">
@@ -179,7 +176,7 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
         <div className="mobile-access-host-body">
           {host ? <>
             <div className="mobile-access-qr-copy">用手机扫描二维码，连接这台电脑</div>
-            <div className="mobile-access-qr"><QRCode type="svg" value={host.pairingUri} size={224} bordered={false} color={qrColor} bgColor={qrBackground} /></div>
+            <div className="mobile-access-qr"><QRCode type="svg" errorLevel="M" value={host.pairingUri} size={280} bordered={false} color="#111111" bgColor="#ffffff" /></div>
             <div className="mobile-access-uri-row">
               <code title={host.pairingUri}>{host.pairingUri}</code>
               <Button variant="ghost" size="icon" title="复制配对链接" aria-label="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
@@ -221,7 +218,7 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
             <Button variant="ghost" size="icon" title={showQr ? "隐藏二维码" : "显示二维码"} aria-pressed={showQr} onClick={() => setShowQr(value => !value)}><ScanLine /></Button>
           </div>
         </div>
-        {showQr && <div className="remote-host-qr"><QRCode type="svg" value={host.pairingUri} size={176} bordered={false} color={qrColor} bgColor={qrBackground} /><span>用手机 Orbit 扫描此二维码，连接这台电脑</span></div>}
+        {showQr && <div className="remote-host-qr"><QRCode type="svg" errorLevel="M" value={host.pairingUri} size={240} bordered={false} color="#111111" bgColor="#ffffff" /><span>用手机 Orbit 扫描此二维码，连接这台电脑</span></div>}
         {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
         <p className="remote-host-security"><Icon name="shield-check" />配对链接包含访问凭据，请只发送到自己的设备。</p>
         <div className="remote-host-devices">

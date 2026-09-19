@@ -1,6 +1,6 @@
 import { useWorkspace } from "../../lib/store";
 import { branchFromMessage, report } from "../../lib/rpc";
-import { memo, useState, type ReactNode } from "react";
+import { Fragment, memo, useState, type ReactNode } from "react";
 import { m } from "motion/react";
 import type { DisplayMessage, Part, PiMessage, Tool } from "../../lib/protocol";
 import { formatTranscriptError } from "../../lib/protocol";
@@ -121,12 +121,64 @@ function specialMessage(item: DisplayMessage) {
   return <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}><div className="transcript-compaction"><div className="transcript-compaction-heading"><Icon name="arrows-clockwise" /><span>上下文已压缩</span></div>{summary.trim() ? <pre>{summary.trim()}</pre> : null}</div></m.div>;
 }
 
-function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Record<string, Tool>, streaming: boolean, thinking: boolean, role: "user" | "assistant") {
+function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Record<string, Tool>, streaming: boolean, thinking: boolean, role: "user" | "assistant", activity?: ReactNode) {
   const progress: ReactNode[] = [];
   const media: ReactNode[] = [];
   const body: ReactNode[] = [];
   let activityIndex: number | undefined;
   const lastMessage = items.at(-1)?.message;
+  const hasVisibleOutput = content.some(({ part }) =>
+    (part.type === "text" && Boolean(part.text?.trim())) || part.type === "image",
+  );
+  const compressProcess = role === "assistant" && !hasVisibleOutput;
+
+  // Tool-only turns can contain many assistant messages. Keep the live view to
+  // one stable thinking row and one stable operation row; each operation still
+  // renders its original expandable details inside the group.
+  if (compressProcess) {
+    const thinkingParts = content.filter(({ part }) => part.type === "thinking" && Boolean(part.thinking?.trim()));
+    const toolParts = content.filter(({ part }) => part.type === "toolCall");
+    if (thinkingParts.length > 0 || (streaming && thinking)) {
+      progress.push(
+        <Thinking
+          key={`${items[0]?.id ?? "turn"}-thinking-summary`}
+          text={thinkingParts.at(-1)?.part.thinking ?? ""}
+          running={streaming && thinking}
+        />,
+      );
+    }
+    if (toolParts.length > 0) {
+      const toolRows = toolParts.map(({ part, key, active }) => <PartView key={key} part={part} tools={tools} running={active} thinking={false} />);
+      const spawnIndex = toolParts.findIndex(({ part }) => (part.name ?? tools[part.id ?? ""]?.name) === "spawn_agent");
+      const operationChildren = toolRows.flatMap((row, index) => index === spawnIndex && activity
+        ? [row, <Fragment key={`${items[0]?.id ?? "turn"}-agent-activity`}>{activity}</Fragment>]
+        : [row]);
+      if (activity && spawnIndex < 0) operationChildren.push(<Fragment key={`${items[0]?.id ?? "turn"}-agent-activity`}>{activity}</Fragment>);
+      progress.push(
+        <ToolActivityGroup
+          key={`${items[0]?.id ?? "turn"}-tool-summary`}
+          toolNames={toolParts.map(({ part }) => part.name ?? tools[part.id ?? ""]?.name ?? "工具")}
+          running={toolParts.some(({ part }) => tools[part.id ?? ""]?.running)}
+          hasError={toolParts.some(({ part }) => tools[part.id ?? ""]?.isError)}
+        >
+          {operationChildren}
+        </ToolActivityGroup>,
+      );
+    } else if (activity) {
+      progress.push(activity);
+    }
+    return {
+      progress,
+      media,
+      body,
+      // Keep the two summaries visible after a tool-only turn settles. The
+      // outer panel can still be collapsed by the user when desired.
+      defaultExpanded: true,
+      activityIndex,
+      activityConsumed: Boolean(activity),
+    };
+  }
+
   // A settled tool request, interrupted answer or error is not a final response.
   const hasFinalResponse = role === "assistant" && !streaming
     && !lastMessage?.errorMessage
@@ -138,7 +190,7 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
     if (!pendingTools.length) return;
     const group = pendingTools;
     pendingTools = [];
-    progress.push(<ToolActivityGroup key={`${group[0].key}-tools`} toolNames={group.map(({ part }) => part.name ?? tools[part.id ?? ""]?.name ?? "工具")} running={group.some(({ part }) => tools[part.id ?? ""]?.running)}>{group.map(({ part, key, active }) => <PartView key={key} part={part} tools={tools} running={active} thinking={false} />)}</ToolActivityGroup>);
+    progress.push(<ToolActivityGroup key={`${group[0].key}-tools`} toolNames={group.map(({ part }) => part.name ?? tools[part.id ?? ""]?.name ?? "工具")} running={group.some(({ part }) => tools[part.id ?? ""]?.running)} hasError={group.some(({ part }) => tools[part.id ?? ""]?.isError)}>{group.map(({ part, key, active }) => <PartView key={key} part={part} tools={tools} running={active} thinking={false} />)}</ToolActivityGroup>);
     if (activityIndex === undefined && group.some(({ part }) => (part.name ?? tools[part.id ?? ""]?.name) === "spawn_agent")) activityIndex = progress.length;
   };
   for (const { part, key, active, messageIndex } of content) {
@@ -160,7 +212,7 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
     }
   }
   flushTools();
-  return { progress, media, body, defaultExpanded: !hasFinalResponse, activityIndex };
+  return { progress, media, body, defaultExpanded: !hasFinalResponse, activityIndex, activityConsumed: false };
 }
 
 function responseText(content: ProjectedPart[]) {
@@ -182,13 +234,14 @@ function TranscriptBody({ item, items, nodes, role, streaming, startedAt, elapse
   onCopied: () => void;
   activity?: ReactNode;
 }) {
-  const hasProgress = nodes.progress.length > 0 || Boolean(activity);
+  const renderedActivity = nodes.activityConsumed ? undefined : activity;
+  const hasProgress = nodes.progress.length > 0 || Boolean(renderedActivity);
   const hasContent = hasProgress || nodes.body.length > 0;
   const activityIndex = nodes.activityIndex ?? nodes.progress.length;
   return <Message from={role}>
     {nodes.media.length > 0 && <div className="user-message-media">{nodes.media}</div>}
     {hasContent && <MessageContent>
-      {hasProgress && <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} defaultExpanded={nodes.defaultExpanded} startedAt={startedAt} durationMs={elapsedMs}>{nodes.progress.slice(0, activityIndex)}{activity}{nodes.progress.slice(activityIndex)}</ProcessingPanel>}
+      {hasProgress && <ProcessingPanel key={`${item.id}-${streaming ? "running" : "complete"}`} running={streaming} defaultExpanded={nodes.defaultExpanded} startedAt={startedAt} durationMs={elapsedMs}>{nodes.progress.slice(0, activityIndex)}{renderedActivity}{nodes.progress.slice(activityIndex)}</ProcessingPanel>}
       {nodes.body}
     </MessageContent>}
     {text && (role === "user" || !streaming) && <MessageCopyFooter message={items.at(-1)!.message} role={role} text={text} time={role === "user" ? turnTime(items) : null} copied={copied} onCopied={onCopied} />}
@@ -207,7 +260,7 @@ function TranscriptMessageComponent({ items, tools, streaming, thinking, savedDu
   const special = specialMessage(item);
   if (special) return special;
   const content = projectParts(items, streaming);
-  const nodes = buildNodes(content, items, tools, streaming, thinking, role);
+  const nodes = buildNodes(content, items, tools, streaming, thinking, role, activity);
   const finalOnly = role === "assistant" && !nodes.defaultExpanded;
   const text = responseText(finalOnly ? content.filter(part => part.messageIndex === items.length - 1) : content);
   if (nodes.progress.length === 0 && nodes.body.length === 0 && nodes.media.length === 0 && !activity) return null;

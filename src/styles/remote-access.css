@@ -437,8 +437,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .remote-pairing-screen .animate-spin,
-  .remote-host-control .animate-spin {
+  .remote-host-control .animate-spin,
+  .remote-pairing-scanner-line {
     animation: none !important;
+  }
+
+  .remote-pairing-scanner-line {
+    top: 50%;
+    opacity: .85;
   }
 }
 
@@ -566,42 +572,181 @@
 .remote-pairing-security { padding-top: 2px; }
 .remote-pairing-security svg { color: #7669b4; }
 
+html.remote-native-scanning,
+html.remote-native-scanning body {
+  background: transparent !important;
+}
+
+html.remote-native-scanning .remote-pairing-screen {
+  background: transparent !important;
+}
+
+html.remote-native-scanning .remote-pairing-screen::before,
+html.remote-native-scanning .remote-pairing-content {
+  visibility: hidden;
+}
+
 .remote-pairing-scanner {
   position: fixed;
-  z-index: 20;
+  z-index: 40;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+}
+
+.remote-pairing-scanner[data-native="true"] {
+  background: transparent;
+}
+
+.remote-pairing-scanner video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.remote-pairing-scanner-mask {
+  position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 20px;
-  background: rgb(49 37 89 / 35%);
-  backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
-.remote-pairing-scanner-card {
-  width: min(100%, 380px);
-  padding: 16px;
-  border: 1px solid rgb(255 255 255 / 75%);
-  border-radius: 22px;
-  background: rgb(255 255 255 / 94%);
-  box-shadow: 0 24px 60px rgb(61 45 119 / 30%);
-  color: #302b57;
+.remote-pairing-scanner-window {
+  position: relative;
+  width: min(72vw, 280px);
+  aspect-ratio: 1;
+  box-shadow: 0 0 0 999vmax rgb(0 0 0 / 48%);
 }
 
-.remote-pairing-scanner-card > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.remote-pairing-scanner-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #07c160;
+}
+
+.remote-pairing-scanner-corner.is-tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.remote-pairing-scanner-corner.is-tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.remote-pairing-scanner-corner.is-bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.remote-pairing-scanner-corner.is-br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+.remote-pairing-scanner-line {
+  position: absolute;
+  top: 6%;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #7dff9a 18%, #07c160 50%, #7dff9a 82%, transparent);
+  box-shadow: 0 0 14px 3px rgb(7 193 96 / 55%);
+  animation: remote-pairing-scan-line 2.2s ease-in-out infinite;
+}
+
+@keyframes remote-pairing-scan-line {
+  0% { top: 6%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 90%; opacity: 0; }
+}
+
+.remote-pairing-scanner-close,
+.remote-pairing-scanner-album {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(28 28 30 / 55%);
+  color: #fff;
+  cursor: pointer;
+  appearance: none;
+}
+
+.remote-pairing-scanner-close:hover,
+.remote-pairing-scanner-album:hover {
+  background: rgb(48 48 50 / 78%);
+}
+
+.remote-pairing-scanner-close:focus-visible,
+.remote-pairing-scanner-album:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.remote-pairing-scanner-close {
+  top: max(14px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+}
+
+.remote-pairing-scanner-close svg,
+.remote-pairing-scanner-album svg {
+  width: 20px;
+  height: 20px;
+}
+
+.remote-pairing-scanner-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.remote-pairing-scanner-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  width: min(72vw, 280px);
+  justify-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  margin: 0;
+  padding: 18px;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  transform: translate(-50%, -50%);
 }
 
-.remote-pairing-scanner-card > header strong { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
-.remote-pairing-scanner-card > header svg { width: 16px; height: 16px; }
-.remote-pairing-camera-frame { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 16px; background: #1f1d2f; }
-.remote-pairing-camera-frame video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.remote-pairing-camera-frame > span { position: absolute; inset: 0; display: grid; place-items: center; gap: 8px; padding: 20px; color: #fff; text-align: center; }
-.remote-pairing-camera-frame > span svg { width: 22px; height: 22px; margin-inline: auto; }
-.remote-pairing-scanner-card > p { margin: 12px 2px 2px; color: #77718d; font-size: 11px; line-height: 1.55; }
+.remote-pairing-scanner-status svg { width: 22px; height: 22px; }
+
+.remote-pairing-scanner-footer {
+  position: absolute;
+  z-index: 3;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(28px, env(safe-area-inset-bottom));
+  left: max(18px, env(safe-area-inset-left));
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+}
+
+.remote-pairing-scanner-footer > p {
+  margin: 0;
+  color: rgb(255 255 255 / 88%);
+  font-size: 14px;
+  letter-spacing: .02em;
+  text-align: center;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 55%);
+}
+
+.remote-pairing-scanner-album {
+  position: relative;
+  justify-self: end;
+  width: 48px;
+  height: 48px;
+  background: rgb(48 48 50 / 72%);
+}
 
 @media (max-width: 520px) {
   .remote-pairing-screen { place-items: end center; padding: 16px max(12px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
@@ -705,9 +850,6 @@
 .remote-pairing-security { margin-top: 18px; color: #77718d; font-size: 12px; }
 .remote-pairing-security svg { color: #7669c8 !important; }
 
-.remote-pairing-scanner-card > header { margin-bottom: 12px; }
-.remote-pairing-scanner-card > p { margin-bottom: 10px; }
-.remote-pairing-scanner-card > [data-slot="button"] { width: 100%; }
 
 @media (max-width: 520px) {
   .remote-pairing-screen { place-items: start center; padding-top: max(32px, env(safe-area-inset-top)); }
@@ -825,4 +967,149 @@
   .remote-pairing-scan-card { min-height: 60px !important; margin-top: 10px; }
   .remote-pairing-divider { margin-block: 8px 6px; }
   .remote-pairing-security { margin-top: 7px; }
+}
+
+/* The scanner follows the familiar camera surface: a quiet top bar, a
+   centered finder, and one clear album action at the bottom. */
+.remote-pairing-scanner {
+  background: #0d0f13;
+}
+
+.remote-pairing-scanner[data-native="true"] {
+  background: transparent;
+}
+
+.remote-pairing-scanner video {
+  filter: saturate(.92) contrast(1.03);
+}
+
+.remote-pairing-scanner-topbar {
+  position: absolute;
+  z-index: 5;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  left: max(16px, env(safe-area-inset-left));
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  min-height: 42px;
+}
+
+.remote-pairing-scanner-title {
+  display: inline-flex;
+  grid-column: 2;
+  align-items: center;
+  justify-self: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  text-shadow: 0 1px 10px rgb(0 0 0 / 38%);
+}
+
+.remote-pairing-scanner-title svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
+}
+
+.remote-pairing-scanner-close {
+  position: relative;
+  inset: auto;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(12 14 17 / 52%);
+  box-shadow: 0 5px 18px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(12px);
+}
+
+.remote-pairing-scanner-status > button {
+  min-height: 32px;
+  padding: 0 13px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.remote-pairing-scanner-status > button:hover { background: rgb(255 255 255 / 20%); }
+
+.remote-pairing-scanner-close:hover { background: rgb(12 14 17 / 72%); }
+
+.remote-pairing-scanner-mask {
+  z-index: 2;
+  padding-bottom: 7vh;
+}
+
+.remote-pairing-scanner-window {
+  width: min(76vw, 310px);
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 20px;
+  box-shadow: 0 0 0 999vmax rgb(0 0 0 / 50%), 0 14px 34px rgb(0 0 0 / 30%);
+}
+
+.remote-pairing-scanner-corner {
+  width: 25px;
+  height: 25px;
+  border-width: 3px;
+  border-color: #30d878;
+  filter: drop-shadow(0 0 7px rgb(48 216 120 / 46%));
+}
+
+.remote-pairing-scanner-line {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #64e99b 18%, #20ca6d 50%, #64e99b 82%, transparent);
+  box-shadow: 0 0 16px 3px rgb(32 202 109 / 50%);
+}
+
+.remote-pairing-scanner-footer {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  gap: 15px;
+  padding: 24px max(20px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  background: linear-gradient(180deg, transparent, rgb(4 6 8 / 76%) 40%, rgb(4 6 8 / 88%));
+}
+
+.remote-pairing-scanner-footer > p {
+  color: rgb(255 255 255 / 82%);
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.remote-pairing-scanner-album {
+  position: relative;
+  justify-self: center;
+  display: inline-flex;
+  width: auto;
+  min-width: 152px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 18px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 13%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(12px);
+}
+
+.remote-pairing-scanner-album:hover { background: rgb(255 255 255 / 22%); }
+.remote-pairing-scanner-album svg { width: 19px; height: 19px; }
+
+.remote-pairing-scanner-status {
+  z-index: 6;
+  width: min(78vw, 310px);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 14px;
+  background: rgb(10 12 15 / 64%);
+  backdrop-filter: blur(12px);
 }

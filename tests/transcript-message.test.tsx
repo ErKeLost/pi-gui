@@ -69,6 +69,58 @@ function renderPhases(streaming = false, items = phases) {
 }
 
 describe("whole-turn process history", () => {
+  test("compresses a tool-only turn into one thinking row and one operation row", () => {
+    const items: DisplayMessage[] = [
+      { id: "thinking-1", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "先检查项目结构", thinkingComplete: true },
+        { type: "toolCall", id: "read-1", name: "read", arguments: { path: "src" } },
+      ] } },
+      { id: "thinking-2", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "再运行验证", thinkingComplete: true },
+        { type: "toolCall", id: "run-1", name: "bash", arguments: { command: "bun test" } },
+      ] } },
+      { id: "thinking-3", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "最后读取结果", thinkingComplete: true },
+        { type: "toolCall", id: "read-2", name: "read", arguments: { path: "test-results.txt" } },
+      ] } },
+    ];
+    const html = readableMarkup(renderToStaticMarkup(<TranscriptMessage items={items} tools={{
+      "read-1": { name: "read", running: false, result: "src/app.ts" },
+      "run-1": { name: "bash", running: false, result: "passed" },
+      "read-2": { name: "read", running: false, result: "3 passed" },
+    }} streaming={false} thinking={false} />));
+
+    expect(html.match(/class="thinking-summary"/g)?.length).toBe(1);
+    expect(html.match(/class="tool-activity-group"/g)?.length).toBe(1);
+    expect(html).toContain("最后读取结果");
+    expect(html).toContain("读取 2 次 · 运行 1 次");
+    expect(html).toContain("src/app.ts");
+    expect(html).toContain("bun test");
+    expect(html).toContain("test-results.txt");
+  });
+
+  test("keeps a single live thinking row while thinking text changes", () => {
+    const items: DisplayMessage[] = [{ id: "live", message: { role: "assistant", content: [
+      { type: "thinking", thinking: "正在检查" },
+    ] } }];
+    const html = readableMarkup(renderToStaticMarkup(<TranscriptMessage items={items} tools={{}} streaming thinking />));
+    expect(html.match(/class="thinking-summary"/g)?.length).toBe(1);
+    expect(html).toContain("正在检查");
+    expect(html).toContain('data-working="true"');
+  });
+
+  test("keeps failed compressed operations expanded and visible", () => {
+    const items: DisplayMessage[] = [{ id: "failed", message: { role: "assistant", stopReason: "toolUse", content: [
+      { type: "thinking", thinking: "执行检查", thinkingComplete: true },
+      { type: "toolCall", id: "run-failed", name: "bash", arguments: { command: "bun test" } },
+    ] } }];
+    const html = readableMarkup(renderToStaticMarkup(<TranscriptMessage items={items} tools={{
+      "run-failed": { name: "bash", running: false, result: "failed", isError: true },
+    }} streaming={false} thinking={false} />));
+    expect(html).toContain('class="tool-activity-group" data-open="true" data-error="true"');
+    expect(html).toContain("failed");
+  });
+
   test("preserves every phase in order and collapses only the process after completion", () => {
     const html = readableMarkup(renderPhases());
     expect(html).toContain('class="turn-activity" data-open="false"');

@@ -61,13 +61,14 @@ function renderedRequest(request: string) {
   return args ? JSON.stringify(args, null, 2) : request;
 }
 
-export function ToolActivityGroup({ toolNames, running, children }: { toolNames: string[]; running: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function ToolActivityGroup({ toolNames, running, hasError = false, children }: { toolNames: string[]; running: boolean; hasError?: boolean; children: ReactNode }) {
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const listId = useId();
   const summary = summarizeToolCalls(toolNames) || "工具调用";
-  return <section className="tool-activity-group" data-open={open}>
-    <Button type="button" variant="ghost" className="tool-activity-group-header" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(value => !value)}>
-      <Icon name="code" aria-hidden="true" />{running ? <StableShimmer text={summary} className="tool-activity-group-summary" /> : <span className="tool-activity-group-summary">{summary}</span>}<Icon name="caret-right" className="tool-activity-group-chevron" aria-hidden="true" />
+  const open = openOverride ?? hasError;
+  return <section className="tool-activity-group" data-open={open} data-error={hasError || undefined}>
+    <Button type="button" variant="ghost" className="tool-activity-group-header" aria-expanded={open} aria-controls={listId} onClick={() => setOpenOverride(!open)}>
+      <Icon name={hasError ? "warning-circle" : "code"} aria-hidden="true" />{running ? <StableShimmer text={summary} className="tool-activity-group-summary" /> : <span className="tool-activity-group-summary">{summary}</span>}<Icon name="caret-right" className="tool-activity-group-chevron" aria-hidden="true" />
     </Button>
     <div id={listId} className="tool-activity-list" aria-hidden={!open} inert={!open}><div className="tool-activity-list-inner">{children}</div></div>
   </section>;

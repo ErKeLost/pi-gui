@@ -75,8 +75,12 @@ Required local components:
 - Android SDK Build-Tools 35.0.0 or newer compatible version
 - Android SDK Command-line Tools
 - NDK (Side by side) 29.0.13846066
-- Rust targets `aarch64-linux-android`, `armv7-linux-androideabi`,
-  `i686-linux-android`, and `x86_64-linux-android`
+- Rust target `aarch64-linux-android`
+
+The project defaults Android `build` and `dev` commands to the `aarch64`
+target. This covers current physical Android phones without generating several
+gigabytes of unused ARMv7 and emulator-only x86 build artifacts. Pass an
+explicit `--target` only when another device architecture is actually needed.
 
 Xcode is used for iOS and cannot replace the Android SDK, NDK, or JDK.
 

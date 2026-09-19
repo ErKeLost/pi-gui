@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.2.21"
+version = "0.2.22"
 description = "A local desktop workspace for Orbit"
 authors = ["you"]
 license = ""
@@ -34,3 +34,6 @@ tauri-plugin-updater = "2.11.0"
 tauri-plugin-process = "2.3.1"
 tungstenite = { version = "=0.26.2", default-features = false, features = ["handshake"] }
 uuid = { version = "=1.26.0", features = ["v4"] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2.4.6"

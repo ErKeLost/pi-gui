@@ -7,6 +7,7 @@ const env={...process.env}
 const args=process.argv.slice(2)
 const androidIndex=args.indexOf('android')
 const androidAction=androidIndex<0?undefined:args[androidIndex+1]
+if(androidIndex>=0&&['build','dev'].includes(androidAction)&&!args.includes('--target'))args.push('--target','aarch64')
 const syncAndroidIcons=()=>spawnSync(process.execPath,[resolve(root,'scripts/sync-android-icons.mjs')],{cwd:root,env,stdio:'inherit'})
 if(androidIndex>=0&&syncAndroidIcons().status!==0)process.exit(1)
 const bundle=spawnSync(process.execPath,[resolve(root,'scripts/bundle-pi.mjs')],{cwd:root,env,stdio:'inherit'})

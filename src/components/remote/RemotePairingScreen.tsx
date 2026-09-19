@@ -1,9 +1,9 @@
-import { BrowserQRCodeReader } from "@zxing/browser";
-import type { IScannerControls } from "@zxing/browser";
-import { ArrowRight, Copy, ImagePlus, LoaderCircle, ScanQrCode, X } from "lucide-react";
+import { ArrowRight, Copy, Image, LoaderCircle, ScanQrCode, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Input } from "../UI";
 import { Icon } from "../Icon";
+import { decodeImageUrl, isScanCanceled, scanQrNative } from "../../lib/qr-scan";
+import { parsePairingUri } from "../../lib/remote-protocol";
 import "../../styles/remote-access.css";
 
 export type RemotePairingScreenProps = {
@@ -18,92 +18,81 @@ export type RemotePairingScreenProps = {
 export function RemotePairingScreen({ pairingUri, connecting, error, onPairingUriChange, onConnect }: RemotePairingScreenProps) {
   const value = pairingUri.trim();
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerMode, setScannerMode] = useState<"camera" | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
-  const [cameraBusy, setCameraBusy] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const controlsRef = useRef<IScannerControls | null>(null);
-  const readerRef = useRef<BrowserQRCodeReader | null>(null);
-  const scanToken = useRef(0);
+  const [imageBusy, setImageBusy] = useState(false);
+  const nativeAbortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const stopCamera = useCallback(() => {
-    scanToken.current += 1;
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-    readerRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraBusy(false);
+  const closeScanner = useCallback(() => {
+    nativeAbortRef.current?.abort();
+    nativeAbortRef.current = null;
+    document.documentElement.classList.remove("remote-native-scanning");
+    setScannerOpen(false);
+    setImageBusy(false);
   }, []);
 
-  const closeScanner = useCallback(() => {
-    stopCamera();
-    setScannerOpen(false);
-    setScannerMode(null);
-  }, [stopCamera]);
-
-  useEffect(() => () => stopCamera(), [stopCamera]);
+  useEffect(() => () => {
+    nativeAbortRef.current?.abort();
+    document.documentElement.classList.remove("remote-native-scanning");
+  }, []);
 
   const acceptScan = useCallback((raw: string | undefined) => {
     const candidate = raw?.trim();
     if (!candidate) return false;
+    try {
+      parsePairingUri(candidate);
+    } catch {
+      setScannerError("这不是有效的 Orbit 配对二维码，请扫描电脑端显示的二维码。");
+      return false;
+    }
     onPairingUriChange(candidate);
     closeScanner();
     return true;
   }, [closeScanner, onPairingUriChange]);
 
-  useEffect(() => {
-    if (!scannerOpen || scannerMode !== "camera") return;
-    let active = true;
-    const token = ++scanToken.current;
-    const start = async () => {
-      await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
-      if (!active || !videoRef.current) return;
-      setCameraBusy(true);
-      try {
-        const reader = new BrowserQRCodeReader();
-        readerRef.current = reader;
-        const controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: "environment" } }, audio: false },
-          videoRef.current,
-          result => {
-            if (active && token === scanToken.current && result) acceptScan(result.getText());
-          },
-        );
-        if (!active || token !== scanToken.current) controls.stop();
-        else controlsRef.current = controls;
-      } catch (cause) {
-        if (active && token === scanToken.current) setScannerError(cause instanceof DOMException && cause.name === "NotAllowedError" ? "摄像头权限未开启，请选择二维码图片或粘贴配对链接。" : "无法打开摄像头，请选择二维码图片或粘贴配对链接。");
-      } finally {
-        if (active && token === scanToken.current) setCameraBusy(false);
-      }
-    };
-    void start();
-    return () => { active = false; if (token === scanToken.current) stopCamera(); };
-  }, [acceptScan, scannerMode, scannerOpen, stopCamera]);
+  const startNativeScan = useCallback(async () => {
+    nativeAbortRef.current?.abort();
+    const abort = new AbortController();
+    nativeAbortRef.current = abort;
+    setScannerError(null);
+    setScannerOpen(true);
+    document.documentElement.classList.add("remote-native-scanning");
+    await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
+    if (abort.signal.aborted) return;
+    try {
+      const text = await scanQrNative(abort.signal);
+      if (!abort.signal.aborted) acceptScan(text);
+    } catch (cause) {
+      if (abort.signal.aborted || isScanCanceled(cause)) return;
+      setScannerError(cause instanceof Error ? cause.message : "无法打开摄像头，请选择二维码图片或粘贴配对链接。");
+    } finally {
+      if (nativeAbortRef.current === abort) nativeAbortRef.current = null;
+    }
+  }, [acceptScan]);
 
   function openScanner() {
-    setScannerError(null);
-    setScannerMode("camera");
-    setScannerOpen(true);
+    void startNativeScan();
   }
 
   async function scanFile(file: File | undefined) {
     if (!file) return;
-    stopCamera();
-    setScannerMode(null);
+    nativeAbortRef.current?.abort();
+    nativeAbortRef.current = null;
     setScannerError(null);
-    setCameraBusy(true);
+    setImageBusy(true);
     const url = URL.createObjectURL(file);
     try {
-      const reader = new BrowserQRCodeReader();
-      const result = await reader.decodeFromImageUrl(url);
-      if (!acceptScan(result.getText())) setScannerError("没有识别到二维码，请换一张清晰图片。");
+      const text = await decodeImageUrl(url);
+      if (text) {
+        acceptScan(text);
+        return;
+      }
+      setScannerError("没有识别到二维码，请换一张清晰图片。");
     } catch {
       setScannerError("无法读取这张图片，请换一张清晰的二维码截图。");
     } finally {
       URL.revokeObjectURL(url);
-      setCameraBusy(false);
+      setImageBusy(false);
     }
   }
 
@@ -126,14 +115,26 @@ export function RemotePairingScreen({ pairingUri, connecting, error, onPairingUr
       </form>
       <p className="remote-pairing-security"><Icon name="shield-check" />配对链接包含访问凭据，请勿分享给其他人。</p>
     </section>
-    {scannerOpen && <div className="remote-pairing-scanner" role="dialog" aria-modal="true" aria-labelledby="remote-pairing-scanner-title">
-      <div className="remote-pairing-scanner-card">
-        <header><strong id="remote-pairing-scanner-title"><ScanQrCode aria-hidden="true" />扫描二维码</strong><Button type="button" variant="ghost" size="icon" title="关闭扫码" onClick={closeScanner}><X aria-hidden="true" /></Button></header>
-        <div className="remote-pairing-camera-frame"><video ref={videoRef} muted playsInline aria-label="二维码摄像头预览" />{cameraBusy && <span><LoaderCircle className="animate-spin" />正在打开摄像头…</span>}{!cameraBusy && scannerError && <span>{scannerError}</span>}</div>
-        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />从图片选择二维码</Button>
-        <input ref={fileRef} className="remote-pairing-file-input" type="file" accept="image/*" onChange={event => { void scanFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-        <p>将电脑端显示的配对二维码放入框内。</p>
+    {scannerOpen && <div className="remote-pairing-scanner" data-native="true" role="dialog" aria-modal="true" aria-labelledby="remote-pairing-scanner-title">
+      <div className="remote-pairing-scanner-topbar">
+        <button type="button" className="remote-pairing-scanner-close" title="关闭扫码" aria-label="关闭扫码" onClick={closeScanner}><X aria-hidden="true" /></button>
+        <div className="remote-pairing-scanner-title"><ScanQrCode aria-hidden="true" /><strong id="remote-pairing-scanner-title">扫描二维码</strong></div>
       </div>
+      <div className="remote-pairing-scanner-mask" aria-hidden="true">
+        <div className="remote-pairing-scanner-window">
+          <i className="remote-pairing-scanner-corner is-tl" />
+          <i className="remote-pairing-scanner-corner is-tr" />
+          <i className="remote-pairing-scanner-corner is-bl" />
+          <i className="remote-pairing-scanner-corner is-br" />
+          <i className="remote-pairing-scanner-line" />
+        </div>
+      </div>
+      {(imageBusy || scannerError) && <div className="remote-pairing-scanner-status" role={scannerError ? "alert" : "status"}>{imageBusy ? <><LoaderCircle className="animate-spin" aria-hidden="true" /><span>正在识别图片…</span></> : <><span>{scannerError}</span><button type="button" onClick={() => void startNativeScan()}>重新扫描</button></>}</div>}
+      <footer className="remote-pairing-scanner-footer">
+        <p>将电脑端显示的配对二维码放入框内</p>
+        <button type="button" className="remote-pairing-scanner-album" title="从相册选择二维码" aria-label="从相册选择二维码" onClick={() => fileRef.current?.click()}><Image aria-hidden="true" /><span>从相册选择</span></button>
+      </footer>
+      <input ref={fileRef} className="remote-pairing-file-input" type="file" accept="image/*" onChange={event => { void scanFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
     </div>}
   </main>;
 }

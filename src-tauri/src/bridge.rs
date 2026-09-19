@@ -1341,42 +1341,42 @@ pub async fn open_pi_terminal(
                     Err("无法打开系统终端".into())
                 };
             }
-        }
 
-        #[cfg(target_os = "linux")]
-        {
-            let shell = std::env::var_os("SHELL")
-                .map(PathBuf::from)
-                .filter(|path| path.is_file())
-                .unwrap_or_else(|| PathBuf::from("/bin/sh"));
-            for terminal in [
-                "konsole",
-                "x-terminal-emulator",
-                "gnome-terminal",
-                "kgx",
-                "kitty",
-                "foot",
-            ] {
-                let Ok(path) = executable(terminal) else {
-                    continue;
-                };
-                let mut process = Command::new(path);
-                match terminal {
-                    "gnome-terminal" | "kgx" => {
-                        process.arg("--").arg(&shell).args(["-lc", &command]);
+            #[cfg(target_os = "linux")]
+            {
+                let shell = std::env::var_os("SHELL")
+                    .map(PathBuf::from)
+                    .filter(|path| path.is_file())
+                    .unwrap_or_else(|| PathBuf::from("/bin/sh"));
+                for terminal in [
+                    "konsole",
+                    "x-terminal-emulator",
+                    "gnome-terminal",
+                    "kgx",
+                    "kitty",
+                    "foot",
+                ] {
+                    let Ok(path) = executable(terminal) else {
+                        continue;
+                    };
+                    let mut process = Command::new(path);
+                    match terminal {
+                        "gnome-terminal" | "kgx" => {
+                            process.arg("--").arg(&shell).args(["-lc", &command]);
+                        }
+                        "kitty" | "foot" => {
+                            process.arg(&shell).args(["-lc", &command]);
+                        }
+                        _ => {
+                            process.arg("-e").arg(&shell).args(["-lc", &command]);
+                        }
                     }
-                    "kitty" | "foot" => {
-                        process.arg(&shell).args(["-lc", &command]);
-                    }
-                    _ => {
-                        process.arg("-e").arg(&shell).args(["-lc", &command]);
+                    if process.spawn().is_ok() {
+                        return Ok(());
                     }
                 }
-                if process.spawn().is_ok() {
-                    return Ok(());
-                }
+                return Err("找不到可用终端；请安装 Konsole 或其他常用终端".into());
             }
-            return Err("找不到可用终端；请安装 Konsole 或其他常用终端".into());
         }
     }
 }
