@@ -53,9 +53,10 @@ describe("workspace extension", () => {
     const handlers = new Map<string, (event: { systemPrompt: string }, ctx: { cwd: string; sessionManager: { getEntries: () => unknown[] }; ui: { setStatus: (key: string, text: string) => void } }) => unknown>()
     const statuses: Record<string, string> = {}
     const pi = {
-      registerCommand: (_name: string, command: { handler: (args: string, ctx: { cwd: string; ui: { setStatus: (key: string, text: string) => void } }) => Promise<void> }) => {
+      registerCommand: (_name: string, command: { handler: (args: string, ctx: { cwd: string; sessionManager: { getEntries: () => unknown[] }; ui: { setStatus: (key: string, text: string) => void } }) => Promise<void> }) => {
         void command.handler(JSON.stringify({ roots: [root] }), {
           cwd: "/work/app",
+          sessionManager: { getEntries: () => [] },
           ui: { setStatus: (key: string, text: string) => { statuses[key] = text } },
         })
       },

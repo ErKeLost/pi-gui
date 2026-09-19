@@ -4836,17 +4836,19 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   min-width: 0;
 }
 .sidebar-project-row {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
   align-items: center;
   min-width: 0;
   border-radius: 7px;
 }
-.sidebar-project-group > [data-slot="context-menu-trigger"] {
+.sidebar-project-main-shell,
+.sidebar-project-main-shell[data-slot="context-menu-trigger"] {
   display: block;
+  min-width: 0;
   width: 100%;
 }
 .sidebar-project-row:hover,
-.sidebar-project-group.active > [data-slot="context-menu-trigger"] > .sidebar-project-row,
 .sidebar-project-group.active .sidebar-project-row {
   background: color-mix(in oklch, var(--sidebar-accent) 72%, transparent);
 }
@@ -4890,6 +4892,107 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   width: 12px;
   height: 12px;
   margin-left: auto;
+}
+.app-shell [data-slot="button"].sidebar-project-actions {
+  display: grid;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  opacity: 0;
+}
+.sidebar-project-row:hover .sidebar-project-actions,
+.sidebar-project-row:focus-within .sidebar-project-actions,
+.sidebar-project-actions[aria-expanded="true"] {
+  opacity: 1;
+}
+.app-shell [data-slot="button"].sidebar-project-actions:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--sidebar-accent) 88%, var(--sidebar-foreground) 4%);
+  color: var(--sidebar-foreground);
+}
+.app-shell [data-slot="button"].sidebar-project-actions svg {
+  width: 16px;
+  height: 16px;
+}
+.project-actions-menu[data-slot="popover-content"] {
+  width: min(300px, calc(100vw - 24px));
+  gap: 6px;
+  padding: 7px;
+}
+.project-actions-summary {
+  display: grid;
+  min-height: 52px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 7px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.project-actions-summary > svg {
+  width: 19px;
+  height: 19px;
+  color: var(--foreground);
+}
+.project-actions-summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-actions-summary strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.project-actions-summary em {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-style: normal;
+}
+.project-actions-items {
+  display: grid;
+  gap: 1px;
+}
+.project-actions-info {
+  display: grid;
+  min-height: 34px;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 0 9px;
+  color: var(--foreground);
+  font-size: 12px;
+}
+.project-actions-info svg {
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+.project-actions-info span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-actions-items [data-slot="button"] {
+  width: 100%;
+  height: 34px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.project-actions-items [data-slot="button"] svg {
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+.project-actions-items .project-actions-danger {
+  color: var(--destructive);
+}
+.project-actions-items .project-actions-danger svg {
+  color: var(--destructive);
 }
 .sidebar-project-sessions {
   position: relative;
@@ -5010,6 +5113,105 @@ html[data-theme="light"] .composer-agent-mode-indicator {
 .sidebar-project-panel[data-ending-style] {
   height: 0;
   will-change: height;
+}
+
+[data-slot="dialog-content"].project-editor-dialog {
+  width: min(520px, calc(100vw - 28px));
+  max-width: none;
+  gap: 16px;
+  padding: 18px;
+}
+.project-editor-body {
+  display: grid;
+  gap: 18px;
+}
+.project-editor-field {
+  display: grid;
+  gap: 7px;
+}
+.project-editor-field > span,
+.project-editor-roots > header > span {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+.project-editor-field [data-slot="input"] {
+  height: 34px;
+  font-size: 13px;
+}
+.project-editor-roots {
+  display: grid;
+  gap: 8px;
+}
+.project-editor-roots > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.project-editor-roots > header small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.project-editor-root-list {
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--muted) 36%, transparent);
+}
+.project-editor-root {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 7px;
+  border-radius: var(--radius-sm);
+}
+.project-editor-root:hover {
+  background: color-mix(in oklch, var(--accent) 64%, transparent);
+}
+.project-editor-root > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--foreground);
+}
+.project-editor-root > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.project-editor-root strong,
+.project-editor-root small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-editor-root strong {
+  font-size: 12px;
+  font-weight: 570;
+}
+.project-editor-root small,
+.project-editor-root em {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-style: normal;
+}
+.project-editor-root .project-editor-remove[data-slot="button"] {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+}
+.project-editor-root .project-editor-remove svg {
+  width: 13px;
+  height: 13px;
+}
+.project-editor-add[data-slot="button"] {
+  justify-self: start;
+  height: 30px;
 }
 
 @media (prefers-reduced-motion: reduce) {

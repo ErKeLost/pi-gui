@@ -4,6 +4,7 @@ import {Channel,invoke,isTauri} from '@tauri-apps/api/core'
 import {QueryClient} from '@tanstack/react-query'
 import type {RpcCommand,RpcResponse} from '@earendil-works/pi-coding-agent'
 import {useWorkspace,type LiveSession,type Workspace,type WorkspaceMode} from './store'
+import {projectExtraRoots,useProjects} from './projects'
 import {parseAgentSnapshot} from './agents'
 import {emptyTranscript,hydrate,reduceEvent,type Event,type PiMessage,type RpcSessionState,type UiRequest} from './protocol'
 import {attachRemoteConnection,remoteHostSnapshot,runRemoteHostOperation,sendRemotePiCommand} from './remote-runtime'
@@ -163,7 +164,8 @@ export function persistedSessionFile(project:string):string {
 }
 const multiAgentModeCommand=(enabled=useWorkspace.getState().multiAgentEnabled)=>({type:'prompt' as const,message:`/gui-agent-mode ${JSON.stringify({enabled})}`})
 export const syncMultiAgentMode=(target:string,enabled=useWorkspace.getState().multiAgentEnabled)=>request(multiAgentModeCommand(enabled),30000,target)
-export const setSessionRoots=(roots:string[])=>request({type:'prompt',message:`/gui-workspace-set ${JSON.stringify({roots})}`},30000)
+export const setSessionRoots=(roots:string[],target=useWorkspace.getState().cwd)=>request({type:'prompt',message:`/gui-workspace-set ${JSON.stringify({roots})}`},30000,target)
+async function syncConfiguredProjectRoots(cwd:string,target=cwd){const project=useProjects.getState().projects.find(item=>item.path===cwd);if(project)await setSessionRoots(projectExtraRoots(project),target)}
 export async function refresh(target=useWorkspace.getState().cwd){const id=route(target),state=await request<RpcSessionState>({type:'get_state'},30000,id);patch(id,{state});const cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd;if(state.sessionFile&&projectActive.get(cwd)===id)persistSession(cwd,state.sessionFile);await queryClient.invalidateQueries({queryKey:['pi','live-stats',id]});return state}
 export async function listProviderModels(provider:string):Promise<{data:ProviderModel[]}> { if(!desktopRuntime()) throw new Error('模型目录设置请在电脑端修改'); return invoke<{data:ProviderModel[]}>('list_provider_models',{provider}) }
 export async function listProjectFiles(project=useWorkspace.getState().cwd):Promise<string[]> { if(mobileRuntime())return runRemoteHostOperation<string[]>({name:'project.files',cwd:project});if(!native)throw new Error('文件索引需要桌面应用');return invoke<string[]>('list_project_files',{cwd:project}) }
@@ -275,6 +277,7 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
   if(snapshot.theme||snapshot.machineName)useWorkspace.getState().set({...snapshot.theme?{remoteTheme:snapshot.theme}:{},...snapshot.machineName?{remoteMachineName:snapshot.machineName}:{}})
   if(!connection)throw new Error('电脑端没有这个项目的活动连接')
   await connectRemoteConnection(connection,workspaceMode)
+  if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd)
   return
  }
  const previous=useWorkspace.getState();if(previous.connectionId)snapshots.set(previous.connectionId,snapshot())
@@ -282,8 +285,9 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
  const saved=snapshots.get(id)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode,connectionId:id})
  localStorage.setItem('pi-gui.cwd',cwd)
  localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
- if(connections.has(id)&&saved.connection==='online'){await Promise.all([refresh(id),syncMultiAgentMode(id)]);return}
+ if(connections.has(id)&&saved.connection==='online'){await Promise.all([refresh(id),syncMultiAgentMode(id)]);if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id);return}
  await startConnection(cwd,id,{restoreLast:true})
+ if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id)
 }
 export async function disconnect(){const cwd=useWorkspace.getState().cwd;await Promise.all(connectionsFor(cwd).map(id=>closeConnection(id,'项目已断开')));projectActive.delete(cwd);useWorkspace.getState().set({...fresh(),cwd,connectionId:'',workspaceMode:useWorkspace.getState().workspaceMode})}
 export async function forgetProject(project:string){
@@ -299,7 +303,7 @@ export async function changeSession(command:RpcCommand){
  if(command.type==='switch_session'){
   if(useWorkspace.getState().state?.sessionFile===command.sessionPath){useWorkspace.getState().set({panel:'chat'});return}
   const owner=sessionOwners.get(command.sessionPath)
-  if(owner&&connections.has(owner)){activateConnection(owner,cwd);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return}
+  if(owner&&connections.has(owner)){activateConnection(owner,cwd);await syncConfiguredProjectRoots(cwd,owner);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return}
  }
  if(mobileRuntime()){
   const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active)
@@ -307,6 +311,7 @@ export async function changeSession(command:RpcCommand){
   patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{},agents:null})
   if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'})
   await loadMessages(active)
+  if(useWorkspace.getState().workspaceMode==='project')await syncConfiguredProjectRoots(cwd,active)
   await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
   return
  }
@@ -315,9 +320,10 @@ export async function changeSession(command:RpcCommand){
   snapshots.set(active,snapshot())
   useWorkspace.getState().set({...fresh(),cwd,connectionId:id,panel:'chat'})
   await startConnection(cwd,id,command.type==='switch_session'?{sessionPath:command.sessionPath}:undefined)
+  if(useWorkspace.getState().workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id)
   await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return
  }
- const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{},agents:null});if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'});await loadMessages(active);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
+ const result=await request<{cancelled?:boolean;text?:string}>(command,60000,active);if(result?.cancelled)throw new Error('扩展取消了会话切换');patch(active,{error:null,telemetry:emptyTelemetry(),draft:result?.text??'',dialogs:[],statuses:{},widgets:{},agents:null});if(useWorkspace.getState().connectionId===active)useWorkspace.getState().set({panel:'chat'});await loadMessages(active);if(useWorkspace.getState().workspaceMode==='project')await syncConfiguredProjectRoots(cwd,active);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]})
 }
 const branchingConnections = new Set<string>()
 export async function branchFromMessage(message: PiMessage) {

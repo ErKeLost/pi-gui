@@ -58,20 +58,21 @@
 }
 
 .workspace-drawer-header {
-  display: flex;
-  min-height: calc(48px + env(safe-area-inset-top));
+  display: grid;
+  min-height: calc(52px + env(safe-area-inset-top));
+  grid-template-columns: minmax(0, 1fr) 32px;
   flex: 0 0 auto;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: env(safe-area-inset-top) max(10px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+  align-items: center;
+  gap: 8px;
+  padding: env(safe-area-inset-top) max(10px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
   border-bottom: 1px solid var(--border);
   background: inherit;
 }
 
 .workspace-drawer-title {
   min-width: 0;
-  padding-bottom: 8px;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   font-size: 13px;
   font-weight: 600;
@@ -80,27 +81,37 @@
 }
 
 .workspace-drawer-close {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  display: grid !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  align-self: center;
   padding: 0;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted-foreground);
+  box-sizing: border-box;
+  outline: none;
 }
 
-.workspace-drawer-close:hover,
-.workspace-drawer-close:focus-visible {
+.workspace-drawer-close:hover {
   background: var(--accent);
   color: var(--accent-foreground);
 }
+.workspace-drawer-close:focus-visible {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
 
 .workspace-drawer-close svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .workspace-drawer-body {
@@ -455,12 +466,6 @@
 
   .workspace-drawer :is(.new-session, .nav-item, .sidebar-project-main) {
     min-height: 44px !important;
-  }
-
-  .workspace-drawer-close {
-    width: 44px;
-    height: 44px;
-    flex-basis: 44px;
   }
 
   .workspace-drawer .sidebar-project-sessions .recent-session-main {

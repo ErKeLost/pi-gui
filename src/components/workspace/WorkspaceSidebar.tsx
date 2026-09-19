@@ -4,8 +4,8 @@ import { gooeyToast } from "goey-toast";
 import type { Session } from "../../lib/protocol";
 import type { LiveSession, Panel } from "../../lib/store";
 import { useWorkspace } from "../../lib/store";
-import { mergeProjects, useProjects, type Project } from "../../lib/projects";
-import { changeSession, connect, desktopRuntime, forgetProject, queryClient, report, retireSession } from "../../lib/rpc";
+import { mergeProjects, projectExtraRoots, useProjects, type Project } from "../../lib/projects";
+import { changeSession, connect, desktopRuntime, forgetProject, queryClient, report, retireSession, setSessionRoots } from "../../lib/rpc";
 import { mergeProjectSessions, useProjectSessionGroups } from "../../hooks/use-project-sessions";
 import { sessionGlyph } from "../../lib/session-visual";
 import { Button, Modal } from "../UI";
@@ -14,6 +14,8 @@ import { DeleteSessionDialog } from "../DeleteSessionDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../ui/context-menu";
 import { WorkspaceTitlebar } from "./WorkspaceTitlebar";
+import { ProjectActions } from "./ProjectActions";
+import { ProjectEditorDialog } from "./ProjectEditorDialog";
 
 const navigation: { id: Panel; label: string; icon: string }[] = [
   { id: "chat", label: "工作台", icon: "chat-circle-text" },
@@ -38,18 +40,28 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
   const cwd = useWorkspace(state => state.cwd);
   const workspaceMode = useWorkspace(state => state.workspaceMode);
   const homeDir = useWorkspace(state => state.homeDir);
-  const { projects, add, remove } = useProjects();
+  const { projects, add, update, remove } = useProjects();
   const visibleProjects = useMemo(() => mergeProjects(projects, cwd && workspaceMode === "project" ? [cwd] : []), [cwd, projects, workspaceMode]);
   const sessionGroups = useProjectSessionGroups(visibleProjects.map(project => project.path));
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [busyProject, setBusyProject] = useState("");
   const [deletingSession, setDeletingSession] = useState<SessionTarget | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  async function syncProjectRoots(project: Project) {
+    await setSessionRoots(projectExtraRoots(project));
+  }
 
   async function chooseProject(path: string) {
     setBusyProject(path);
     setCollapsed(current => { const next = new Set(current); next.delete(path); return next; });
-    try { await connect(path, "project"); onNavigate?.(); }
+    try {
+      await connect(path, "project");
+      const project = useProjects.getState().projects.find(item => item.path === path);
+      if (project) await syncProjectRoots(project);
+      onNavigate?.();
+    }
     catch (error) { report(error); }
     finally { setBusyProject(""); }
   }
@@ -69,9 +81,23 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
     try {
       if (cwd !== projectPath || workspaceMode !== "project" || !online) await connect(projectPath, "project");
       await changeSession({ type: "switch_session", sessionPath: session.path });
+      const project = useProjects.getState().projects.find(item => item.path === projectPath);
+      if (project) await syncProjectRoots(project);
       onNavigate?.();
     } catch (error) { report(error); }
     finally { setBusyProject(""); }
+  }
+
+  async function newSession() {
+    await changeSession({ type: "new_session" });
+    const project = useProjects.getState().projects.find(item => item.path === cwd);
+    if (project) await syncProjectRoots(project);
+  }
+
+  async function saveProject(project: Project) {
+    update(project);
+    if (workspaceMode === "project" && cwd === project.path && online) await syncProjectRoots(project);
+    gooeyToast.success("项目已更新", { description: `${projectExtraRoots(project).length + 1} 个 app root`, showTimestamp: false });
   }
 
   async function deleteSelectedSession() {
@@ -114,7 +140,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
   return <div className="sidebar-pane">
     {!hideTitlebar && <WorkspaceTitlebar variant="sidebar" sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />}
     <aside className="sidebar">
-      <Button variant="outline" className="new-session" disabled={!online} onClick={() => { onNavigate?.(); void changeSession({ type: "new_session" }).catch(report); }}><Icon name="plus" />新建会话<kbd>⌘ N</kbd></Button>
+      <Button variant="outline" className="new-session" disabled={!online} onClick={() => { onNavigate?.(); void newSession().catch(report); }}><Icon name="plus" />新建会话<kbd>⌘ N</kbd></Button>
       <nav aria-label="主导航">{navigation.map(item => <Button key={item.id} className={`nav-item ${panel === item.id ? "selected" : ""}`} onClick={() => { useWorkspace.getState().set({ panel: item.id }); onNavigate?.(); }}><Icon name={item.icon} /><span>{item.label}</span>{item.id === "commands" && <Icon name="arrow-up-right" />}</Button>)}</nav>
 
       <div className="sidebar-library">
@@ -127,12 +153,15 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
             const isExpanded = !collapsed.has(project.path);
             return <Collapsible open={isExpanded} onOpenChange={open => setProjectExpanded(project.path, open)} className={`sidebar-project-group${isActiveProject ? " active" : ""}`} key={project.path}>
               <ContextMenu>
-                <ContextMenuTrigger render={<div className="sidebar-project-row" />}>
-                  <CollapsibleTrigger render={<button type="button" className="sidebar-project-main" disabled={busyProject === project.path} aria-current={isActiveProject ? "true" : undefined} onClick={event => { if (!isActiveProject) { event.preventDefault(); void chooseProject(project.path); } }} />}>
-                    <Icon name={isExpanded ? "folder-open" : "folder-simple"} /><span title={project.path}>{project.name}</span>{busyProject === project.path && <i className="session-working-indicator" aria-hidden />}
-                  </CollapsibleTrigger>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
+                <div className="sidebar-project-row">
+                  <ContextMenuTrigger render={<div className="sidebar-project-main-shell" />}>
+                    <CollapsibleTrigger render={<button type="button" className="sidebar-project-main" disabled={busyProject === project.path} aria-current={isActiveProject ? "true" : undefined} onClick={event => { if (!isActiveProject) { event.preventDefault(); void chooseProject(project.path); } }} />}>
+                      <Icon name={isExpanded ? "folder-open" : "folder-simple"} /><span title={project.path}>{project.name}</span>{busyProject === project.path && <i className="session-working-indicator" aria-hidden />}
+                    </CollapsibleTrigger>
+                  </ContextMenuTrigger>
+                  <ProjectActions project={project} homeDir={homeDir} taskCount={merged.sessions.length} onEdit={() => setEditingProject(project)} />
+                </div>
+                <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => setEditingProject(project)}><Icon name="gear-six" />编辑项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
               </ContextMenu>
               <CollapsibleContent className="sidebar-project-panel"><div className="sidebar-project-sessions">
                 {merged.sessions.map(session => {
@@ -160,6 +189,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
       </div>
     </aside>
     <DeleteSessionDialog open={Boolean(deletingSession)} sessionName={deletingSession?.session.name || deletingSession?.session.firstMessage || "未命名会话"} onCancel={() => setDeletingSession(null)} onConfirm={() => void deleteSelectedSession()} />
+    {editingProject && <ProjectEditorDialog key={editingProject.path} project={editingProject} homeDir={homeDir} onClose={() => setEditingProject(null)} onSave={saveProject} />}
     <Modal open={Boolean(deletingProject)} title="移除项目" onCancel={() => setDeletingProject(null)} onOk={() => void removeSelectedProject()} okText="移除" cancelText="取消" destructive><div className="remove-workspace-copy"><strong>{deletingProject?.name}</strong><code>{deletingProject?.path}</code><p>只会从侧栏移除，不会删除磁盘文件。</p></div></Modal>
   </div>;
 }

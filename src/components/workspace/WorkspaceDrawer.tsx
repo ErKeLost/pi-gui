@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { LiveSession, Panel } from "../../lib/store";
 import { Icon } from "../Icon";
 import { Inspector } from "../Inspector";
+import { Button } from "../ui/button";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
 type WorkspaceDrawerProps = {
@@ -20,7 +21,7 @@ function WorkspaceDrawer({ children, open, onClose, side, title }: WorkspaceDraw
       <Dialog.Popup className={`workspace-drawer workspace-drawer-${side}`}>
         <header className="workspace-drawer-header">
           <Dialog.Title className="workspace-drawer-title">{title}</Dialog.Title>
-          <Dialog.Close className="workspace-drawer-close" aria-label={`关闭${title}`}><Icon name="x" /></Dialog.Close>
+          <Dialog.Close render={<Button variant="ghost" size="icon" className="workspace-drawer-close" aria-label={`关闭${title}`} />}><Icon name="x" /></Dialog.Close>
         </header>
         <div className="workspace-drawer-body">{children}</div>
       </Dialog.Popup>

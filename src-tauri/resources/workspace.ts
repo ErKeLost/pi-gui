@@ -51,8 +51,11 @@ export function registerWorkspace(pi: ExtensionAPI): void {
   pi.registerCommand("gui-workspace-set", {
     description: "GUI: attach extra project roots to this session",
     handler: async (args, ctx) => {
-      const roots = extraRoots(ctx.cwd, (JSON.parse(args) as { roots: string[] }).roots)
-      pi.appendEntry(WORKSPACE_TYPE, { roots })
+      const input = JSON.parse(args) as { roots?: unknown }
+      if (!Array.isArray(input.roots) || input.roots.some(root => typeof root !== "string")) throw new Error("Expected roots array")
+      const roots = extraRoots(ctx.cwd, input.roots)
+      const current = storedRoots(ctx.sessionManager.getEntries(), ctx.cwd)
+      if (roots.length !== current.length || roots.some((root, index) => root !== current[index])) pi.appendEntry(WORKSPACE_TYPE, { roots })
       ctx.ui.setStatus(WORKSPACE_STATUS, JSON.stringify({ roots }))
     },
   })
