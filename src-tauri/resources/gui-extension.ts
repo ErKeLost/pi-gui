@@ -3,6 +3,7 @@ import {realpathSync} from 'node:fs'
 import {pathToFileURL} from 'node:url'
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent'
 import {registerSubagentTools,SUBAGENT_TOOL_NAMES} from './subagents/index.ts'
+import {registerWorkspace} from './workspace.ts'
 // Pi official docs/extensions.md: registerCommand, getAllTools, setActiveTools,
 // ExtensionCommandContext.navigateTree and setLabel. Loaded only by this GUI.
 export function ensureImageInput(model: {input: ('text'|'image')[]} | undefined) {
@@ -35,6 +36,7 @@ function sessionText(ctx:ExtensionCommandContext){
 }
 export default async function (pi: ExtensionAPI) {
   registerSubagentTools(pi)
+  registerWorkspace(pi)
   pi.on('model_select',(event)=>{ensureImageInput(event.model)})
   pi.on('input',(_event,ctx)=>{ensureImageInput(ctx.model);return {action:'continue'}})
   const {SettingsManager}=await import(pathToFileURL(join(dirname(realpathSync(process.argv[1])),'index.js')).href)

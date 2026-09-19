@@ -4,9 +4,10 @@ Orbit adds a collaboration control plane on top of Pi 0.85.1. Pi remains the exe
 
 ## Runtime model
 
-The parent Pi session receives six model-callable tools:
+The parent Pi session receives a supervisor-oriented collaboration surface:
 
 - `spawn_agent`
+- `spawn_agents`
 - `send_message`
 - `followup_task`
 - `wait_agent`
@@ -38,7 +39,11 @@ Pi's delta-only `message_update`, `tool_execution_*`, `message_end`, `agent_end`
 
 ## Lifecycle and communication
 
-`spawn_agent` returns as soon as Pi accepts the child prompt, so the parent can dispatch independent tasks without serially waiting for completion. The parent then enters a supervisor barrier: Orbit waits for every active child at `agent_end` before Pi can start another parent run, allowing the children to execute in parallel while preventing parent exploration or synthesis from racing ahead. `wait_agent` remains available for explicit status collection and waits on event-driven settlement rather than polling. Completed children keep their RPC context for `followup_task`; all child processes are reclaimed when the next top-level run begins or the parent session shuts down.
+`spawn_agent` is the normal supervisor delegation primitive: it starts one isolated child Pi process, waits for `agent_settled`, and returns the child's completed result as the tool result for the parent's next model iteration. `spawn_agents` is the explicit parallel primitive for independent work; it starts all requested children, waits for all of them, and returns one result per task for synthesis. This matches the agents-as-tools pattern used by current supervisor frameworks: process state is internal, while the parent model receives a bounded result contract.
+
+The parent still has a barrier at `agent_end` for legacy/background control calls, so a parent cannot race ahead with ordinary repository tools while an explicitly controlled child remains active. `send_message`, `followup_task`, `wait_agent`, `interrupt_agent`, and `list_agents` are lifecycle controls for an already-running delegation, not substitutes for the completed result returned by `spawn_agent` or `spawn_agents`. Completed children keep their RPC context for follow-up work; all child processes are reclaimed when the next top-level run begins or the parent session shuts down.
+
+`spawn_agents` accepts at most eight tasks per delegation and the runtime enforces the same active-child limit across nested calls. This bounds process, provider, and UI pressure without imposing an arbitrary tree-depth limit.
 
 Cancellation sends Pi's `clear_queue` and `abort` commands before terminating the process. Child sessions are persisted and become openable from the activity panel after settlement.
 

@@ -3568,6 +3568,140 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.app-shell [data-slot="button"].session-roots-trigger {
+  display: flex;
+  min-width: 0;
+  max-width: min(32em, calc(100% - 180px));
+  height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--foreground);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.app-shell [data-slot="button"].session-roots-trigger:hover:not(:disabled) {
+  background: var(--accent);
+}
+.session-roots-trigger .app-header-folder {
+  margin-right: 0;
+}
+.session-roots-trigger .app-header-title {
+  flex: 1 1 auto;
+  max-width: none;
+}
+.session-roots-caret {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--muted-foreground);
+}
+.session-roots-menu[data-slot="popover-content"] {
+  width: min(320px, calc(100vw - 24px));
+  padding: 8px;
+  gap: 0;
+}
+.session-roots-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 6px 10px;
+}
+.session-roots-heading span {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-roots-heading small {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.session-roots-list,
+.session-roots-available {
+  display: grid;
+  gap: 2px;
+}
+.session-roots-available {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.session-roots-row,
+.app-shell [data-slot="button"].session-roots-add {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+}
+.app-shell [data-slot="button"].session-roots-add:hover:not(:disabled) {
+  background: var(--accent);
+}
+.session-roots-row svg,
+.session-roots-add svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+}
+.session-roots-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 1px;
+}
+.session-roots-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-roots-copy small {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-roots-home {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.app-shell [data-slot="button"].session-roots-remove {
+  display: grid;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.app-shell [data-slot="button"].session-roots-remove:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.app-shell [data-slot="button"].session-roots-remove svg {
+  width: 12px;
+  height: 12px;
+}
 .app-header-more {
   flex: 0 0 auto;
   margin-left: auto;

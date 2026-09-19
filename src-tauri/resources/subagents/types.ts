@@ -35,4 +35,10 @@ export interface AgentResult {
   agent: AgentNode
   output: string
   snapshot: AgentSnapshot
+  usage?: Record<string, unknown>
+}
+
+export interface AgentBatchResult {
+  results: AgentResult[]
+  snapshot: AgentSnapshot
 }

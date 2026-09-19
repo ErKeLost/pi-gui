@@ -4,6 +4,7 @@ import { Icon } from "../Icon";
 import { useWorkspace } from "../../lib/store";
 import { useWindowDrag } from "../../hooks/use-window-drag";
 import { ComposerContext } from "../chat/ComposerContext";
+import { SessionRoots } from "./SessionRoots";
 
 function Navigation({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {
   return <div className="titlebar-navigation">
@@ -26,6 +27,7 @@ export function WorkspaceTitlebar({ variant, sidebarOpen, onToggleSidebar, title
   const dragRef = useWindowDrag();
   const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const connection = useWorkspace(state => state.connection);
+  const cwd = useWorkspace(state => state.cwd);
   const showNavigation = variant === "sidebar" || variant === "full" || (variant === "workspace" && !sidebarOpen);
   const showContent = variant === "workspace" || variant === "full";
   const className = variant === "workspace" && !sidebarOpen
@@ -35,8 +37,7 @@ export function WorkspaceTitlebar({ variant, sidebarOpen, onToggleSidebar, title
     {showNavigation && <Navigation sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />}
     {showNavigation && showContent && <span className="titlebar-divider" aria-hidden />}
     {showContent && <>
-      <FolderClosed className="app-header-folder" strokeWidth={1.7} aria-hidden="true" />
-      <strong className="app-header-title" title={rawTitle || title}>{title}</strong>
+      {showMenu && cwd ? <SessionRoots title={title} rawTitle={rawTitle} /> : <><FolderClosed className="app-header-folder" strokeWidth={1.7} aria-hidden="true" /><strong className="app-header-title" title={rawTitle || title}>{title}</strong></>}
       {runtimeTarget === "mobile" && connection !== "online" && <span className="titlebar-remote-status" aria-live="polite">{connection === "connecting" ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <WifiOff aria-hidden="true" />}{connection === "connecting" ? "正在重连电脑" : "电脑已断开"}</span>}
       {runtimeTarget === "mobile" && showContent && <div className="app-header-context"><ComposerContext placement="header" /></div>}
       {showMenu && <Button className="titlebar-button app-header-more" title="会话管理" onClick={() => useWorkspace.getState().set({ panel: "settings", settingsPage: "sessions" })}><Icon name="dots-three" /></Button>}

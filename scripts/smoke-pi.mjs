@@ -12,6 +12,7 @@ mkdirSync(resources,{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/pi-runtime'),resolve(resources,'pi-runtime'),{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/subagents'),resolve(resources,'subagents'),{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/gui-extension.ts'),resolve(resources,'gui-extension.ts'))
+cpSync(resolve(root,'src-tauri/resources/workspace.ts'),resolve(resources,'workspace.ts'))
 const cli=resolve(resources,'pi-runtime/cli.js'),extension=resolve(resources,'gui-extension.ts')
 const child=spawn(process.execPath,[cli,'--mode','rpc','--offline','--no-session','--extension',extension],{cwd,stdio:['pipe','pipe','pipe'],env:{...process.env,ORBIT_PI_CLI_PATH:cli,ORBIT_PI_NODE_PATH:process.execPath}})
 let buffer='',sequence=0,errors='',toolState,runtimeInfo

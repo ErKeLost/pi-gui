@@ -189,7 +189,8 @@
     flex-basis: 48px;
   }
 
-  .narrow-workspace .app-header-title {
+  .narrow-workspace .app-header-title,
+  .narrow-workspace .session-roots-trigger {
     max-width: calc(100% - 158px);
   }
 
