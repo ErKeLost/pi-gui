@@ -11,6 +11,9 @@ const marker = resolve(output, "package.json");
 const current = existsSync(marker) ? JSON.parse(readFileSync(marker, "utf8")) : null;
 const buildFormat = 3;
 
+const computerUse = spawnSync(process.execPath, [resolve(root, "scripts/sync-computer-use.mjs")], { cwd: root, stdio: "inherit" });
+if (computerUse.status !== 0) process.exit(computerUse.status ?? 1);
+
 if (current?.version === packageJson.version && current?.buildFormat === buildFormat && existsSync(resolve(output, "cli.js")) && existsSync(resolve(output, "index.js"))) process.exit(0);
 
 rmSync(output, { recursive: true, force: true });

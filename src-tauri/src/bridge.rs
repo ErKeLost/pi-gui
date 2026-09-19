@@ -1091,10 +1091,22 @@ pub async fn pi_connect(
             .path()
             .resolve("resources/gui-extension.ts", BaseDirectory::Resource)
             .map_err(|e| e.to_string())?;
+        let computer_use = app
+            .path()
+            .resolve(
+                "resources/pi-computer-use/extensions/computer-use.ts",
+                BaseDirectory::Resource,
+            )
+            .ok()
+            .filter(|path| path.is_file());
         let mut command = Command::new(&node);
+        command.arg(&pi).args(["--mode", "rpc", "--offline"]);
+        // Load Computer Use before the GUI extension so session_start can disable
+        // those tools until the user explicitly turns the mode on.
+        if let Some(path) = &computer_use {
+            command.arg("--extension").arg(path);
+        }
         command
-            .arg(&pi)
-            .args(["--mode", "rpc", "--offline"])
             .arg("--extension")
             .arg(extension)
             .current_dir(&path)

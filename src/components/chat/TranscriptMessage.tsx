@@ -125,38 +125,49 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
   const progress: ReactNode[] = [];
   const media: ReactNode[] = [];
   const body: ReactNode[] = [];
-  let activityIndex: number | undefined;
   const lastMessage = items.at(-1)?.message;
-  const hasVisibleOutput = content.some(({ part }) =>
-    (part.type === "text" && Boolean(part.text?.trim())) || part.type === "image",
-  );
-  const compressProcess = role === "assistant" && !hasVisibleOutput;
+  const hasFinalResponse = role === "assistant" && !streaming
+    && !lastMessage?.errorMessage
+    && (!lastMessage?.stopReason || lastMessage.stopReason === "stop")
+    && !content.some(({ part, messageIndex }) => messageIndex === items.length - 1 && part.type === "toolCall")
+    && content.some(({ part, messageIndex }) => messageIndex === items.length - 1 && part.type === "text" && part.text?.trim());
 
-  // Tool-only turns can contain many assistant messages. Keep the live view to
-  // one stable thinking row and one stable operation row; each operation still
-  // renders its original expandable details inside the group.
-  if (compressProcess) {
-    const thinkingParts = content.filter(({ part }) => part.type === "thinking" && Boolean(part.thinking?.trim()));
-    const toolParts = content.filter(({ part }) => part.type === "toolCall");
-    if (thinkingParts.length > 0 || (streaming && thinking)) {
-      progress.push(
-        <Thinking
-          key={`${items[0]?.id ?? "turn"}-thinking-summary`}
-          text={thinkingParts.at(-1)?.part.thinking ?? ""}
-          running={streaming && thinking}
-        />,
-      );
+  if (role === "user") {
+    for (const { part, key, active } of content) {
+      if (part.type === "text" && !part.text?.trim()) continue;
+      if (part.type === "thinking" && !part.thinking?.trim()) continue;
+      const node = <PartView key={key} part={part} tools={tools} running={active} thinking={false} collapse />;
+      if (part.type === "image") media.push(node);
+      else body.push(node);
+    }
+    return { progress, media, body, defaultExpanded: false, activityIndex: undefined, activityConsumed: false };
+  }
+
+  let processParts: ProjectedPart[] = [];
+  let processIndex = 0;
+  let activityConsumed = false;
+  const turnKey = items[0]?.id ?? "turn";
+  const flushProcess = (live: boolean) => {
+    if (!processParts.length) return;
+    const group = processParts;
+    processParts = [];
+    const groupKey = `${turnKey}-process-${processIndex++}`;
+    const thoughts = group.filter(({ part, active }) => part.type === "thinking" && (Boolean(part.thinking?.trim()) || (active && thinking)));
+    const toolParts = group.filter(({ part }) => part.type === "toolCall");
+    const latestThought = thoughts.at(-1);
+    if (latestThought) {
+      progress.push(<Thinking key={`${groupKey}-thinking`} text={latestThought.part.thinking ?? ""} running={live && streaming} />);
     }
     if (toolParts.length > 0) {
       const toolRows = toolParts.map(({ part, key, active }) => <PartView key={key} part={part} tools={tools} running={active} thinking={false} />);
-      const spawnIndex = toolParts.findIndex(({ part }) => (part.name ?? tools[part.id ?? ""]?.name) === "spawn_agent");
+      const spawnIndex = activityConsumed ? -1 : toolParts.findIndex(({ part }) => (part.name ?? tools[part.id ?? ""]?.name) === "spawn_agent");
       const operationChildren = toolRows.flatMap((row, index) => index === spawnIndex && activity
-        ? [row, <Fragment key={`${items[0]?.id ?? "turn"}-agent-activity`}>{activity}</Fragment>]
+        ? [row, <Fragment key={`${turnKey}-agent-activity`}>{activity}</Fragment>]
         : [row]);
-      if (activity && spawnIndex < 0) operationChildren.push(<Fragment key={`${items[0]?.id ?? "turn"}-agent-activity`}>{activity}</Fragment>);
+      if (activity && spawnIndex >= 0) activityConsumed = true;
       progress.push(
         <ToolActivityGroup
-          key={`${items[0]?.id ?? "turn"}-tool-summary`}
+          key={`${groupKey}-tools`}
           toolNames={toolParts.map(({ part }) => part.name ?? tools[part.id ?? ""]?.name ?? "工具")}
           running={toolParts.some(({ part }) => tools[part.id ?? ""]?.running)}
           hasError={toolParts.some(({ part }) => tools[part.id ?? ""]?.isError)}
@@ -164,55 +175,29 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
           {operationChildren}
         </ToolActivityGroup>,
       );
-    } else if (activity) {
-      progress.push(activity);
     }
-    return {
-      progress,
-      media,
-      body,
-      // Keep the two summaries visible after a tool-only turn settles. The
-      // outer panel can still be collapsed by the user when desired.
-      defaultExpanded: true,
-      activityIndex,
-      activityConsumed: Boolean(activity),
-    };
-  }
-
-  // A settled tool request, interrupted answer or error is not a final response.
-  const hasFinalResponse = role === "assistant" && !streaming
-    && !lastMessage?.errorMessage
-    && (!lastMessage?.stopReason || lastMessage.stopReason === "stop")
-    && !content.some(({ part, messageIndex }) => messageIndex === items.length - 1 && part.type === "toolCall")
-    && content.some(({ part, messageIndex }) => messageIndex === items.length - 1 && part.type === "text" && part.text?.trim());
-  let pendingTools: ProjectedPart[] = [];
-  const flushTools = () => {
-    if (!pendingTools.length) return;
-    const group = pendingTools;
-    pendingTools = [];
-    progress.push(<ToolActivityGroup key={`${group[0].key}-tools`} toolNames={group.map(({ part }) => part.name ?? tools[part.id ?? ""]?.name ?? "工具")} running={group.some(({ part }) => tools[part.id ?? ""]?.running)} hasError={group.some(({ part }) => tools[part.id ?? ""]?.isError)}>{group.map(({ part, key, active }) => <PartView key={key} part={part} tools={tools} running={active} thinking={false} />)}</ToolActivityGroup>);
-    if (activityIndex === undefined && group.some(({ part }) => (part.name ?? tools[part.id ?? ""]?.name) === "spawn_agent")) activityIndex = progress.length;
   };
+
   for (const { part, key, active, messageIndex } of content) {
-    if (part.type === "toolCall" && role === "assistant") {
-      pendingTools.push({ part, key, active, messageIndex });
+    if (part.type === "toolCall" || part.type === "thinking") {
+      processParts.push({ part, key, active, messageIndex });
       continue;
     }
     if (part.type === "text" && !part.text?.trim()) continue;
-    if (part.type === "thinking" && !part.thinking?.trim() && !(active && thinking && !part.thinkingComplete)) continue;
-    flushTools();
-    const node = <PartView key={key} part={part} tools={tools} running={active} thinking={active && thinking} collapse={role === "user"} />;
-    if (role === "user") {
-      if (part.type === "image") media.push(node);
-      else body.push(node);
-    } else if (hasFinalResponse && messageIndex === items.length - 1 && (part.type === "text" || part.type === "image")) {
+    flushProcess(false);
+    const node = <PartView key={key} part={part} tools={tools} running={active} thinking={active && thinking} />;
+    if (hasFinalResponse && messageIndex === items.length - 1 && (part.type === "text" || part.type === "image")) {
       body.push(node);
     } else {
       progress.push(node);
     }
   }
-  flushTools();
-  return { progress, media, body, defaultExpanded: !hasFinalResponse, activityIndex, activityConsumed: false };
+  flushProcess(true);
+  if (activity && !activityConsumed) {
+    progress.push(activity);
+    activityConsumed = true;
+  }
+  return { progress, media, body, defaultExpanded: !hasFinalResponse, activityIndex: undefined, activityConsumed };
 }
 
 function responseText(content: ProjectedPart[]) {

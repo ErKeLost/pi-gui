@@ -14,4 +14,4 @@ const vscode=load('../node_modules/@iconify-json/vscode-icons/icons.json')
 const skillIconNames=['file-type-audio','file-type-excel2','file-type-html','file-type-image','file-type-markdown','file-type-pdf2','file-type-powerpoint2','file-type-python','file-type-svg','file-type-typescript','file-type-video','file-type-word2','folder-type-github']
 write('../src/skill-icons.generated.json',vscode,skillIconNames)
 const fluentColor=load('../node_modules/@iconify-json/fluent-color/icons.json')
-write('../src/mode-icons.generated.json',fluentColor,['bot-sparkle-24','people-team-24'])
+write('../src/mode-icons.generated.json',fluentColor,['bot-sparkle-24','people-team-24','laptop-24'])

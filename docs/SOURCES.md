@@ -18,6 +18,7 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 | P3 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md | registerCommand、getAllTools、getActiveTools、setActiveTools、setLabel、ctx.navigateTree、waitForIdle | `gui-extension.ts` |
 | P4 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md 和 settings.md | 模型定义、reasoning 开关、动态可用 thinking levels、默认模型与 thinking | 复用已有 Pi 配置；GUI 不硬编码支持的 effort |
 | P5 | Pi 0.85.1 安装包 `examples/extensions/subagent/` | 独立 Pi 进程、JSON 事件、并行调度、取消与用量聚合的官方扩展示例 | `resources/subagents/` 的执行基础；Orbit 另加持久 RPC、父子通信和状态树 |
+| P6 | https://github.com/injaneity/pi-computer-use | Pi Computer Use 扩展：state-scoped observe/act、macOS helper、默认工具面 | 捆绑 `@injaneity/pi-computer-use`；`resources/computer-use/mode.ts` 做默认关闭与开关 |
 | R1 | https://react.dev/reference/react | React hooks 与组件生命周期 | React 组件；事件订阅有清理 |
 | A1 | https://www.assistant-ui.com/docs/runtimes/custom/external-store.md | ExternalStoreRuntime、自有状态、convertMessage、onNew/onCancel | `Chat.tsx` |
 | A2 | https://www.assistant-ui.com/docs/primitives/thread.md | Root / Viewport / Messages 的 children render function、ScrollToBottom | `Chat.tsx` |

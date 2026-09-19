@@ -26,18 +26,30 @@ async function installUpdate(update: import("@tauri-apps/plugin-updater").Update
   }
 }
 
-async function installMobileUpdate(update: MobileUpdate) {
+export async function installMobileUpdate(update: MobileUpdate) {
   const installation = invoke("mobile_update_install", {
     url: update.downloadUrl,
     version: update.version,
   })
   gooeyToast.promise(installation, {
-    loading: "正在下载 Android 更新",
+    loading: "正在下载 Android 更新，网络不好可能较慢",
     success: "下载完成，请在系统界面确认安装",
-    error: "Android 更新安装失败",
+    error: "Android 更新下载失败，网络不稳定请稍后重试",
     showTimestamp: false,
   })
   await installation
+}
+
+export function offerMobileUpdate(update: MobileUpdate) {
+  gooeyToast.info(`发现 Orbit ${update.version}`, {
+    description: update.body,
+    duration: Infinity,
+    showTimestamp: false,
+    action: {
+      label: "下载并安装",
+      onClick: () => void installMobileUpdate(update),
+    },
+  })
 }
 
 export function UpdateChecker() {
@@ -50,16 +62,7 @@ export function UpdateChecker() {
       void getVersion()
         .then(checkMobileUpdate)
         .then(update => {
-          if (!update) return
-          gooeyToast.info(`发现 Orbit ${update.version}`, {
-            description: update.body,
-            duration: Infinity,
-            showTimestamp: false,
-            action: {
-              label: "下载并安装",
-              onClick: () => void installMobileUpdate(update),
-            },
-          })
+          if (update) offerMobileUpdate(update)
         })
         .catch(() => undefined)
       return

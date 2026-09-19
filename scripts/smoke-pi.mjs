@@ -11,6 +11,7 @@ const isolated=mkdtempSync(resolve(tmpdir(),'orbit-pi-smoke-')),resources=resolv
 mkdirSync(resources,{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/pi-runtime'),resolve(resources,'pi-runtime'),{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/subagents'),resolve(resources,'subagents'),{recursive:true})
+cpSync(resolve(root,'src-tauri/resources/computer-use'),resolve(resources,'computer-use'),{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/gui-extension.ts'),resolve(resources,'gui-extension.ts'))
 cpSync(resolve(root,'src-tauri/resources/workspace.ts'),resolve(resources,'workspace.ts'))
 const cli=resolve(resources,'pi-runtime/cli.js'),extension=resolve(resources,'gui-extension.ts')
@@ -45,6 +46,8 @@ try{
  await req({type:'prompt',message:'/gui-tools-set ["read"]'});assert.deepEqual(toolState.active,['read']);results.push('GUI extension: active tools update')
  await req({type:'prompt',message:'/gui-agent-mode {"enabled":true}'});assert(collaborationTools.every(name=>toolState.active.includes(name)));results.push('GUI extension: multi-agent tools enabled')
  await req({type:'prompt',message:'/gui-agent-mode {"enabled":false}'});assert(collaborationTools.every(name=>!toolState.active.includes(name)));results.push('GUI extension: multi-agent tools disabled')
+ await req({type:'prompt',message:'/gui-computer-use-mode {"enabled":true}'});assert.equal(toolState && typeof toolState, 'object');results.push('GUI extension: computer-use mode command')
+ await req({type:'prompt',message:'/gui-computer-use-mode {"enabled":false}'});results.push('GUI extension: computer-use mode disabled')
  const bash=await req({type:'bash',command:'printf "Orbit integration ok"',excludeFromContext:true});assert.equal(bash.exitCode,0);assert.equal(bash.output,'Orbit integration ok');results.push('real Bash execution through RPC')
  const commands=await req({type:'get_commands'});assert(commands.commands.some(c=>c.name==='gui-tree'));results.push('commands enumerated')
  if(process.argv.includes('--live')){

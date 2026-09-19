@@ -1,4 +1,6 @@
 export const RELEASES_API = "https://api.github.com/repos/ErKeLost/pi-gui/releases/latest";
+export const CHECK_TIMEOUT_MS = 8_000;
+export const CHECK_RETRIES = 1;
 
 type GithubAsset = {
   name?: unknown;
@@ -55,10 +57,43 @@ export function parseMobileUpdate(currentVersion: string, input: unknown): Mobil
   };
 }
 
-export async function checkMobileUpdate(currentVersion: string): Promise<MobileUpdate | null> {
-  const response = await fetch(RELEASES_API, {
-    headers: { Accept: "application/vnd.github+json" },
-  });
-  if (!response.ok) throw new Error(`检查更新失败（HTTP ${response.status}）`);
-  return parseMobileUpdate(currentVersion, await response.json());
+export function shouldRetryMobileUpdate(status: number | null): boolean {
+  return status == null || status >= 500;
+}
+
+export function mobileUpdateErrorMessage(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  const name = error instanceof Error ? error.name : "";
+  if (name === "AbortError" || /aborted|timeout/i.test(text)) return "检查更新超时，网络不稳定，请稍后重试";
+  if (/failed to fetch|networkerror|load failed|network/i.test(text)) return "无法连接 GitHub，网络不稳定，请稍后重试";
+  return text || "检查更新失败，请稍后重试";
+}
+
+async function fetchGithubRelease(fetcher: typeof fetch): Promise<unknown> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= CHECK_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+    try {
+      const response = await fetcher(RELEASES_API, {
+        headers: { Accept: "application/vnd.github+json" },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (response.ok) return await response.json();
+      const error = new Error(response.status === 403 ? "GitHub 暂时无法访问，请稍后重试" : `检查更新失败（HTTP ${response.status}）`);
+      if (!shouldRetryMobileUpdate(response.status) || attempt === CHECK_RETRIES) throw error;
+      lastError = error;
+    } catch (error) {
+      lastError = error;
+      if (attempt === CHECK_RETRIES) throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError ?? new Error("检查更新失败，请稍后重试");
+}
+
+export async function checkMobileUpdate(currentVersion: string, fetcher: typeof fetch = fetch): Promise<MobileUpdate | null> {
+  return parseMobileUpdate(currentVersion, await fetchGithubRelease(fetcher));
 }

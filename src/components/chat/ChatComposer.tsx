@@ -1,7 +1,7 @@
 import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../lib/store";
-import { report, request, stop, syncMultiAgentMode } from "../../lib/rpc";
+import { report, request, stop, syncComputerUseMode, syncMultiAgentMode } from "../../lib/rpc";
 import { Beam } from "../Effects";
 import { Button } from "../UI";
 import { Icon } from "../Icon";
@@ -59,7 +59,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
     deliveryOverride.current = null;
     useWorkspace.getState().event({ type: "prompt_submitted" });
     try {
-      if (!transcript.running) await syncMultiAgentMode(project);
+      if (!transcript.running) await Promise.all([syncMultiAgentMode(project), syncComputerUseMode(project)]);
       await request({ type: "prompt", message: message.text, images: attachments.map(attachment => ({ type: "image" as const, data: attachment.data, mimeType: attachment.mimeType })), ...(transcript.running ? { streamingBehavior } : {}) }, 45000, project);
       setAttachments([]);
       setDraft("");

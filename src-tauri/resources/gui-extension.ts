@@ -4,6 +4,7 @@ import {pathToFileURL} from 'node:url'
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent'
 import {registerSubagentTools,SUBAGENT_TOOL_NAMES} from './subagents/index.ts'
 import {registerWorkspace} from './workspace.ts'
+import {registerComputerUseMode} from './computer-use/mode.ts'
 // Pi official docs/extensions.md: registerCommand, getAllTools, setActiveTools,
 // ExtensionCommandContext.navigateTree and setLabel. Loaded only by this GUI.
 export function ensureImageInput(model: {input: ('text'|'image')[]} | undefined) {
@@ -48,6 +49,7 @@ export default async function (pi: ExtensionAPI) {
     active: pi.getActiveTools(),
     tools: pi.getAllTools().map((tool) => ({name:tool.name,description:tool.description})),
   }));
+  registerComputerUseMode(pi, publishTools)
   pi.registerCommand('gui-tools', {description:'GUI: list available tools',handler:async (_args: string,ctx: ExtensionCommandContext) => publishTools(ctx)});
   pi.registerCommand('gui-tools-set', {description:'GUI: change active tools',handler:async (args: string,ctx: ExtensionCommandContext) => {
     await ctx.waitForIdle(); const names=JSON.parse(args);

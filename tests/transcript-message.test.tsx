@@ -121,11 +121,39 @@ describe("whole-turn process history", () => {
     expect(html).toContain("failed");
   });
 
+  test("uses text as the only boundary while thinking stays in one changing row", () => {
+    const items: DisplayMessage[] = [
+      { id: "status-1", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "先理解需求", thinkingComplete: true },
+        { type: "text", text: "先检查 Pi 扩展怎么注册工具" },
+        { type: "toolCall", id: "read-1", name: "read", arguments: { path: "src" } },
+      ] } },
+      { id: "status-2", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "再确认 Node 通信方式", thinkingComplete: true },
+        { type: "toolCall", id: "run-1", name: "bash", arguments: { command: "bun test" } },
+      ] } },
+      { id: "status-3", message: { role: "assistant", stopReason: "toolUse", content: [
+        { type: "thinking", thinking: "已经确认通信方式", thinkingComplete: true },
+        { type: "toolCall", id: "read-2", name: "read", arguments: { path: "README.md" } },
+      ] } },
+    ];
+    const html = readableMarkup(renderToStaticMarkup(<TranscriptMessage items={items} tools={{
+      "read-1": { name: "read", running: false, result: "ok" },
+      "run-1": { name: "bash", running: false, result: "passed" },
+      "read-2": { name: "read", running: false, result: "done" },
+    }} streaming={false} thinking={false} />));
+    expect(html.match(/class="thinking-summary"/g)?.length).toBe(2);
+    expect(html.match(/class="tool-activity-group"/g)?.length).toBe(1);
+    expect(html).toContain("先检查 Pi 扩展怎么注册工具");
+    expect(html).toContain("已经确认通信方式");
+    expect(html).toContain("读取 2 次 · 运行 1 次");
+  });
+
   test("preserves every phase in order and collapses only the process after completion", () => {
     const html = readableMarkup(renderPhases());
     expect(html).toContain('class="turn-activity" data-open="false"');
     expect(html).toContain("33秒");
-    const ordered = ["第一轮思考", "先检查实现", "src/app.ts", "第二轮思考", "现在运行验证", "bun test", "准备总结", "最终结果：已完成"];
+    const ordered = ["第一轮思考", "先检查实现", "第二轮思考", "src/app.ts", "现在运行验证", "准备总结", "bun test", "最终结果：已完成"];
     for (let i = 1; i < ordered.length; i++) {
       expect(html.indexOf(ordered[i])).toBeGreaterThan(html.indexOf(ordered[i - 1]));
     }
@@ -137,7 +165,6 @@ describe("whole-turn process history", () => {
   test("shows the complete timeline while streaming", () => {
     const html = readableMarkup(renderPhases(true));
     expect(html).toContain('class="turn-activity" data-open="true" data-working="true"');
-    expect(html).not.toContain('</section><section class="message-response-disclosure"');
     expect(html).toContain('最终结果：已完成');
     expect(html.indexOf('第一轮思考')).toBeLessThan(html.indexOf('第二轮思考'));
   });

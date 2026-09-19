@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { useTheme } from "next-themes";
 import { gooeyToast } from "goey-toast";
 import { Eye, EyeOff, ScanLine } from "lucide-react";
 import QRCode from "antd/es/qr-code";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
-import { connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
+import { connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
 import { getRemoteHost, startRemoteHost, stopRemoteHost, type RemoteHostInfo } from "../../lib/remote-host";
+import { checkMobileUpdate, mobileUpdateErrorMessage } from "../../lib/mobile-update";
+import { offerMobileUpdate } from "../UpdateChecker";
 import { Button, Input, Select, Switch } from "../UI";
 import { usePrompt } from "../../lib/prompt";
 import { Icon } from "../Icon";
@@ -76,6 +79,15 @@ function QueueSettings({ status, state }: { status: string; state: RpcSessionSta
   return <>{(["steering", "followUp"] as const).map(kind => <SettingRow key={kind} title={kind === "steering" ? "引导消息" : "跟进消息"} description={kind === "steering" ? "当前工具调用完成后交给模型。" : "本轮任务全部结束后交给模型。"}><Select aria-label={kind === "steering" ? "引导消息模式" : "跟进消息模式"} disabled={status !== "online"} value={kind === "steering" ? state?.steeringMode : state?.followUpMode} onChange={event => void applySetting({ type: kind === "steering" ? "set_steering_mode" : "set_follow_up_mode", mode: event.target.value as "all" | "one-at-a-time" }).catch(report)}><option value="one-at-a-time">每次一条</option><option value="all">全部送入</option></Select></SettingRow>)}</>;
 }
 
+function ComputerUseSettings({ desktop, online, running }: { desktop: boolean; online: boolean; running: boolean }) {
+  const enabled = useWorkspace(state => state.computerUseEnabled);
+  return <>
+    <SettingRow title="电脑操作" description={desktop ? "开启后，当前会话模型可以使用 observe_ui / act_ui 等工具操作本机 App。macOS 需授权 ~/Applications/pi-computer-use.app 的辅助功能和屏幕录制。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
+      {desktop ? <Switch aria-label="电脑操作" checked={enabled} disabled={!online || running} onChange={checked => void setComputerUseMode(checked).catch(report)} /> : <span className="remote-settings-note">电脑端设置</span>}
+    </SettingRow>
+  </>;
+}
+
 function ToolsSettings({ tools, running }: { tools: GuiTools; running: boolean }) {
   const active = new Set(tools.active);
   return <>{tools.tools.map(tool => <SettingRow key={tool.name} title={tool.name} description={tool.description}><Switch aria-label={tool.name} checked={active.has(tool.name)} disabled={running} onChange={checked => { const next = checked ? [...tools.active, tool.name] : tools.active.filter(name => name !== tool.name); void request({ type: "prompt", message: `/gui-tools-set ${JSON.stringify(next)}` }).catch(report); }} /></SettingRow>)}{!tools.tools.length && <p className="settings-empty-note">连接 Pi 后读取工具列表。</p>}</>;
@@ -83,6 +95,27 @@ function ToolsSettings({ tools, running }: { tools: GuiTools; running: boolean }
 
 function TerminalSettings({ cwd, desktop }: { cwd: string; desktop: boolean }) {
   return <SettingRow title="原生终端环境" description={desktop ? "在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。" : "原生终端需要在电脑端打开。"}><Button variant="outline" disabled={!desktop || !cwd} onClick={() => { if (desktopRuntime()) void invoke("open_pi_terminal", { cwd, session: null, piArgs: [] }).catch(report); }}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
+}
+
+function MobileAppUpdateSettings() {
+  const [version, setVersion] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void getVersion().then(setVersion).catch(() => undefined); }, []);
+  async function check() {
+    setBusy(true);
+    try {
+      const current = version || await getVersion();
+      if (!version) setVersion(current);
+      const update = await checkMobileUpdate(current);
+      if (update) offerMobileUpdate(update);
+      else gooeyToast.success(`已是最新版本（${current}）`, { showTimestamp: false });
+    } catch (error) {
+      gooeyToast.error(mobileUpdateErrorMessage(error), { showTimestamp: false });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <SettingRow title="检查更新" description={version ? `当前版本 ${version}。从 GitHub 检查 Android 安装包；网络不好时可稍后重试。` : "从 GitHub 检查 Android 安装包；网络不好时可稍后重试。"}><Button variant="outline" disabled={busy} onClick={() => void check()}>{busy ? "检查中…" : "检查更新"}</Button></SettingRow>;
 }
 
 function remoteAddress(host: RemoteHostInfo) {
@@ -293,8 +326,10 @@ export function GeneralSettingsPanel() {
     <SettingsGroup title="外观" icon="palette"><ThemeSettings /></SettingsGroup>
     <SettingsGroup title="工作区" icon="folder-simple"><ProjectDirectorySettings path={path} setPath={setPath} busy={busy} running={running} status={status} onReconnect={reconnect} /><TrustSettings mode={trustMode} busy={trustBusy} desktop={desktop} onChange={changeTrustMode} /></SettingsGroup>
     <SettingsGroup title="移动端" icon="device-mobile" description={desktop ? "从手机连接到这台电脑。" : "连接运行 Pi 的电脑。"}><MobileAccessSettings /></SettingsGroup>
+    {runtimeTarget === "mobile" && <SettingsGroup title="软件更新" icon="arrows-clockwise" description="主动从 GitHub Release 检查 Android 安装包。"><MobileAppUpdateSettings /></SettingsGroup>}
     <SettingsGroup title="上下文" icon="brain" description="管理当前会话的容量与压缩方式。"><ContextSettings cwd={cwd} status={status} running={running} state={state} onCompact={manualCompact} /></SettingsGroup>
     <SettingsGroup title="消息队列" icon="chats"><QueueSettings status={status} state={state} /></SettingsGroup>
+    <SettingsGroup title="电脑操作" icon="desktop" description="让当前 Pi 模型通过界面观察和点击桌面应用。有可靠 API 或 CLI 时不要用。"><ComputerUseSettings desktop={desktop} online={status === "online"} running={running} /></SettingsGroup>
     <SettingsGroup title="工具与终端" icon="wrench"><ToolsSettings tools={tools} running={running} /><TerminalSettings cwd={cwd} desktop={desktop} /></SettingsGroup>
   </>;
 }

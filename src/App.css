@@ -2248,9 +2248,15 @@ html[data-theme="light"] .composer-model-row.active {
   background: color-mix(in oklch, var(--foreground) 6%, var(--background));
 }
 .light .composer-agent-mode,
-html[data-theme="light"] .composer-agent-mode {
+html[data-theme="light"] .composer-agent-mode,
+.light .composer-computer-use,
+html[data-theme="light"] .composer-computer-use {
   border-color: color-mix(in oklch, var(--foreground) 14%, var(--border));
   background: color-mix(in oklch, var(--muted) 72%, var(--background));
+}
+.light .composer-computer-use.selected,
+html[data-theme="light"] .composer-computer-use.selected {
+  background: var(--background);
 }
 .light .composer-agent-mode-indicator,
 html[data-theme="light"] .composer-agent-mode-indicator {

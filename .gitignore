@@ -37,3 +37,4 @@ work/
 outputs/
 src-tauri/target/
 src-tauri/resources/pi-runtime/
+src-tauri/resources/pi-computer-use/

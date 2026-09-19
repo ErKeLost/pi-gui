@@ -163,7 +163,10 @@ export function persistedSessionFile(project:string):string {
  const value=readSessionFiles()[project];return typeof value==='string'?value:''
 }
 const multiAgentModeCommand=(enabled=useWorkspace.getState().multiAgentEnabled)=>({type:'prompt' as const,message:`/gui-agent-mode ${JSON.stringify({enabled})}`})
+const computerUseModeCommand=(enabled=useWorkspace.getState().computerUseEnabled)=>({type:'prompt' as const,message:`/gui-computer-use-mode ${JSON.stringify({enabled})}`})
 export const syncMultiAgentMode=(target:string,enabled=useWorkspace.getState().multiAgentEnabled)=>request(multiAgentModeCommand(enabled),30000,target)
+export const syncComputerUseMode=(target:string,enabled=useWorkspace.getState().computerUseEnabled)=>request(computerUseModeCommand(enabled),30000,target)
+const syncSessionModes=(target:string)=>Promise.all([syncMultiAgentMode(target),syncComputerUseMode(target)])
 export const setSessionRoots=(roots:string[],target=useWorkspace.getState().cwd)=>request({type:'prompt',message:`/gui-workspace-set ${JSON.stringify({roots})}`},30000,target)
 async function syncConfiguredProjectRoots(cwd:string,target=cwd){const project=useProjects.getState().projects.find(item=>item.path===cwd);if(project)await setSessionRoots(projectExtraRoots(project),target)}
 export async function refresh(target=useWorkspace.getState().cwd){const id=route(target),state=await request<RpcSessionState>({type:'get_state'},30000,id);patch(id,{state});const cwd=connections.get(id)?.cwd??useWorkspace.getState().cwd;if(state.sessionFile&&projectActive.get(cwd)===id)persistSession(cwd,state.sessionFile);await queryClient.invalidateQueries({queryKey:['pi','live-stats',id]});return state}
@@ -216,7 +219,7 @@ function activateConnection(id:string,cwd:string){
  const saved=snapshots.get(id)??fresh()
  useWorkspace.getState().set({...saved,cwd,connectionId:id,panel:'chat'})
  persistSession(cwd,saved.state?.sessionFile);syncLiveSessions()
- if(saved.connection==='online')void Promise.all([refresh(id),syncMultiAgentMode(id)]).catch(error=>patch(id,{error:String(error)}))
+ if(saved.connection==='online')void Promise.all([refresh(id),syncSessionModes(id)]).catch(error=>patch(id,{error:String(error)}))
 }
 async function startConnection(cwd:string,id:string,options?:{restoreLast?:boolean;sessionPath?:string}){
  const token=Symbol(id);connections.set(id,{token,cwd});projectActive.set(cwd,id);patch(id,{connection:'connecting',error:null})
@@ -242,7 +245,7 @@ async function startConnection(cwd:string,id:string,options?:{restoreLast?:boole
   const state=await request<RpcSessionState>({type:'get_state'},45000,id)
   if(connections.get(id)?.token!==token)return
   patch(id,{state})
-  await syncMultiAgentMode(id).catch(()=>{})
+  await syncSessionModes(id).catch(()=>{})
   if(options?.sessionPath){try{await request({type:'switch_session',sessionPath:options.sessionPath},45000,id)}catch{patch(id,{notices:['会话无法读取，已打开新会话']})}}
   else if(options?.restoreLast){const previousFile=persistedSessionFile(cwd)||undefined;if(previousFile&&previousFile!==state.sessionFile){try{await request({type:'switch_session',sessionPath:previousFile},45000,id)}catch{patch(id,{notices:['上次会话无法读取，已打开新会话']})}}}
   await loadMessages(id)
@@ -270,6 +273,13 @@ export async function setMultiAgentMode(enabled:boolean){
  try{await request(multiAgentModeCommand(enabled),30000)}
  catch(error){useWorkspace.getState().set({multiAgentEnabled:previous});localStorage.setItem('pi-gui.multiAgentEnabled',String(previous));throw error}
 }
+export async function setComputerUseMode(enabled:boolean){
+ const previous=useWorkspace.getState().computerUseEnabled
+ useWorkspace.getState().set({computerUseEnabled:enabled});localStorage.setItem('pi-gui.computerUseEnabled',String(enabled))
+ if(useWorkspace.getState().connection!=='online')return
+ try{await request(computerUseModeCommand(enabled),30000)}
+ catch(error){useWorkspace.getState().set({computerUseEnabled:previous});localStorage.setItem('pi-gui.computerUseEnabled',String(previous));throw error}
+}
 export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspace.getState().workspaceMode){
  if(!native&&!mobileRuntime())throw new Error('请在桌面应用中选择项目')
  if(mobileRuntime()){
@@ -285,7 +295,7 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
  const saved=snapshots.get(id)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode,connectionId:id})
  localStorage.setItem('pi-gui.cwd',cwd)
  localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
- if(connections.has(id)&&saved.connection==='online'){await Promise.all([refresh(id),syncMultiAgentMode(id)]);if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id);return}
+ if(connections.has(id)&&saved.connection==='online'){await Promise.all([refresh(id),syncSessionModes(id)]);if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id);return}
  await startConnection(cwd,id,{restoreLast:true})
  if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id)
 }
