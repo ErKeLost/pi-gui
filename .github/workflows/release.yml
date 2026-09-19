@@ -97,11 +97,17 @@ jobs:
 
       - name: Prepare Android SDK
         run: |
+          android_home="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_HOME="$android_home"
+          export ANDROID_SDK_ROOT="$android_home"
+          export PATH="$android_home/cmdline-tools/latest/bin:$android_home/cmdline-tools/16.0/bin:$android_home/platform-tools:$PATH"
+          echo "ANDROID_HOME=$android_home" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$android_home" >> "$GITHUB_ENV"
+          echo "PATH=$PATH" >> "$GITHUB_ENV"
           sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-36" "build-tools;35.0.0" "ndk;29.0.13846066"
-          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" >> "$GITHUB_ENV"
-          echo "NDK_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/29.0.13846066" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/29.0.13846066" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$android_home/ndk/29.0.13846066" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$android_home/ndk/29.0.13846066" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
