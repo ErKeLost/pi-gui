@@ -30,8 +30,10 @@
 
 .mobile-access-surface {
   margin-top: 28px;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
 }
 
 .mobile-access-surface > .settings-item {
@@ -176,6 +178,40 @@
   color: var(--muted-foreground);
   font-size: 10px;
 }
+
+.remote-host-devices {
+  margin-top: 18px;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.remote-host-devices > strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.remote-host-devices > p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.remote-host-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-top: 1px solid var(--border);
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+.remote-host-device > svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+.remote-host-device > span { flex: 1; min-width: 0; }
+.remote-host-device small { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 10px; }
+.remote-host-device small i { width: 6px; height: 6px; border-radius: 50%; background: var(--foreground); }
 
 .remote-pairing-screen {
   display: grid;

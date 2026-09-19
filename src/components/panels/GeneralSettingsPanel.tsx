@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useTheme } from "next-themes";
 import { gooeyToast } from "goey-toast";
-import { Eye, EyeOff, LoaderCircle, ScanLine } from "lucide-react";
+import { Eye, EyeOff, ScanLine } from "lucide-react";
 import QRCode from "antd/es/qr-code";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
@@ -168,9 +168,7 @@ function DesktopHostSettings() {
     <SettingRow title="电脑 Host" description="让同一局域网中的手机连接这台电脑，并使用这里运行的 Pi。">
       <div className="remote-host-control">
         <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}{host && <small>{connectedLabel}</small>}</span>
-        {host
-          ? <Button variant="outline" disabled={Boolean(busy)} onClick={() => void stop()}>{busy === "stop" && <LoaderCircle className="animate-spin" />}关闭</Button>
-          : <Button variant="default" disabled={loading || Boolean(busy)} onClick={() => void start()}>{busy === "start" && <LoaderCircle className="animate-spin" />}开启</Button>}
+        <Switch aria-label="电脑 Host" checked={Boolean(host)} disabled={loading || Boolean(busy)} onChange={checked => void (checked ? start() : stop())} />
       </div>
     </SettingRow>
     {host && <div className="remote-host-details">
@@ -194,6 +192,12 @@ function DesktopHostSettings() {
       {showQr && <div className="remote-host-qr"><QRCode value={host.pairingUri} size={176} bordered={false} color="var(--foreground)" bgColor="var(--card)" /><span>用手机 Orbit 扫描此二维码</span></div>}
       {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
       <p className="remote-host-security"><Icon name="shield-check" />配对链接包含访问凭据，请只发送到自己的设备。</p>
+      <div className="remote-host-devices">
+        <strong>已连接的设备</strong>
+        {host.connectedClients > 0
+          ? Array.from({ length: host.connectedClients }, (_, index) => <div className="remote-host-device" key={index}><Icon name="device-mobile" /><span>移动端设备 {index + 1}</span><small><i />在线</small></div>)
+          : <p>暂无设备连接</p>}
+      </div>
     </div>}
   </>;
 }

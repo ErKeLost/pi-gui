@@ -1924,15 +1924,6 @@ body,
 .sidebar { background: var(--sidebar) !important; border-color: var(--sidebar-border) !important; }
 .chat-toolbar { border-color: var(--border) !important; }
 .composer.studio-composer { background: var(--card) !important; border-color: var(--border) !important; }
-.light .composer.studio-composer,
-html[data-theme="light"] .composer.studio-composer {
-  border-color: color-mix(in oklch, var(--foreground) 18%, var(--border)) !important;
-  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 5%, transparent);
-}
-.light .composer.studio-composer:focus-within,
-html[data-theme="light"] .composer.studio-composer:focus-within {
-  border-color: color-mix(in oklch, var(--foreground) 28%, var(--border)) !important;
-}
 .composer.studio-composer .composer-input { background: var(--background) !important; border-color: var(--border) !important; color: var(--foreground) !important; }
 .composer.studio-composer .composer-input::placeholder { color: var(--muted-foreground) !important; }
 .composer.studio-composer .composer-selectors [data-slot="select-trigger"] { background: var(--secondary) !important; border-color: var(--border) !important; color: var(--secondary-foreground) !important; }
@@ -2173,6 +2164,81 @@ html[data-theme="light"] .composer.studio-composer:focus-within {
 }
 .composer-beam,
 .composer-beam [data-border-beam] { }
+
+/* Light surfaces need explicit edges because the page, cards, and popovers are
+   all near-white. Dark mode already has enough contrast from its surface tokens. */
+.light .composer.studio-composer,
+html[data-theme="light"] .composer.studio-composer {
+  border-color: color-mix(in oklch, var(--foreground) 26%, var(--border)) !important;
+  box-shadow: 0 1px 3px color-mix(in oklch, var(--foreground) 9%, transparent) !important;
+}
+.light .composer.studio-composer:focus-within,
+html[data-theme="light"] .composer.studio-composer:focus-within {
+  border-color: color-mix(in oklch, var(--foreground) 36%, var(--border)) !important;
+}
+.light :is(
+  [data-slot="popover-content"],
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="hover-card-content"]
+),
+html[data-theme="light"] :is(
+  [data-slot="popover-content"],
+  [data-slot="select-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="hover-card-content"]
+) {
+  border: 1px solid color-mix(in oklch, var(--foreground) 20%, var(--border));
+  background: var(--popover);
+  box-shadow: 0 14px 36px color-mix(in oklch, var(--foreground) 13%, transparent), 0 2px 8px color-mix(in oklch, var(--foreground) 7%, transparent);
+}
+.light .composer-model-control,
+html[data-theme="light"] .composer-model-control {
+  border-color: color-mix(in oklch, var(--foreground) 12%, var(--border));
+  background: color-mix(in oklch, var(--muted) 78%, var(--background));
+}
+.light .composer-model-control:hover,
+.light .composer-model-control[aria-expanded="true"],
+html[data-theme="light"] .composer-model-control:hover,
+html[data-theme="light"] .composer-model-control[aria-expanded="true"] {
+  border-color: color-mix(in oklch, var(--foreground) 18%, var(--border));
+  background: var(--accent);
+}
+.light .composer-model-search,
+html[data-theme="light"] .composer-model-search {
+  border-color: color-mix(in oklch, var(--foreground) 14%, var(--border));
+  background: color-mix(in oklch, var(--muted) 58%, var(--background));
+  box-shadow: none;
+}
+.light .composer-model-search:focus-within,
+html[data-theme="light"] .composer-model-search:focus-within {
+  border-color: color-mix(in oklch, var(--foreground) 26%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 16%, transparent);
+}
+.light .composer-model-groups,
+.light .composer-effort-footer,
+html[data-theme="light"] .composer-model-groups,
+html[data-theme="light"] .composer-effort-footer {
+  border-color: color-mix(in oklch, var(--foreground) 11%, var(--border));
+}
+.light .composer-model-row:hover,
+.light .composer-model-row.active,
+html[data-theme="light"] .composer-model-row:hover,
+html[data-theme="light"] .composer-model-row.active {
+  background: color-mix(in oklch, var(--foreground) 6%, var(--background));
+}
+.light .composer-agent-mode,
+html[data-theme="light"] .composer-agent-mode {
+  border-color: color-mix(in oklch, var(--foreground) 14%, var(--border));
+  background: color-mix(in oklch, var(--muted) 72%, var(--background));
+}
+.light .composer-agent-mode-indicator,
+html[data-theme="light"] .composer-agent-mode-indicator {
+  border-color: color-mix(in oklch, var(--foreground) 12%, var(--border));
+  box-shadow: 0 1px 3px color-mix(in oklch, var(--foreground) 12%, transparent);
+}
 .theme-settings-controls { display: flex; align-items: center; gap: 8px; }
 .chat-root ::selection { background: transparent; color: inherit; }
 .chat-root .transcript-message :where(.md-selectable-text, .stream-char, small, strong, em, b, i, code, a, time)::selection {
@@ -4545,10 +4611,10 @@ html[data-theme="light"] .composer.studio-composer:focus-within {
   transform: translateX(0);
 }
 .app-shell [data-slot="switch"][data-size="default"][data-checked] [data-slot="switch-thumb"] {
-  transform: translateX(14px);
+  transform: translateX(18px);
 }
 .app-shell [data-slot="switch"][data-size="sm"][data-checked] [data-slot="switch-thumb"] {
-  transform: translateX(12px);
+  transform: translateX(16px);
 }
 
 /* Project tree sidebar: every saved directory owns its own Pi session list. */
@@ -4612,7 +4678,7 @@ html[data-theme="light"] .composer.studio-composer:focus-within {
 }
 .sidebar-project-groups {
   display: grid;
-  gap: 0;
+  gap: 6px;
 }
 .sidebar-project-group {
   min-width: 0;
@@ -4677,7 +4743,7 @@ html[data-theme="light"] .composer.studio-composer:focus-within {
   position: relative;
   display: grid;
   gap: 1px;
-  margin: 0 0 4px 19px;
+  margin: 4px 0 4px 19px;
   padding-left: 8px;
 }
 .sidebar-project-sessions::before {
