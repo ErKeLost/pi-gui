@@ -33,6 +33,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
   const connectionId = useWorkspace(state => state.connectionId);
   const transcript = useWorkspace(state => state.transcript);
   const online = useWorkspace(state => state.connection === "online");
+  const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const composerKey = connectionId || project;
   const [attachments, setAttachments] = useState<Attachment[]>(() => composerCache.get(composerKey)?.attachments ?? []);
   const [draft, setDraft] = useState(() => useWorkspace.getState().draft || composerCache.get(composerKey)?.text || "");
@@ -81,7 +82,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
           <ComposerModelSelector />
           <ComposerAgentMode />
           {(transcript.queue.steering.length > 0 || transcript.queue.followUp.length > 0) && <span className="composer-queue-status" aria-live="polite">已排队 {transcript.queue.steering.length + transcript.queue.followUp.length}</span>}
-          <ComposerContext />
+          {runtimeTarget !== "mobile" && <ComposerContext />}
           <PromptInputSubmit status={transcript.running ? "streaming" : "ready"} disabled={!online} title={transcript.running ? "暂停生成" : "发送消息"} aria-label={transcript.running ? "暂停生成" : "发送消息"} onClick={transcript.running ? () => void stop().catch(report) : undefined} />
         </div>
       </PromptInput>

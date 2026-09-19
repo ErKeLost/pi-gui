@@ -3,6 +3,7 @@ import { Button } from "../UI";
 import { Icon } from "../Icon";
 import { useWorkspace } from "../../lib/store";
 import { useWindowDrag } from "../../hooks/use-window-drag";
+import { ComposerContext } from "../chat/ComposerContext";
 
 function Navigation({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {
   return <div className="titlebar-navigation">
@@ -37,6 +38,7 @@ export function WorkspaceTitlebar({ variant, sidebarOpen, onToggleSidebar, title
       <FolderClosed className="app-header-folder" strokeWidth={1.7} aria-hidden="true" />
       <strong className="app-header-title" title={rawTitle || title}>{title}</strong>
       {runtimeTarget === "mobile" && connection !== "online" && <span className="titlebar-remote-status" aria-live="polite">{connection === "connecting" ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <WifiOff aria-hidden="true" />}{connection === "connecting" ? "正在重连电脑" : "电脑已断开"}</span>}
+      {runtimeTarget === "mobile" && showContent && <div className="app-header-context"><ComposerContext placement="header" /></div>}
       {showMenu && <Button className="titlebar-button app-header-more" title="会话管理" onClick={() => useWorkspace.getState().set({ panel: "settings", settingsPage: "sessions" })}><Icon name="dots-three" /></Button>}
     </>}
   </header>;

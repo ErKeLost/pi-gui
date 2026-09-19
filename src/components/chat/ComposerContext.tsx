@@ -18,7 +18,7 @@ import { useWorkspace } from "../../lib/store";
 const format = (value: number | null | undefined) => value == null ? "—" : value.toLocaleString("zh-CN");
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
-export function ComposerContext() {
+export function ComposerContext({ placement = "composer" }: { placement?: "composer" | "header" } = {}) {
   const { stats, runtime, online } = useMetrics();
   const state = useWorkspace(workspace => workspace.state);
   const compacting = useWorkspace(workspace => workspace.transcript.compacting);
@@ -33,12 +33,12 @@ export function ComposerContext() {
   const percent = usage?.percent ?? (usage?.tokens == null ? null : (usage.tokens / Math.max(1, maxTokens)) * 100);
 
   return <Context usedTokens={usedTokens} maxTokens={Math.max(1, maxTokens)}>
-    <ContextTrigger showPercentage={false} className="composer-context-trigger" disabled={!online} title="上下文用量" aria-label="上下文用量">
+    <ContextTrigger showPercentage={false} className={`composer-context-trigger composer-context-trigger-${placement}`} disabled={!online} title="上下文用量" aria-label="上下文用量">
       {compacting ? <MetalFx preset="chromatic" variant="circle" strength={1} innerShadow theme={resolvedTheme === "dark" ? "dark" : "light"} paused={!!reducedMotion} className="composer-context-metal">
         <Button type="button" variant="ghost" className="composer-context-trigger" title="正在压缩上下文" aria-label="正在压缩上下文" aria-busy="true"><ContextIcon /></Button>
       </MetalFx> : undefined}
     </ContextTrigger>
-    <ContextContent side="top" align="end" sideOffset={10} className="composer-context-content">
+    <ContextContent side="top" align="end" sideOffset={10} className={`composer-context-content composer-context-content-${placement}`}>
       <ContextContentHeader className="composer-context-header">
         <div className="composer-context-summary"><span><ContextIcon /><strong>{percent == null ? "上下文" : `${percent.toFixed(1)}%`}</strong></span><small>{usage?.tokens == null || reportedMaxTokens == null ? "等待数据" : `${compact.format(usedTokens)} / ${compact.format(reportedMaxTokens)}`}</small></div>
         <Progress value={percent ?? 0} aria-label="上下文使用比例" />
