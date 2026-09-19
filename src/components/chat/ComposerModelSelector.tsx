@@ -86,7 +86,7 @@ export function ComposerModelSelector() {
         </section>)}
         {groups.length === 0 && <p className="composer-model-empty">没有匹配的模型</p>}
       </div>
-      <div className="composer-effort-footer"><EffortSlider key={`${state?.model?.provider}/${state?.model?.id}/${availableLevels.join(",")}`} levels={availableLevels} value={state?.thinkingLevel} disabled={streaming} onChange={level => void choose({ type: "set_thinking_level", level })} /></div>
+      {availableLevels.length > 1 && <div className="composer-effort-footer"><EffortSlider key={`${state?.model?.provider}/${state?.model?.id}/${availableLevels.join(",")}`} levels={availableLevels} value={state?.thinkingLevel} disabled={streaming} onChange={level => void choose({ type: "set_thinking_level", level })} /></div>}
     </PopoverContent>
   </Popover></div>;
 }

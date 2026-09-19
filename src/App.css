@@ -2169,12 +2169,30 @@ body,
    all near-white. Dark mode already has enough contrast from its surface tokens. */
 .light .composer.studio-composer,
 html[data-theme="light"] .composer.studio-composer {
-  border-color: color-mix(in oklch, var(--foreground) 26%, var(--border)) !important;
-  box-shadow: 0 1px 3px color-mix(in oklch, var(--foreground) 9%, transparent) !important;
+  border-color: color-mix(in oklch, var(--foreground) 16%, var(--border)) !important;
+  box-shadow: 0 1px 3px color-mix(in oklch, var(--foreground) 6%, transparent) !important;
 }
 .light .composer.studio-composer:focus-within,
 html[data-theme="light"] .composer.studio-composer:focus-within {
-  border-color: color-mix(in oklch, var(--foreground) 36%, var(--border)) !important;
+  border-color: color-mix(in oklch, var(--foreground) 24%, var(--border)) !important;
+}
+.light .studio-composer-beam[data-beam]:not([data-active]):not([data-fading])::after,
+html[data-theme="light"] .studio-composer-beam[data-beam]:not([data-active]):not([data-fading])::after {
+  background: transparent !important;
+}
+.light .studio-composer-beam[data-beam]::after,
+html[data-theme="light"] .studio-composer-beam[data-beam]::after {
+  opacity: 0 !important;
+}
+.light .composer.studio-composer,
+html[data-theme="light"] .composer.studio-composer {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+.light .composer.studio-composer:focus-within,
+html[data-theme="light"] .composer.studio-composer:focus-within {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06) !important;
 }
 .light :is(
   [data-slot="popover-content"],
@@ -2190,7 +2208,7 @@ html[data-theme="light"] :is(
   [data-slot="context-menu-content"],
   [data-slot="hover-card-content"]
 ) {
-  border: 1px solid color-mix(in oklch, var(--foreground) 20%, var(--border));
+  border: 1px solid color-mix(in oklch, var(--foreground) 14%, var(--border));
   background: var(--popover);
   box-shadow: 0 14px 36px color-mix(in oklch, var(--foreground) 13%, transparent), 0 2px 8px color-mix(in oklch, var(--foreground) 7%, transparent);
 }
@@ -2208,13 +2226,13 @@ html[data-theme="light"] .composer-model-control[aria-expanded="true"] {
 }
 .light .composer-model-search,
 html[data-theme="light"] .composer-model-search {
-  border-color: color-mix(in oklch, var(--foreground) 14%, var(--border));
+  border-color: color-mix(in oklch, var(--foreground) 10%, var(--border));
   background: color-mix(in oklch, var(--muted) 58%, var(--background));
   box-shadow: none;
 }
 .light .composer-model-search:focus-within,
 html[data-theme="light"] .composer-model-search:focus-within {
-  border-color: color-mix(in oklch, var(--foreground) 26%, var(--border));
+  border-color: color-mix(in oklch, var(--foreground) 20%, var(--border));
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 16%, transparent);
 }
 .light .composer-model-groups,

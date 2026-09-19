@@ -94,7 +94,8 @@ function hiddenPairingUri(uri: string) {
   return uri.replace(/([?&]token=)[^&]*/i, "$1********");
 }
 
-function DesktopHostSettings() {
+export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean } = {}) {
+  const { resolvedTheme } = useTheme();
   const [host, setHost] = useState<RemoteHostInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<"start" | "stop" | null>(null);
@@ -164,6 +165,36 @@ function DesktopHostSettings() {
 
   const statusLabel = loading ? "正在读取" : host ? "已开启" : "未开启";
   const connectedLabel = host ? (host.connectedClients > 0 ? `手机已连接 · ${host.connectedClients}` : "等待手机连接") : "";
+  const qrColor = resolvedTheme === "dark" ? "#f5f5f5" : "#111111";
+  const qrBackground = resolvedTheme === "dark" ? "#2b2b2b" : "#ffffff";
+  if (pageMode) {
+    return <>
+      <section className="mobile-access-host-card" aria-label="电脑 Host">
+        <SettingRow title="电脑 Host" description="让同一局域网中的手机连接这台电脑，并使用这里运行的 Pi。">
+          <div className="remote-host-control">
+            <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}{host && <small>{connectedLabel}</small>}</span>
+            <Switch aria-label="电脑 Host" checked={Boolean(host)} disabled={loading || Boolean(busy)} onChange={checked => void (checked ? start() : stop())} />
+          </div>
+        </SettingRow>
+        <div className="mobile-access-host-body">
+          {host ? <>
+            <div className="mobile-access-qr-copy">用手机扫描二维码，连接这台电脑</div>
+            <div className="mobile-access-qr"><QRCode type="svg" value={host.pairingUri} size={224} bordered={false} color={qrColor} bgColor={qrBackground} /></div>
+            <div className="mobile-access-uri-row">
+              <code title={host.pairingUri}>{host.pairingUri}</code>
+              <Button variant="ghost" size="icon" title="复制配对链接" aria-label="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
+            </div>
+            <div className="mobile-access-address">局域网地址 <code>{remoteAddress(host)}</code></div>
+            {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
+          </> : <div className="mobile-access-qr-empty"><ScanLine /><strong>开启电脑 Host 后显示二维码</strong><span>手机扫描二维码即可连接当前电脑</span></div>}
+        </div>
+      </section>
+      <section className="mobile-access-devices-card" aria-label="已连接的设备">
+        <header><h2>已连接的设备</h2><span>{host?.connectedClients ?? 0} 台</span></header>
+        {host?.connectedClients ? Array.from({ length: host.connectedClients }, (_, index) => <div className="remote-host-device" key={index}><Icon name="device-mobile" /><span>移动端设备 {index + 1}</span><small><i />在线</small></div>) : <p>暂无设备连接</p>}
+      </section>
+    </>;
+  }
   return <>
     <SettingRow title="电脑 Host" description="让同一局域网中的手机连接这台电脑，并使用这里运行的 Pi。">
       <div className="remote-host-control">
@@ -171,41 +202,46 @@ function DesktopHostSettings() {
         <Switch aria-label="电脑 Host" checked={Boolean(host)} disabled={loading || Boolean(busy)} onChange={checked => void (checked ? start() : stop())} />
       </div>
     </SettingRow>
-    {host && <div className="remote-host-details">
-      <div className="remote-host-detail">
-        <span>电脑</span>
-        <strong className="remote-host-machine">{host.machineName}</strong>
-      </div>
-      <div className="remote-host-detail">
-        <span>连接地址</span>
-        <code title={remoteAddress(host)}>{remoteAddress(host)}</code>
-      </div>
-      <div className="remote-host-detail remote-host-pairing">
-        <span>配对链接</span>
-        <code title={revealed ? host.pairingUri : "配对凭据已隐藏"}>{revealed ? host.pairingUri : hiddenPairingUri(host.pairingUri)}</code>
-        <div className="remote-host-detail-actions">
-          <Button variant="ghost" size="icon" title={revealed ? "隐藏配对链接" : "显示配对链接"} aria-pressed={revealed} onClick={() => setRevealed(value => !value)}>{revealed ? <EyeOff /> : <Eye />}</Button>
-          <Button variant="ghost" size="icon" title="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
-          <Button variant="ghost" size="icon" title={showQr ? "隐藏二维码" : "显示二维码"} aria-pressed={showQr} onClick={() => setShowQr(value => !value)}><ScanLine /></Button>
+    <div className="remote-host-details">
+      {host ? <>
+        <div className="remote-host-detail">
+          <span>电脑</span>
+          <strong className="remote-host-machine">{host.machineName}</strong>
         </div>
-      </div>
-      {showQr && <div className="remote-host-qr"><QRCode value={host.pairingUri} size={176} bordered={false} color="var(--foreground)" bgColor="var(--card)" /><span>用手机 Orbit 扫描此二维码</span></div>}
-      {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
-      <p className="remote-host-security"><Icon name="shield-check" />配对链接包含访问凭据，请只发送到自己的设备。</p>
-      <div className="remote-host-devices">
-        <strong>已连接的设备</strong>
-        {host.connectedClients > 0
-          ? Array.from({ length: host.connectedClients }, (_, index) => <div className="remote-host-device" key={index}><Icon name="device-mobile" /><span>移动端设备 {index + 1}</span><small><i />在线</small></div>)
-          : <p>暂无设备连接</p>}
-      </div>
-    </div>}
+        <div className="remote-host-detail">
+          <span>连接地址</span>
+          <code title={remoteAddress(host)}>{remoteAddress(host)}</code>
+        </div>
+        <div className="remote-host-detail remote-host-pairing">
+          <span>配对链接</span>
+          <code title={revealed ? host.pairingUri : "配对凭据已隐藏"}>{revealed ? host.pairingUri : hiddenPairingUri(host.pairingUri)}</code>
+          <div className="remote-host-detail-actions">
+            <Button variant="ghost" size="icon" title={revealed ? "隐藏配对链接" : "显示配对链接"} aria-pressed={revealed} onClick={() => setRevealed(value => !value)}>{revealed ? <EyeOff /> : <Eye />}</Button>
+            <Button variant="ghost" size="icon" title="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
+            <Button variant="ghost" size="icon" title={showQr ? "隐藏二维码" : "显示二维码"} aria-pressed={showQr} onClick={() => setShowQr(value => !value)}><ScanLine /></Button>
+          </div>
+        </div>
+        {showQr && <div className="remote-host-qr"><QRCode type="svg" value={host.pairingUri} size={176} bordered={false} color={qrColor} bgColor={qrBackground} /><span>用手机 Orbit 扫描此二维码，连接这台电脑</span></div>}
+        {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
+        <p className="remote-host-security"><Icon name="shield-check" />配对链接包含访问凭据，请只发送到自己的设备。</p>
+        <div className="remote-host-devices">
+          <strong>已连接的设备</strong>
+          {host.connectedClients > 0
+            ? Array.from({ length: host.connectedClients }, (_, index) => <div className="remote-host-device" key={index}><Icon name="device-mobile" /><span>移动端设备 {index + 1}</span><small><i />在线</small></div>)
+            : <p>暂无设备连接</p>}
+        </div>
+      </> : <>
+        <div className="remote-host-qr remote-host-qr-empty"><ScanLine /><strong>开启电脑 Host 后显示二维码</strong><span>手机扫描二维码即可连接当前电脑</span></div>
+        <div className="remote-host-detail remote-host-detail-muted"><span>配对状态</span><span>等待开启</span></div>
+      </>}
+    </div>
   </>;
 }
 
 export function MobileAccessSettings() {
   const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const connection = useWorkspace(state => state.connection);
-  if (runtimeTarget === "desktop") return <DesktopHostSettings />;
+  if (runtimeTarget !== "mobile") return <DesktopHostSettings pageMode />;
   return <SettingRow title="电脑连接" description="移动访问地址和配对凭据由电脑端管理，请在电脑端开启或关闭 Host。"><span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={connection === "online"} />{connection === "online" ? "已连接电脑" : connection === "connecting" ? "正在连接电脑" : "未连接电脑"}</span></SettingRow>;
 }
 
@@ -259,7 +295,7 @@ export function GeneralSettingsPanel() {
     <div className="panel-heading"><div><h1><Icon name="gear-six" />常规</h1></div></div>
     <SettingsGroup title="外观" icon="palette"><ThemeSettings /></SettingsGroup>
     <SettingsGroup title="工作区" icon="folder-simple"><ProjectDirectorySettings path={path} setPath={setPath} busy={busy} running={running} status={status} onReconnect={reconnect} /><TrustSettings mode={trustMode} busy={trustBusy} desktop={desktop} onChange={changeTrustMode} /></SettingsGroup>
-    <SettingsGroup title="移动访问" icon="plugs-connected" description={desktop ? "从手机连接到这台电脑。" : "连接运行 Pi 的电脑。"}><MobileAccessSettings /></SettingsGroup>
+    <SettingsGroup title="移动端" icon="device-mobile" description={desktop ? "从手机连接到这台电脑。" : "连接运行 Pi 的电脑。"}><MobileAccessSettings /></SettingsGroup>
     <SettingsGroup title="上下文" icon="brain" description="管理当前会话的容量与压缩方式。"><ContextSettings cwd={cwd} status={status} running={running} state={state} onCompact={manualCompact} /></SettingsGroup>
     <SettingsGroup title="消息队列" icon="chats"><QueueSettings status={status} state={state} /></SettingsGroup>
     <SettingsGroup title="工具与终端" icon="wrench"><ToolsSettings tools={tools} running={running} /><TerminalSettings cwd={cwd} desktop={desktop} /></SettingsGroup>

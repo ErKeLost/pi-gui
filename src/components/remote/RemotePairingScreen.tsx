@@ -1,6 +1,6 @@
 import { BrowserQRCodeReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
-import { ArrowRight, Copy, ImagePlus, LoaderCircle, ScanLine, X } from "lucide-react";
+import { ArrowRight, Copy, ImagePlus, LoaderCircle, ScanQrCode, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Input } from "../UI";
 import { Icon } from "../Icon";
@@ -115,7 +115,7 @@ export function RemotePairingScreen({ pairingUri, connecting, error, onPairingUr
         <h1 id="remote-pairing-title">连接到你的电脑</h1>
         <span>在电脑端开启移动访问，然后扫描或粘贴生成的配对链接。</span>
       </header>
-      <Button type="button" variant="outline" className="remote-pairing-scan-card" onClick={() => void openScanner()} disabled={connecting}><span className="remote-pairing-scan-icon"><ScanLine aria-hidden="true" /></span><span><strong>扫描二维码</strong><small>扫描电脑端显示的二维码，快速完成配对</small></span><ArrowRight aria-hidden="true" /></Button>
+      <Button type="button" variant="outline" className="remote-pairing-scan-card" onClick={() => void openScanner()} disabled={connecting}><span className="remote-pairing-scan-icon"><ScanQrCode aria-hidden="true" /></span><span><strong>扫描二维码</strong><small>扫描电脑端显示的二维码，快速完成配对</small></span><ArrowRight aria-hidden="true" /></Button>
       <div className="remote-pairing-divider"><span>或</span></div>
       <form className="remote-pairing-form" aria-busy={connecting} onSubmit={event => { event.preventDefault(); if (value && !connecting) onConnect(value); }}>
         <label htmlFor="remote-pairing-uri">配对链接</label>
@@ -128,7 +128,7 @@ export function RemotePairingScreen({ pairingUri, connecting, error, onPairingUr
     </section>
     {scannerOpen && <div className="remote-pairing-scanner" role="dialog" aria-modal="true" aria-labelledby="remote-pairing-scanner-title">
       <div className="remote-pairing-scanner-card">
-        <header><strong id="remote-pairing-scanner-title"><ScanLine aria-hidden="true" />扫描二维码</strong><Button type="button" variant="ghost" size="icon" title="关闭扫码" onClick={closeScanner}><X aria-hidden="true" /></Button></header>
+        <header><strong id="remote-pairing-scanner-title"><ScanQrCode aria-hidden="true" />扫描二维码</strong><Button type="button" variant="ghost" size="icon" title="关闭扫码" onClick={closeScanner}><X aria-hidden="true" /></Button></header>
         <div className="remote-pairing-camera-frame"><video ref={videoRef} muted playsInline aria-label="二维码摄像头预览" />{cameraBusy && <span><LoaderCircle className="animate-spin" />正在打开摄像头…</span>}{!cameraBusy && scannerError && <span>{scannerError}</span>}</div>
         <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />从图片选择二维码</Button>
         <input ref={fileRef} className="remote-pairing-file-input" type="file" accept="image/*" onChange={event => { void scanFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
