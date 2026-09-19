@@ -18,7 +18,7 @@ import { WorkspaceTitlebar } from "./WorkspaceTitlebar";
 const navigation: { id: Panel; label: string; icon: string }[] = [
   { id: "chat", label: "工作台", icon: "chat-circle-text" },
   { id: "commands", label: "技能与命令", icon: "puzzle-piece" },
-  { id: "mobile-access", label: "移动端", icon: "plugs-connected" },
+  { id: "mobile-access", label: "移动端", icon: "device-mobile" },
 ];
 
 export type WorkspaceSidebarProps = {
