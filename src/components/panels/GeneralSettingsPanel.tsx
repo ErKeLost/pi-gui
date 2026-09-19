@@ -8,7 +8,7 @@ import { Eye, EyeOff, ScanLine } from "lucide-react";
 import QRCode from "antd/es/qr-code";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
-import { connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
+import { computerUseKeyStatus, connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, saveComputerUseKey, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
 import { getRemoteHost, startRemoteHost, stopRemoteHost, type RemoteHostInfo } from "../../lib/remote-host";
 import { checkMobileUpdate, mobileUpdateErrorMessage } from "../../lib/mobile-update";
 import { offerMobileUpdate } from "../UpdateChecker";
@@ -81,9 +81,26 @@ function QueueSettings({ status, state }: { status: string; state: RpcSessionSta
 
 function ComputerUseSettings({ desktop, online, running }: { desktop: boolean; online: boolean; running: boolean }) {
   const enabled = useWorkspace(state => state.computerUseEnabled);
+  const [apiKey, setApiKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (desktop) void computerUseKeyStatus().then(status => setHasKey(status.hasKey)).catch(report); }, [desktop]);
+  async function saveKey() {
+    setBusy(true);
+    try {
+      const status = await saveComputerUseKey(apiKey);
+      setHasKey(status.hasKey);
+      setApiKey("");
+      gooeyToast.success(status.hasKey ? "Jev Key 已保存" : "Jev Key 已清除", { showTimestamp: false });
+    } catch (error) { report(error); }
+    finally { setBusy(false); }
+  }
   return <>
-    <SettingRow title="电脑操作" description={desktop ? "开启后，当前会话模型可以使用 observe_ui / act_ui 等工具操作本机 App。macOS 需授权 ~/Applications/pi-computer-use.app 的辅助功能和屏幕录制。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
+    <SettingRow title="电脑操作" description={desktop ? "由你手动打开。打开后用平常说话即可，例如「打开日历翻到上个月」。macOS 需授权 pi-computer-use.app。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
       {desktop ? <Switch aria-label="电脑操作" checked={enabled} disabled={!online || running} onChange={checked => void setComputerUseMode(checked).catch(report)} /> : <span className="remote-settings-note">电脑端设置</span>}
+    </SettingRow>
+    <SettingRow title="Jev API Key" description={desktop ? "从 TypeSafe 控制台粘贴，只存在这台电脑。保存不等于打开电脑操作，开关仍由你控制。" : "Jev Key 由电脑端保管。"}>
+      {desktop ? <div className="settings-directory-control"><Input type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} placeholder={hasKey ? "已保存，留空再保存可覆盖" : "粘贴 TypeSafe API Key"} autoComplete="off" aria-label="Jev API Key" /><div className="settings-directory-actions"><Button variant="default" disabled={busy || !apiKey.trim()} onClick={() => void saveKey()}>{busy ? "保存中…" : "保存"}</Button><Button variant="outline" disabled={busy || !hasKey} onClick={() => { setApiKey(""); void saveComputerUseKey("").then(status => { setHasKey(status.hasKey); gooeyToast.success("Jev Key 已清除", { showTimestamp: false }); }).catch(report); }}>清除</Button></div></div> : <span className="remote-settings-note">{hasKey ? "电脑端已保存" : "电脑端设置"}</span>}
     </SettingRow>
   </>;
 }

@@ -1,5 +1,5 @@
 import {describe,test,expect} from 'bun:test'
-import {emptyTranscript,groupDisplayMessages,reduceEvent,hydrate} from '../src/lib/protocol'
+import {emptyTranscript,groupDisplayMessages,reduceEvent,hydrate,toolResultText} from '../src/lib/protocol'
 import { summarizeToolCalls } from '../src/lib/tool-activity'
 import { turnDurationId } from '../src/lib/turn-duration'
 describe('Pi 0.85.1 JSONL event projection',()=>{
@@ -49,7 +49,16 @@ describe('Pi 0.85.1 JSONL event projection',()=>{
  })
  test('hydration attaches historical tool results without showing duplicate assistant messages',()=>{
   const state=hydrate([{role:'user',content:'test'},{role:'assistant',content:[{type:'toolCall',id:'call',name:'read'}]},{role:'toolResult',toolCallId:'call',toolName:'read',content:[{type:'text',text:'file'}]}])
-  expect(state.messages).toHaveLength(2);expect(state.tools.call.result).toEqual({content:[{type:'text',text:'file'}],details:undefined})
+  expect(state.messages).toHaveLength(2);expect(state.tools.call.result).toBe('file')
+ })
+ test('projects large structured tool results to bounded display text',()=>{
+  const hugeDetails={outline:{root:{children:Array.from({length:10_000},(_,index)=>({title:`node-${index}`}))}}}
+  const result={content:[{type:'text',text:'observe_ui completed'}],details:hugeDetails}
+  expect(toolResultText(result)).toBe('observe_ui completed')
+  let state=reduceEvent(emptyTranscript(),{type:'tool_execution_end',toolCallId:'ui',toolName:'observe_ui',result})
+  expect(state.tools.ui.result).toBe('observe_ui completed')
+  state=hydrate([{role:'assistant',content:[{type:'toolCall',id:'ui',name:'observe_ui'}]},{role:'toolResult',toolCallId:'ui',toolName:'observe_ui',content:[{type:'text',text:'done'}],details:hugeDetails}])
+  expect(state.tools.ui.result).toBe('done')
  })
 })
 test('bash and compaction records normalize without exposing hidden custom messages',()=>{

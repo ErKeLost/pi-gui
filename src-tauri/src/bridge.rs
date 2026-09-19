@@ -278,6 +278,63 @@ fn home_dir() -> Result<PathBuf, String> {
         .map(PathBuf::from)
         .ok_or_else(|| "找不到用户目录".into())
 }
+fn typesafe_key_path() -> Result<PathBuf, String> {
+    Ok(agent_dir()?.join("typesafe-api-key"))
+}
+fn typesafe_api_key() -> Option<String> {
+    if let Ok(key) = std::env::var("TYPESAFE_API_KEY") {
+        let key = key.trim().to_string();
+        if !key.is_empty() {
+            return Some(key);
+        }
+    }
+    let mut paths = Vec::new();
+    if let Ok(path) = typesafe_key_path() {
+        paths.push(path);
+    }
+    if let Ok(home) = home_dir() {
+        paths.push(home.join(".typesafe-api-key"));
+        paths.push(home.join(".pi/typesafe-api-key"));
+    }
+    for path in paths {
+        if let Ok(text) = fs::read_to_string(path) {
+            let key = text.trim().to_string();
+            if !key.is_empty() {
+                return Some(key);
+            }
+        }
+    }
+    None
+}
+fn write_secret_file(path: &std::path::Path, value: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建配置目录失败：{e}"))?;
+    }
+    fs::write(path, value).map_err(|e| format!("写入密钥失败：{e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+#[tauri::command]
+pub fn computer_use_key_status() -> Result<Value, String> {
+    Ok(json!({ "hasKey": typesafe_api_key().is_some() }))
+}
+#[tauri::command]
+pub fn save_computer_use_key(api_key: Option<String>) -> Result<Value, String> {
+    let path = typesafe_key_path()?;
+    match api_key.map(|value| value.trim().to_string()) {
+        Some(key) if !key.is_empty() => write_secret_file(&path, &key)?,
+        _ => {
+            if path.exists() {
+                fs::remove_file(&path).map_err(|e| format!("删除密钥失败：{e}"))?;
+            }
+        }
+    }
+    Ok(json!({ "hasKey": typesafe_api_key().is_some() }))
+}
 fn project(cwd: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(cwd)
         .canonicalize()
@@ -1117,6 +1174,9 @@ pub async fn pi_connect(
             .env("ORBIT_PI_SOURCE", pi_source);
         if let Some(version) = &pi_version {
             command.env("ORBIT_PI_VERSION", version);
+        }
+        if let Some(key) = typesafe_api_key() {
+            command.env("TYPESAFE_API_KEY", key);
         }
         let mut child = command
             .stdin(Stdio::piped())

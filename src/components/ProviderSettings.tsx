@@ -126,6 +126,10 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
   const { provider, name, baseUrl, modelsUrl, api, apiKey, defaultModelId, authHeader, models, search, busy } = form;
 
   const selected = profiles.data?.find((item) => item.id === editingProfileId);
+  const mergeConfiguredModels = (catalog: ProviderModel[]) => {
+    const configured = new Map((selected?.models ?? []).map(model => [model.id, model]));
+    return catalog.map(model => ({ ...configured.get(model.id), ...model }));
+  };
   const providerConflict = profiles.data?.find(item => item.id === provider.trim() && item.id !== editingProfileId);
   const providerOptions = useMemo(() => {
     const saved = profiles.data ?? [];
@@ -208,7 +212,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
     try {
       const catalog = await probeProviderModels(provider.trim(), baseUrl.trim(), api, apiKey.trim() || undefined, authHeader, modelsUrl.trim() || undefined);
       const next = Array.isArray(catalog.data) ? catalog.data : [];
-      update({ models: next }); gooeyToast.success(`已加载 ${next.length} 个模型`, { description: "模型目录已更新", showTimestamp: false });
+      update({ models: mergeConfiguredModels(next) }); gooeyToast.success(`已加载 ${next.length} 个模型`, { description: "模型目录已更新", showTimestamp: false });
     } catch (error) { report(error); } finally { update({ busy: null }); }
   }
 

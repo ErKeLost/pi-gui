@@ -27,7 +27,7 @@ export function ComposerAgentMode() {
         </button>;
       })}
     </div>
-    {desktop && <button type="button" className={`composer-computer-use${computerUse ? " selected" : ""}`} aria-label="电脑操作" title={running ? "任务运行中不可切换" : computerUse ? "电脑操作已开启：当前模型可通过界面工具操作桌面应用" : "开启电脑操作。有 API 或 CLI 时不要用。macOS 需授权辅助功能和屏幕录制。"} aria-pressed={computerUse} disabled={!online || running} onClick={() => void setComputerUseMode(!computerUse).then(() => gooeyToast.success(computerUse ? "电脑操作已关闭" : "电脑操作已开启", { showTimestamp: false })).catch(report)}>
+    {desktop && <button type="button" className={`composer-computer-use${computerUse ? " selected" : ""}`} aria-label="电脑操作" title={running ? "任务运行中不可切换" : computerUse ? "电脑操作已开启，直接说要打开的网页或 App 即可" : "开启电脑操作后，用平常说话让助手点界面"} aria-pressed={computerUse} disabled={!online || running} onClick={() => void setComputerUseMode(!computerUse).then(() => gooeyToast.success(computerUse ? "电脑操作已关闭" : "电脑操作已开启，直接说要做什么即可", { showTimestamp: false })).catch(report)}>
       <Icon name="fluent-color:laptop-24" className="composer-agent-mode-icon" />
     </button>}
   </div>;

@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../lib/store";
 import { report, request, stop, syncComputerUseMode, syncMultiAgentMode } from "../../lib/rpc";
 import { Beam } from "../Effects";
-import { Button } from "../UI";
 import { Icon } from "../Icon";
 import { PromptInput, PromptInputSubmit, PromptInputTextarea, type PromptInputMessage } from "../ai-elements/prompt-input";
+import { Button } from "../ui/button";
 import { ComposerModelSelector } from "./ComposerModelSelector";
 import { ComposerContext } from "./ComposerContext";
 import { ComposerAgentMode } from "./ComposerAgentMode";
 
-type Attachment = { name: string; data: string; mimeType: string };
+type Attachment = { id: string; name: string; data: string; mimeType: string };
 const composerCache = new Map<string, { text: string; attachments: Attachment[] }>();
 
 function cacheComposer(project: string, value: { text: string; attachments: Attachment[] }) {
@@ -22,7 +22,7 @@ function cacheComposer(project: string, value: { text: string; attachments: Atta
 function imageAttachments(files: Iterable<File>) {
   return Promise.all(Array.from(files).flatMap(file => file.type.startsWith("image/") ? [new Promise<Attachment>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve({ name: file.name || "粘贴的图片", data: String(reader.result).split(",")[1], mimeType: file.type });
+    reader.onload = () => resolve({ id: crypto.randomUUID(), name: file.name || "粘贴的图片", data: String(reader.result).split(",")[1], mimeType: file.type });
     reader.onerror = reject;
     reader.readAsDataURL(file);
   })] : []));
@@ -73,7 +73,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
     <Beam className="studio-composer-beam" borderRadius={14} active={transcript.running || compacting}>
       <PromptInput onSubmit={message => void submit(message)} className="composer studio-composer" allowEmpty={attachments.length > 0}>
         <AnimatePresence>{attachments.length > 0 && <m.div className="attachments" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-          {attachments.map(attachment => <div className="attachment-preview" key={`${attachment.name}-${attachment.data.slice(0, 16)}`}><img src={`data:${attachment.mimeType};base64,${attachment.data}`} alt={attachment.name} /><Button type="button" className="attachment-remove" title={`移除 ${attachment.name}`} aria-label={`移除 ${attachment.name}`} onClick={() => setAttachments(current => current.filter(item => item !== attachment))}><Icon name="x" /></Button></div>)}
+          {attachments.map(attachment => <div className="attachment-preview" key={attachment.id}><img src={`data:${attachment.mimeType};base64,${attachment.data}`} alt={attachment.name} /><Button type="button" variant="secondary" size="icon" className="attachment-remove" title={`移除 ${attachment.name}`} aria-label={`移除 ${attachment.name}`} onClick={() => setAttachments(current => current.filter(item => item.id !== attachment.id))}><Icon name="x" /></Button></div>)}
         </m.div>}</AnimatePresence>
         <PromptInputTextarea placeholder="输入消息，发送给助手…" value={draft} onChange={event => setDraft(event.currentTarget.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) deliveryOverride.current = event.altKey ? "followUp" : "steer"; }} />
         <div className="composer-bottom">

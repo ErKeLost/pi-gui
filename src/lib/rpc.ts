@@ -194,6 +194,8 @@ export async function persistDefaultModel(provider:string,modelId:string):Promis
 export type ProjectTrustMode = 'ask' | 'always' | 'never'
 export async function getProjectTrustMode():Promise<ProjectTrustMode> { if(!desktopRuntime()) throw new Error('项目权限请在电脑端设置'); return invoke<ProjectTrustMode>('get_project_trust_mode') }
 export async function setProjectTrustMode(mode:ProjectTrustMode):Promise<ProjectTrustMode> { if(!desktopRuntime()) throw new Error('项目权限请在电脑端设置'); return invoke<ProjectTrustMode>('set_project_trust_mode',{mode}) }
+export async function computerUseKeyStatus():Promise<{hasKey:boolean}> { if(!desktopRuntime()) throw new Error('Jev Key 请在电脑端设置'); return invoke<{hasKey:boolean}>('computer_use_key_status') }
+export async function saveComputerUseKey(apiKey?:string):Promise<{hasKey:boolean}> { if(!desktopRuntime()) throw new Error('Jev Key 请在电脑端设置'); return invoke<{hasKey:boolean}>('save_computer_use_key',{apiKey:apiKey?.trim()||null}) }
 export async function loadMessages(target=useWorkspace.getState().cwd){
  const id=route(target),data=await request<{messages:PiMessage[]}>({type:'get_messages'},30000,id)
  patch(id,{transcript:hydrate(data.messages)})

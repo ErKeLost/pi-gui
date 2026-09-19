@@ -10,6 +10,27 @@ export type Tool = { name: string; args?: Record<string, Json>; result?: unknown
 export type Event = { type: string; message?: PiMessage; toolCallId?: string; toolName?: string; args?: Record<string, Json>; result?: unknown; partialResult?: unknown; isError?: boolean; details?: unknown; errorMessage?: string; assistantMessageEvent?: { type: string; contentIndex: number; delta?: string; content?: string; id?: string; toolName?: string; toolCall?: Part }; steering?: string[]; followUp?: string[]; [key: string]: unknown }
 export type Transcript = { messages: DisplayMessage[]; active: number; running: boolean; compacting: boolean; phase: string; tools: Record<string, Tool>; error: string | null; queue: { steering: string[]; followUp: string[] }; bash: { id?: string; command?: string; output: string; running: boolean } | null; turnStartedAt: number | null }
 export const emptyTranscript = (): Transcript => ({ messages: [], active: -1, running: false, compacting: false, phase: '就绪', tools: {}, error: null, queue: { steering: [], followUp: [] }, bash: null, turnStartedAt: null })
+const MAX_TOOL_RESULT_CHARS = 20_000
+const boundedToolText = (text:string) => text.length <= MAX_TOOL_RESULT_CHARS ? text : `${text.slice(0,MAX_TOOL_RESULT_CHARS)}\n\n[输出过长，已省略]`
+export function toolResultText(value:unknown):string {
+  if(value == null)return ''
+  if(typeof value==='string')return boundedToolText(value)
+  if(typeof value==='number'||typeof value==='boolean')return String(value)
+  if(Array.isArray(value))return boundedToolText(value.flatMap(item=>{
+    if(typeof item==='string')return [item]
+    if(item&&typeof item==='object'&&'text' in item&&typeof item.text==='string')return [item.text]
+    if(item&&typeof item==='object'&&'type' in item&&item.type==='image')return ['[图片]']
+    return []
+  }).join('\n'))
+  if(typeof value==='object'){
+    const record=value as Record<string,unknown>
+    if('content' in record)return toolResultText(record.content)
+    for(const key of ['message','error','output','result'] as const){
+      if(key in record){const text=toolResultText(record[key]);if(text)return text}
+    }
+  }
+  return '工具执行完成'
+}
 export function groupDisplayMessages(messages: DisplayMessage[]): DisplayMessageGroup[] {
   return messages.reduce<DisplayMessageGroup[]>((groups, item, index) => {
     const previous = groups.at(-1)
@@ -54,7 +75,7 @@ export function hydrate(messages: PiMessage[]): Transcript {
   for (const raw of messages) {
     if(raw.role==='custom' && raw.display===false)continue
     const message=normalizeMessage(raw)
-    if (message.role === 'toolResult' && message.toolCallId) state.tools[message.toolCallId] = {name: message.toolName ?? 'tool', result: {content:message.content,details:message.details}, running: false, isError: message.isError, usage: message.usage as ToolUsage|undefined}
+    if (message.role === 'toolResult' && message.toolCallId) state.tools[message.toolCallId] = {name: message.toolName ?? 'tool', result: toolResultText(message.content), running: false, isError: message.isError, usage: message.usage as ToolUsage|undefined}
     else state.messages.push({ id: `history-${state.messages.length}-${message.timestamp ?? 0}`, message })
   }
   return state
@@ -124,7 +145,7 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
       if (message.role === 'assistant' && Array.isArray(message.content)) {
         message.content = message.content.map(part => part.type === 'thinking' ? {...part,thinkingComplete:true} : part)
       }
-      if (message.role === 'toolResult' && message.toolCallId) return { ...state, tools: {...state.tools,[message.toolCallId]:{...state.tools[message.toolCallId],name:message.toolName ?? 'tool',running:false,result:{content:message.content,details:message.details},isError:message.isError,usage:message.usage as ToolUsage|undefined}} }
+      if (message.role === 'toolResult' && message.toolCallId) return { ...state, tools: {...state.tools,[message.toolCallId]:{...state.tools[message.toolCallId],name:message.toolName ?? 'tool',running:false,result:toolResultText(message.content),isError:message.isError,usage:message.usage as ToolUsage|undefined}} }
       const index = message.role === 'assistant' ? state.active : state.messages.length - 1
       if(index >= 0) {
         state.messages = [...state.messages]; state.messages[index] = {...state.messages[index],message}
@@ -137,7 +158,8 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
     case 'tool_execution_end': {
       if (!event.toolCallId) return state
       const tool = state.tools[event.toolCallId]
-      return { ...state, phase: event.type === 'tool_execution_end' ? '正在运行' : `执行 ${event.toolName}`, tools: {...state.tools,[event.toolCallId]:{...tool,name:event.toolName ?? tool?.name ?? 'tool',args:event.args ?? tool?.args,result:event.result ?? event.partialResult ?? tool?.result,running:event.type !== 'tool_execution_end',isError:event.isError}} }
+      const result = event.result !== undefined ? toolResultText(event.result) : event.partialResult !== undefined ? toolResultText(event.partialResult) : tool?.result
+      return { ...state, phase: event.type === 'tool_execution_end' ? '正在运行' : `执行 ${event.toolName}`, tools: {...state.tools,[event.toolCallId]:{...tool,name:event.toolName ?? tool?.name ?? 'tool',args:event.args ?? tool?.args,result,running:event.type !== 'tool_execution_end',isError:event.isError}} }
     }
     default: return state
   }

@@ -3,7 +3,7 @@ import { branchFromMessage, report } from "../../lib/rpc";
 import { Fragment, memo, useState, type ReactNode } from "react";
 import { m } from "motion/react";
 import type { DisplayMessage, Part, PiMessage, Tool } from "../../lib/protocol";
-import { formatTranscriptError } from "../../lib/protocol";
+import { formatTranscriptError, toolResultText } from "../../lib/protocol";
 import { ProcessingPanel, Thinking } from "../RichMessage";
 import { ToolActivityGroup, ToolCall } from "../ai-elements/tool-call";
 import { Message, MessageContent, MessageResponse } from "../ai-elements/message";
@@ -42,7 +42,7 @@ function ToolPart({ part, tools }: PartViewProps) {
   return <ToolCall
     toolName={part.name ?? tool?.name ?? "工具"}
     request={part.argsText ?? JSON.stringify(part.arguments ?? {})}
-    result={result === undefined ? "" : typeof result === "string" ? result : JSON.stringify(result)}
+    result={toolResultText(result)}
     usage={tool?.usage}
     running={tool?.running ?? false}
   />;

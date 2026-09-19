@@ -38,6 +38,8 @@ pub fn run() {
             bridge::set_default_model,
             bridge::get_project_trust_mode,
             bridge::set_project_trust_mode,
+            bridge::computer_use_key_status,
+            bridge::save_computer_use_key,
             bridge::pi_connect,
             bridge::pi_send,
             bridge::pi_disconnect,
