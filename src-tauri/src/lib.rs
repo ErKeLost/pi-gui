@@ -3,8 +3,27 @@ mod mobile_update;
 mod remote;
 mod runtime;
 use tauri::Manager;
+
+/// Finder/Dock-launched apps inherit launchd's minimal PATH, so every shell
+/// Pi spawns would miss Homebrew tools like rg and ffmpeg. Normalize once at
+/// startup; all child processes inherit the corrected environment. Existing
+/// entries keep their order, so user overrides always win.
+#[cfg(desktop)]
+fn normalize_path() {
+    let current = std::env::var("PATH").unwrap_or_default();
+    let mut entries: Vec<&str> = current.split(':').collect();
+    for dir in ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"] {
+        if !entries.contains(&dir) {
+            entries.push(dir);
+        }
+    }
+    std::env::set_var("PATH", entries.join(":"));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(desktop)]
+    normalize_path();
     let builder = tauri::Builder::default();
     #[cfg(target_os = "android")]
     let builder = builder.plugin(mobile_update::init());
