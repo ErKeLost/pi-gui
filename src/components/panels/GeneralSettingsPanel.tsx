@@ -9,7 +9,7 @@ import QRCode from "antd/es/qr-code";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
 import { computerUseKeyStatus, connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, saveComputerUseKey, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
-import { getRemoteHost, startRemoteHost, stopRemoteHost, type RemoteHostInfo } from "../../lib/remote-host";
+import { getRemoteHost, getRemoteHostAddresses, startRemoteHost, stopRemoteHost, type RemoteHostAddresses, type RemoteHostInfo } from "../../lib/remote-host";
 import { checkMobileUpdate, mobileUpdateErrorMessage } from "../../lib/mobile-update";
 import { offerMobileUpdate } from "../UpdateChecker";
 import { Button, Input, Select, Switch } from "../UI";
@@ -151,10 +151,17 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
   const [revealed, setRevealed] = useState(false);
   const [showQr, setShowQr] = useState(true);
   const [connectionFeedback, setConnectionFeedback] = useState("");
+  const [addresses, setAddresses] = useState<RemoteHostAddresses | null>(null);
+  const [addressMode, setAddressMode] = useState<"lan" | "tailscale">(() => typeof window === "undefined" ? "lan" : localStorage.getItem("orbit.remote.addressMode") === "tailscale" ? "tailscale" : "lan");
   const previousClients = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    void getRemoteHostAddresses().then(value => {
+      if (!mounted) return;
+      setAddresses(value);
+      if (!value.tailscale) setAddressMode("lan");
+    }).catch(report);
     const refreshHost = () => void getRemoteHost().then(info => {
       if (!mounted) return;
       const clients = info?.connectedClients ?? 0;
@@ -163,17 +170,18 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
       }
       previousClients.current = clients;
       setHost(info);
-      setShowQr(true);
+      if (info) setAddressMode(info.advertisedAddress === addresses?.tailscale ? "tailscale" : "lan");
     }).catch(report).finally(() => { if (mounted) setLoading(false); });
     refreshHost();
     const timer = window.setInterval(refreshHost, 2000);
     return () => { mounted = false; window.clearInterval(timer); };
-  }, []);
+  }, [addresses?.tailscale]);
 
   async function start() {
     setBusy("start");
     try {
-      const info = await startRemoteHost();
+      localStorage.setItem("orbit.remote.addressMode", addressMode);
+      const info = await startRemoteHost({ addressMode });
       previousClients.current = info.connectedClients;
       setConnectionFeedback("");
       setHost(info);
@@ -214,15 +222,22 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
 
   const statusLabel = loading ? "正在读取" : host ? "已开启" : "未开启";
   const connectedLabel = host ? (host.connectedClients > 0 ? `手机已连接 · ${host.connectedClients}` : "等待手机连接") : "";
+  const addressSetting = <SettingRow title="二维码网络" description={addresses?.tailscale ? "局域网适合同一 Wi-Fi；Tailscale 可在外网连接，两台设备需登录同一账号并开启 Tailscale。Host 只监听所选网络地址。" : "当前只检测到局域网。安装并登录 Tailscale 后，重新打开此页面即可选择外网连接。"} className="remote-address-setting">
+    <Select aria-label="移动端连接方式" value={addressMode} disabled={Boolean(host) || Boolean(busy)} onChange={event => setAddressMode(event.target.value as "lan" | "tailscale")}>
+      <option value="lan">局域网 · {addresses?.lan ?? "检测中…"}</option>
+      {addresses?.tailscale && <option value="tailscale">Tailscale · {addresses.tailscale}</option>}
+    </Select>
+  </SettingRow>;
   if (pageMode) {
     return <>
       <section className="mobile-access-host-card" aria-label="电脑 Host">
-        <SettingRow title="电脑 Host" description="让同一局域网中的手机连接这台电脑，并使用这里运行的 Pi。">
+        <SettingRow title="电脑 Host" description="让手机通过局域网或自己的 Tailscale 网络连接这台电脑，并使用这里运行的 Pi。">
           <div className="remote-host-control">
             <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}{host && <small>{connectedLabel}</small>}</span>
             <Switch aria-label="电脑 Host" checked={Boolean(host)} disabled={loading || Boolean(busy)} onChange={checked => void (checked ? start() : stop())} />
           </div>
         </SettingRow>
+        {addressSetting}
         <div className="mobile-access-host-body">
           {host ? <>
             <div className="mobile-access-qr-copy">用手机扫描二维码，连接这台电脑</div>
@@ -231,7 +246,8 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
               <code title={host.pairingUri}>{host.pairingUri}</code>
               <Button variant="ghost" size="icon" title="复制配对链接" aria-label="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
             </div>
-            <div className="mobile-access-address">局域网地址 <code>{remoteAddress(host)}</code></div>
+
+            <div className="mobile-access-address">二维码连接地址 <code>{remoteAddress(host)}</code></div>
             {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
           </> : <div className="mobile-access-qr-empty"><ScanLine /><strong>开启电脑 Host 后显示二维码</strong><span>手机扫描二维码即可连接当前电脑</span></div>}
         </div>
@@ -243,12 +259,13 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
     </>;
   }
   return <>
-    <SettingRow title="电脑 Host" description="让同一局域网中的手机连接这台电脑，并使用这里运行的 Pi。">
+    <SettingRow title="电脑 Host" description="让手机通过局域网或自己的 Tailscale 网络连接这台电脑，并使用这里运行的 Pi。">
       <div className="remote-host-control">
         <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}{host && <small>{connectedLabel}</small>}</span>
         <Switch aria-label="电脑 Host" checked={Boolean(host)} disabled={loading || Boolean(busy)} onChange={checked => void (checked ? start() : stop())} />
       </div>
     </SettingRow>
+    {addressSetting}
     <div className="remote-host-details">
       {host ? <>
         <div className="remote-host-detail">

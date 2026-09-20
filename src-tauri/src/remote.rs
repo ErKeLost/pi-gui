@@ -32,6 +32,13 @@ enum RemoteHostOperation {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RemoteHostAddresses {
+    pub lan: String,
+    pub tailscale: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RemoteHostInfo {
     pub running: bool,
     pub protocol: &'static str,
@@ -41,13 +48,16 @@ pub struct RemoteHostInfo {
     pub port: u16,
     pub token: String,
     pub pairing_uri: String,
+    pub lan_pairing_uri: String,
+    pub relay_pairing_uri: Option<String>,
+    pub relay_url: Option<String>,
     pub machine_name: String,
     pub connected_clients: usize,
 }
 
 #[cfg(desktop)]
 mod desktop {
-    use super::{RemoteHostInfo, RemoteTheme, PROTOCOL};
+    use super::{RemoteHostAddresses, RemoteHostInfo, RemoteTheme, PROTOCOL};
     use crate::bridge::Bridge;
     use serde_json::{json, Value};
     use std::{
@@ -63,7 +73,9 @@ mod desktop {
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
     use tauri::{AppHandle, Manager, State};
-    use tungstenite::{accept_hdr, handshake::server::ErrorResponse, Message};
+    use tungstenite::{
+        accept_hdr, connect, handshake::server::ErrorResponse, stream::MaybeTlsStream, Message,
+    };
     use uuid::Uuid;
 
     const EVENT_BATCH_WINDOW: Duration = Duration::from_millis(16);
@@ -88,6 +100,12 @@ mod desktop {
         stop: Arc<AtomicBool>,
         clients: Clients,
         events: SyncSender<PiBroadcast>,
+    }
+
+    struct RelayClient {
+        local_id: Uuid,
+        attached: Arc<Mutex<HashSet<String>>>,
+        incoming: Receiver<String>,
     }
 
     pub struct RemoteHost {
@@ -246,8 +264,103 @@ mod desktop {
             .unwrap_or_else(|| "127.0.0.1".into())
     }
 
+    fn is_tailscale_address(address: &str) -> bool {
+        let Ok(IpAddr::V4(address)) = address.parse::<IpAddr>() else {
+            return false;
+        };
+        let octets = address.octets();
+        octets[0] == 100 && (64..=127).contains(&octets[1])
+    }
+
+    fn tailscale_address_from_text(text: &str) -> Option<String> {
+        text.split(|character: char| !(character.is_ascii_digit() || character == '.'))
+            .find(|value| is_tailscale_address(value))
+            .map(str::to_owned)
+    }
+
+    fn command_stdout(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
+        let mut child = std::process::Command::new(program)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok()?;
+        let started = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        return None;
+                    }
+                    let mut stdout = String::new();
+                    child.stdout.take()?.read_to_string(&mut stdout).ok()?;
+                    return Some(stdout);
+                }
+                Ok(None) if started.elapsed() < timeout => {
+                    thread::sleep(Duration::from_millis(20));
+                }
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+            }
+        }
+    }
+
+    fn tailscale_address() -> Option<String> {
+        let mut commands = vec!["tailscale".to_owned()];
+        #[cfg(target_os = "macos")]
+        commands.push("/Applications/Tailscale.app/Contents/MacOS/Tailscale".to_owned());
+        #[cfg(target_os = "windows")]
+        commands.push(r"C:\Program Files\Tailscale\tailscale.exe".to_owned());
+        commands.into_iter().find_map(|program| {
+            command_stdout(&program, &["ip", "-4"], Duration::from_secs(2))
+                .and_then(|output| tailscale_address_from_text(&output))
+        })
+    }
+
+    fn addresses() -> RemoteHostAddresses {
+        RemoteHostAddresses {
+            lan: advertised_address(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED)),
+            tailscale: tailscale_address(),
+        }
+    }
+
+    fn selected_address(
+        mode: Option<&str>,
+        detected: &RemoteHostAddresses,
+    ) -> Result<String, String> {
+        match mode.unwrap_or("lan") {
+            "lan" => Ok(detected.lan.clone()),
+            "tailscale" => detected.tailscale.clone().ok_or_else(|| {
+                "未检测到 Tailscale 地址，请确认 Tailscale 已登录并处于开启状态".into()
+            }),
+            _ => Err("不支持的移动端连接方式".into()),
+        }
+    }
+
     fn pairing_uri(address: &str, port: u16, token: &str) -> String {
         format!("orbit://pair?host={address}&port={port}&token={token}&protocol={PROTOCOL}")
+    }
+
+    fn relay_pairing_uri(relay_url: &str, host_id: &str, token: &str) -> String {
+        format!(
+            "orbit://pair?relay={}&hostId={host_id}&token={token}&protocol={PROTOCOL}",
+            percent_encode(relay_url)
+        )
+    }
+
+    fn percent_encode(value: &str) -> String {
+        value.bytes().fold(String::new(), |mut encoded, byte| {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+                encoded.push(byte as char);
+            } else {
+                encoded.push_str(&format!("%{byte:02X}"));
+            }
+            encoded
+        })
     }
 
     fn machine_name() -> String {
@@ -573,28 +686,246 @@ mod desktop {
         }
     }
 
+    fn set_relay_timeout(stream: &mut MaybeTlsStream<TcpStream>) {
+        let timeout = Some(Duration::from_millis(100));
+        match stream {
+            MaybeTlsStream::Plain(stream) => {
+                let _ = stream.set_read_timeout(timeout);
+                let _ = stream.set_write_timeout(timeout);
+            }
+            MaybeTlsStream::Rustls(stream) => {
+                let _ = stream.sock.set_read_timeout(timeout);
+                let _ = stream.sock.set_write_timeout(timeout);
+            }
+            _ => {}
+        }
+    }
+
+    fn relay_envelope(client_id: &str, data: String) -> Message {
+        Message::text(json!({"relay":"frame","clientId":client_id,"data":data}).to_string())
+    }
+
+    fn add_relay_client(
+        app: &AppHandle,
+        client_id: &str,
+        host_id: &str,
+        clients: &Clients,
+        relay_clients: &mut HashMap<String, RelayClient>,
+    ) -> Option<Message> {
+        if let Some(previous) = relay_clients.remove(client_id) {
+            clients.lock().ok()?.remove(&previous.local_id);
+        }
+        let (outbound, incoming) = mpsc::sync_channel::<String>(CLIENT_QUEUE_CAPACITY);
+        let attached = Arc::new(Mutex::new(HashSet::new()));
+        let local_id = Uuid::new_v4();
+        clients.lock().ok()?.insert(
+            local_id,
+            Client {
+                sender: outbound,
+                projects: attached.clone(),
+            },
+        );
+        relay_clients.insert(
+            client_id.to_owned(),
+            RelayClient {
+                local_id,
+                attached,
+                incoming,
+            },
+        );
+        Some(relay_envelope(client_id, json!({
+            "type":"host.hello",
+            "protocol":PROTOCOL,
+            "hostId":host_id,
+            "serverTime":unix_millis(),
+            "theme":app.state::<RemoteHost>().theme(),
+            "machineName":app.state::<RemoteHost>().info().map(|info| info.machine_name).unwrap_or_else(|| "Orbit Desktop".into())
+        }).to_string()))
+    }
+
+    fn clear_relay_clients(clients: &Clients, relay_clients: &mut HashMap<String, RelayClient>) {
+        if let Ok(mut connected) = clients.lock() {
+            for relay_client in relay_clients.values() {
+                connected.remove(&relay_client.local_id);
+            }
+        }
+        relay_clients.clear();
+    }
+
+    fn relay_loop(
+        app: AppHandle,
+        relay_url: String,
+        host_id: String,
+        token: String,
+        clients: Clients,
+        stop: Arc<AtomicBool>,
+    ) {
+        let endpoint = format!(
+            "{}/relay/host/{host_id}?token={token}",
+            relay_url.trim_end_matches('/')
+        );
+        while !stop.load(Ordering::Acquire) {
+            let Ok((mut socket, _)) = connect(endpoint.as_str()) else {
+                thread::sleep(Duration::from_secs(2));
+                continue;
+            };
+            set_relay_timeout(socket.get_mut());
+            let mut relay_clients = HashMap::<String, RelayClient>::new();
+            while !stop.load(Ordering::Acquire) {
+                let outbound = relay_clients
+                    .iter()
+                    .flat_map(|(client_id, client)| {
+                        client
+                            .incoming
+                            .try_iter()
+                            .map(move |data| (client_id.clone(), data))
+                    })
+                    .collect::<Vec<_>>();
+                let mut failed = false;
+                for (client_id, data) in outbound {
+                    if socket.send(relay_envelope(&client_id, data)).is_err() {
+                        failed = true;
+                        break;
+                    }
+                }
+                if failed {
+                    break;
+                }
+                match socket.read() {
+                    Ok(Message::Text(text)) => {
+                        let Ok(frame) = serde_json::from_str::<Value>(&text) else {
+                            continue;
+                        };
+                        let Some(client_id) = frame.get("clientId").and_then(Value::as_str) else {
+                            continue;
+                        };
+                        match frame.get("relay").and_then(Value::as_str) {
+                            Some("connect") => {
+                                if let Some(hello) = add_relay_client(
+                                    &app,
+                                    client_id,
+                                    &host_id,
+                                    &clients,
+                                    &mut relay_clients,
+                                ) {
+                                    if socket.send(hello).is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                            Some("disconnect") => {
+                                if let Some(client) = relay_clients.remove(client_id) {
+                                    clients
+                                        .lock()
+                                        .ok()
+                                        .map(|mut connected| connected.remove(&client.local_id));
+                                }
+                            }
+                            Some("frame") => {
+                                if !relay_clients.contains_key(client_id) {
+                                    if let Some(hello) = add_relay_client(
+                                        &app,
+                                        client_id,
+                                        &host_id,
+                                        &clients,
+                                        &mut relay_clients,
+                                    ) {
+                                        if socket.send(hello).is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                                let Some(data) = frame.get("data").and_then(Value::as_str) else {
+                                    continue;
+                                };
+                                let Some(client) = relay_clients.get(client_id) else {
+                                    continue;
+                                };
+                                let response = handle_request(&app, data, &client.attached);
+                                if socket.send(relay_envelope(client_id, response)).is_err() {
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    Ok(Message::Ping(payload)) => {
+                        if socket.send(Message::Pong(payload)).is_err() {
+                            break;
+                        }
+                    }
+                    Ok(Message::Close(_)) => break,
+                    Ok(_) => {}
+                    Err(tungstenite::Error::Io(error))
+                        if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+                    Err(_) => break,
+                }
+            }
+            clear_relay_clients(&clients, &mut relay_clients);
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+
     pub(super) fn start(
         app: AppHandle,
         bind_address: Option<String>,
+        address_mode: Option<String>,
         port: Option<u16>,
+        relay_url: Option<String>,
         state: State<'_, RemoteHost>,
     ) -> Result<RemoteHostInfo, String> {
         if let Some(info) = state.info() {
             return Ok(info);
         }
-        let bind_address = bind_address.unwrap_or_else(|| "0.0.0.0".into());
+        if relay_url.is_some() {
+            return Err("公网 Relay 尚未开放，请使用局域网或 Tailscale".into());
+        }
+        let detected_addresses = addresses();
+        let explicit_mode = address_mode.is_some();
+        if explicit_mode
+            && address_mode.as_deref() == Some("lan")
+            && detected_addresses.lan == "127.0.0.1"
+        {
+            return Err("未检测到可供手机连接的局域网地址".into());
+        }
+        let advertised_address = if explicit_mode {
+            selected_address(address_mode.as_deref(), &detected_addresses)?
+        } else if let Some(bound) = bind_address.as_deref() {
+            let bound = bound
+                .parse::<IpAddr>()
+                .map_err(|_| "Host 绑定地址无效".to_string())?;
+            advertised_address(bound)
+        } else {
+            detected_addresses.lan
+        };
+        let bind_address = bind_address.unwrap_or_else(|| {
+            if explicit_mode {
+                advertised_address.clone()
+            } else {
+                "0.0.0.0".into()
+            }
+        });
         let address = bind_address
             .parse::<IpAddr>()
             .map_err(|_| "Host 绑定地址无效".to_string())?;
+        if explicit_mode && address.to_string() != advertised_address {
+            return Err("Host 绑定地址必须与所选连接方式一致".into());
+        }
         let listener = TcpListener::bind(SocketAddr::new(address, port.unwrap_or(0)))
             .map_err(|error| format!("启动 Orbit Host 失败：{error}"))?;
         listener
             .set_nonblocking(true)
             .map_err(|error| error.to_string())?;
         let local = listener.local_addr().map_err(|error| error.to_string())?;
-        let advertised_address = advertised_address(local.ip());
         let token = Uuid::new_v4().simple().to_string();
         let host_id = Uuid::new_v4().to_string();
+        let relay_url = relay_url
+            .map(|value| value.trim().trim_end_matches('/').to_owned())
+            .filter(|value| value.starts_with("wss://") || value.starts_with("ws://"));
+        let lan_pairing_uri = pairing_uri(&advertised_address, local.port(), &token);
+        let relay_pairing_uri = relay_url
+            .as_ref()
+            .map(|url| relay_pairing_uri(url, &host_id, &token));
         let info = RemoteHostInfo {
             running: true,
             protocol: PROTOCOL,
@@ -602,7 +933,12 @@ mod desktop {
             bind_address,
             advertised_address: advertised_address.clone(),
             port: local.port(),
-            pairing_uri: pairing_uri(&advertised_address, local.port(), &token),
+            pairing_uri: relay_pairing_uri
+                .clone()
+                .unwrap_or_else(|| lan_pairing_uri.clone()),
+            lan_pairing_uri,
+            relay_pairing_uri,
+            relay_url: relay_url.clone(),
             token: token.clone(),
             machine_name: machine_name(),
             connected_clients: 0,
@@ -615,15 +951,36 @@ mod desktop {
         thread::spawn(move || broadcast_loop(event_receiver, broadcast_clients, broadcast_stop));
         let accept_clients = clients.clone();
         let accept_stop = stop.clone();
+        let accept_app = app.clone();
+        let accept_token = token.clone();
+        let accept_host_id = host_id.clone();
+        let relay_args = relay_url.map(|relay_url| {
+            (
+                app.clone(),
+                relay_url,
+                info.host_id.clone(),
+                info.token.clone(),
+                clients.clone(),
+                stop.clone(),
+            )
+        });
+        let mut slot = state.running.lock().map_err(|error| error.to_string())?;
+        *slot = Some(RunningHost {
+            info: info.clone(),
+            stop,
+            clients,
+            events,
+        });
+        drop(slot);
         thread::spawn(move || {
             while !accept_stop.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((stream, _)) => {
-                        let app = app.clone();
-                        let token = token.clone();
+                        let app = accept_app.clone();
+                        let token = accept_token.clone();
                         let clients = accept_clients.clone();
                         let stop = accept_stop.clone();
-                        let host_id = host_id.clone();
+                        let host_id = accept_host_id.clone();
                         thread::spawn(move || {
                             client_loop(app, stream, token, clients, stop, host_id)
                         });
@@ -635,14 +992,25 @@ mod desktop {
                 }
             }
         });
-        let mut slot = state.running.lock().map_err(|error| error.to_string())?;
-        *slot = Some(RunningHost {
-            info: info.clone(),
-            stop,
-            clients,
-            events,
-        });
+        if let Some((relay_app, relay_url, relay_host_id, relay_token, relay_clients, relay_stop)) =
+            relay_args
+        {
+            thread::spawn(move || {
+                relay_loop(
+                    relay_app,
+                    relay_url,
+                    relay_host_id,
+                    relay_token,
+                    relay_clients,
+                    relay_stop,
+                )
+            });
+        }
         Ok(info)
+    }
+
+    pub(super) fn addresses_command() -> RemoteHostAddresses {
+        addresses()
     }
 
     pub(super) fn status(state: State<'_, RemoteHost>) -> Option<RemoteHostInfo> {
@@ -686,6 +1054,41 @@ mod desktop {
                 pairing_uri("192.168.1.5", 17777, "abc"),
                 "orbit://pair?host=192.168.1.5&port=17777&token=abc&protocol=orbit.remote.v1"
             );
+        }
+
+        #[test]
+        fn recognizes_only_the_tailscale_cgnat_range() {
+            assert!(is_tailscale_address("100.64.0.1"));
+            assert!(is_tailscale_address("100.127.255.254"));
+            assert!(!is_tailscale_address("100.128.0.1"));
+            assert!(!is_tailscale_address("192.168.1.20"));
+            assert_eq!(
+                tailscale_address_from_text("100.82.7.9\n"),
+                Some("100.82.7.9".into())
+            );
+        }
+
+        #[test]
+        fn selected_address_accepts_only_known_connection_modes() {
+            let detected = RemoteHostAddresses {
+                lan: "192.168.1.20".into(),
+                tailscale: Some("100.82.7.9".into()),
+            };
+            assert_eq!(selected_address(None, &detected).unwrap(), "192.168.1.20");
+            assert_eq!(
+                selected_address(Some("lan"), &detected).unwrap(),
+                "192.168.1.20"
+            );
+            assert_eq!(
+                selected_address(Some("tailscale"), &detected).unwrap(),
+                "100.82.7.9"
+            );
+            assert!(selected_address(Some("relay"), &detected).is_err());
+            let without_tailscale = RemoteHostAddresses {
+                lan: detected.lan,
+                tailscale: None,
+            };
+            assert!(selected_address(Some("tailscale"), &without_tailscale).is_err());
         }
 
         #[test]
@@ -737,17 +1140,34 @@ impl RemoteHost {
 pub fn remote_host_start(
     app: tauri::AppHandle,
     bind_address: Option<String>,
+    address_mode: Option<String>,
     port: Option<u16>,
+    relay_url: Option<String>,
     state: tauri::State<'_, RemoteHost>,
 ) -> Result<RemoteHostInfo, String> {
     #[cfg(desktop)]
     {
-        desktop::start(app, bind_address, port, state)
+        desktop::start(app, bind_address, address_mode, port, relay_url, state)
     }
     #[cfg(mobile)]
     {
-        let _ = (app, bind_address, port, state);
+        let _ = (app, bind_address, address_mode, port, relay_url, state);
         Err("移动端不能启动 Orbit Host，请连接一台桌面设备".into())
+    }
+}
+
+#[tauri::command]
+pub fn remote_host_addresses() -> RemoteHostAddresses {
+    #[cfg(desktop)]
+    {
+        desktop::addresses_command()
+    }
+    #[cfg(mobile)]
+    {
+        RemoteHostAddresses {
+            lan: "127.0.0.1".into(),
+            tailscale: None,
+        }
     }
 }
 

@@ -7,12 +7,6 @@ import {registerWorkspace} from './workspace.ts'
 import {registerComputerUseMode} from './computer-use/mode.ts'
 // Pi official docs/extensions.md: registerCommand, getAllTools, setActiveTools,
 // ExtensionCommandContext.navigateTree and setLabel. Loaded only by this GUI.
-export function ensureImageInput(model: {input: ('text'|'image')[]} | undefined) {
-  if(!model||model.input.includes('image'))return false
-  // Relay model catalogs often omit modality metadata; let the endpoint decide.
-  model.input=[...model.input,'image']
-  return true
-}
 export const SESSION_META_TYPE='pi-gui-session-meta'
 export const SESSION_ICONS=['code','bug','palette','magnifying-glass','book-open','terminal-window','globe','image-square','film-strip','music-notes','database','translate','list-checks','calendar-blank','rocket-launch','lightbulb','chats','chat-teardrop-text'] as const
 type SessionIcon=(typeof SESSION_ICONS)[number]
@@ -38,8 +32,6 @@ function sessionText(ctx:ExtensionCommandContext){
 export default async function (pi: ExtensionAPI) {
   registerSubagentTools(pi)
   registerWorkspace(pi)
-  pi.on('model_select',(event)=>{ensureImageInput(event.model)})
-  pi.on('input',(_event,ctx)=>{ensureImageInput(ctx.model);return {action:'continue'}})
   const {SettingsManager}=await import(pathToFileURL(join(dirname(realpathSync(process.argv[1])),'index.js')).href)
   pi.registerCommand('gui-observe',{description:'GUI: observe session configuration',handler:async(_args,ctx)=>{
     const settings=SettingsManager.create(ctx.cwd,undefined,{projectTrusted:ctx.isProjectTrusted()})

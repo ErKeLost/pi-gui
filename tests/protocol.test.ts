@@ -69,6 +69,7 @@ test('bash and compaction records normalize without exposing hidden custom messa
 })
 test('tool activity summaries use the actual Pi tool names',()=>{
  expect(summarizeToolCalls(['read','rg','bash','edit','write'])).toBe('读取 1 次 · 搜索 1 次 · 运行 1 次 · 编辑 2 次')
+ expect(summarizeToolCalls(['gui_task'])).toBe('操作 1 次')
 })
 test('consecutive assistant fragments render as one logical turn',()=>{
  const messages=[

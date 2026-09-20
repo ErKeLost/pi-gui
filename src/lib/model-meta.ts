@@ -1,14 +1,6 @@
 import type { ProviderModel } from './rpc'
 import { modelMappings } from '@lobehub/icons'
 
-const providerAliases: Record<string, string> = {
-  'x-ai': 'xai',
-  'z-ai': 'zhipu',
-  moonshotai: 'moonshot',
-  'meta-llama': 'meta',
-  mistralai: 'mistral',
-  'together-ai': 'togetherai',
-}
 const familyLabels:Record<string,string>={'Z.ai':'GLM',ChatGLM:'GLM','GLM-V':'GLM',MoonshotAI:'Kimi',Anthropic:'Claude'}
 const familyCache=new Map<string,string>()
 
@@ -19,11 +11,6 @@ export function modelLabel(id: string, fallback?: string) {
 
 export function modelDisplayName(model: ProviderModel) {
   return model.name ?? modelLabel(model.id)
-}
-
-export function modelProviderKey(id: string) {
-  const prefix = id.split('/').filter(Boolean)[0]?.toLowerCase() ?? ''
-  return providerAliases[prefix] ?? prefix.replace(/[^a-z0-9]/g, '')
 }
 
 export function modelFamily(id:string){

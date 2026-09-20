@@ -115,14 +115,31 @@ export function decodeRemoteMessage(raw: string): RemoteMessage | null {
   return null
 }
 
-export type RemoteEndpoint = {
+export type DirectRemoteEndpoint = {
+  mode: "direct"
   host: string
   port: number
   token: string
   secure?: boolean
 }
 
+export type RelayRemoteEndpoint = {
+  mode: "relay"
+  relayUrl: string
+  hostId: string
+  token: string
+}
+
+export type RemoteEndpoint = DirectRemoteEndpoint | RelayRemoteEndpoint
+
 export function remoteWebSocketUrl(endpoint: RemoteEndpoint): string {
+  if (endpoint.mode === "relay") {
+    const url = new URL(endpoint.relayUrl)
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/relay/client/${encodeURIComponent(endpoint.hostId)}`
+    url.search = ""
+    url.searchParams.set("token", endpoint.token)
+    return url.toString()
+  }
   const scheme = endpoint.secure ? "wss" : "ws"
   const token = encodeURIComponent(endpoint.token)
   const host = endpoint.host.includes(":") && !endpoint.host.startsWith("[") ? `[${endpoint.host}]` : endpoint.host
@@ -137,17 +154,30 @@ export function parsePairingUri(value: string): RemoteEndpoint {
     throw new Error("无效的 Orbit 配对地址")
   }
   const host = uri.searchParams.get("host")?.trim().replace(/^\[|\]$/g, "") ?? ""
+  const relay = uri.searchParams.get("relay")?.trim() ?? ""
+  const hostId = uri.searchParams.get("hostId")?.trim() ?? ""
   const port = Number(uri.searchParams.get("port"))
   const token = uri.searchParams.get("token") ?? ""
   const protocol = uri.searchParams.get("protocol")
   if (uri.protocol !== "orbit:" || uri.hostname !== "pair" || (uri.pathname && uri.pathname !== "/")) throw new Error("无效的 Orbit 配对地址")
   if (protocol !== REMOTE_PROTOCOL) throw new Error("Orbit Host 协议版本不兼容")
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("Orbit Host 端口无效")
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(token)) throw new Error("Orbit 配对令牌无效")
+  if (relay || hostId) {
+    let relayUrl: URL
+    try {
+      relayUrl = new URL(relay)
+    } catch {
+      throw new Error("Orbit Relay 地址无效")
+    }
+    if (relayUrl.protocol !== "wss:" && relayUrl.protocol !== "ws:") throw new Error("Orbit Relay 地址无效")
+    if (!/^[A-Za-z0-9-]{8,80}$/.test(hostId)) throw new Error("Orbit Relay Host ID 无效")
+    return { mode: "relay", relayUrl: relayUrl.toString(), hostId, token }
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("Orbit Host 端口无效")
   try {
     new URL(`ws://${host.includes(":") ? `[${host}]` : host}:${port}`)
   } catch {
     throw new Error("Orbit Host 地址无效")
   }
-  return { host, port, token }
+  return { mode: "direct", host, port, token }
 }

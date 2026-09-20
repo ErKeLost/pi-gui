@@ -12,6 +12,7 @@ const toolKinds: Record<ToolKind, { label: string; icon: string }> = {
   search: { label: "搜索", icon: "magnifying-glass" },
   command: { label: "运行", icon: "terminal-window" },
   edit: { label: "编辑", icon: "pencil-simple" },
+  computer: { label: "电脑操作", icon: "cpu" },
   other: { label: "调用", icon: "wrench" },
 };
 
@@ -34,7 +35,9 @@ function firstText(input: JsonRecord | null, fields: string[]) {
 
 function displayTarget(kind: ToolKind, request: string) {
   const args = parseArguments(request);
-  const fields = kind === "command"
+  const fields = kind === "computer"
+    ? ["goal", "app", "url", "target"]
+    : kind === "command"
     ? ["command", "cmd", "script", "input"]
     : kind === "search"
       ? ["query", "pattern", "path", "glob", "input"]

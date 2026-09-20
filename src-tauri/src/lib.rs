@@ -130,6 +130,7 @@ pub fn run() {
             mobile_update::mobile_update_install,
             mobile_update::mobile_update_probe,
             remote::remote_host_start,
+            remote::remote_host_addresses,
             remote::remote_host_status,
             remote::remote_host_stop,
             remote::remote_host_set_theme

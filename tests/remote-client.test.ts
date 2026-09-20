@@ -75,7 +75,7 @@ describe("remote client reconnect", () => {
     const client = new OrbitRemoteClient({ onState: state => states.push(state) }, { reconnectBaseMs: 5, reconnectMaxMs: 10, heartbeatMs: 0 })
     clients.push(client)
 
-    await client.connect({ host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
+    await client.connect({ mode: "direct", host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
     expect(client.connectionState).toBe("online")
     expect(FakeWebSocket.instances).toHaveLength(1)
 
@@ -96,7 +96,7 @@ describe("remote client reconnect", () => {
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
     const client = new OrbitRemoteClient({}, { reconnectBaseMs: 5, reconnectMaxMs: 10, heartbeatMs: 5, heartbeatTimeoutMs: 10 })
     clients.push(client)
-    await client.connect({ host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
+    await client.connect({ mode: "direct", host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
 
     await Bun.sleep(30)
     expect(FakeWebSocket.instances).toHaveLength(1)
@@ -108,7 +108,7 @@ describe("remote client reconnect", () => {
     const events: string[] = []
     const client = new OrbitRemoteClient({ onEvent: event => { if (event.type === "host.theme") events.push(event.theme) } }, { heartbeatMs: 0 })
     clients.push(client)
-    await client.connect({ host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
+    await client.connect({ mode: "direct", host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
 
     expect((await client.getSnapshot()).theme).toBe("dark")
     FakeWebSocket.instances[0].serverSend({ type: "host.theme", theme: "light", serverTime: Date.now() })

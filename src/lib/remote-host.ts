@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core"
 import { REMOTE_PROTOCOL, type RemoteTheme } from "./remote-protocol"
 
+export type RemoteHostAddresses = {
+  lan: string
+  tailscale?: string | null
+}
+
 export type RemoteHostInfo = {
   running: true
   protocol: typeof REMOTE_PROTOCOL
@@ -10,14 +15,21 @@ export type RemoteHostInfo = {
   port: number
   token: string
   pairingUri: string
+  lanPairingUri: string
   machineName: string
   connectedClients: number
 }
 
-export function startRemoteHost(options: { bindAddress?: string; port?: number } = {}): Promise<RemoteHostInfo> {
+export function getRemoteHostAddresses(): Promise<RemoteHostAddresses> {
+  return invoke<RemoteHostAddresses>("remote_host_addresses")
+}
+
+export function startRemoteHost(options: { bindAddress?: string; addressMode?: "lan" | "tailscale"; port?: number } = {}): Promise<RemoteHostInfo> {
   return invoke<RemoteHostInfo>("remote_host_start", {
     bindAddress: options.bindAddress ?? null,
+    addressMode: options.addressMode ?? null,
     port: options.port ?? null,
+    relayUrl: null,
   })
 }
 

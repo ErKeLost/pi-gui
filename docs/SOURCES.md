@@ -19,6 +19,10 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 | P4 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md 和 settings.md | 模型定义、reasoning 开关、动态可用 thinking levels、默认模型与 thinking | 复用已有 Pi 配置；GUI 不硬编码支持的 effort |
 | P5 | Pi 0.85.1 安装包 `examples/extensions/subagent/` | 独立 Pi 进程、JSON 事件、并行调度、取消与用量聚合的官方扩展示例 | `resources/subagents/` 的执行基础；Orbit 另加持久 RPC、父子通信和状态树 |
 | P6 | https://github.com/injaneity/pi-computer-use | Pi Computer Use 扩展：state-scoped observe/act、macOS helper、默认工具面 | 捆绑 `@injaneity/pi-computer-use`；`resources/computer-use/mode.ts` 做默认关闭与开关 |
+| J1 | https://docs.typesafe.ai/concepts/how-to-build-with-system-one 和 https://docs.typesafe.ai/model-jaggedness/jev-1.13 | 代码掌控流程和副作用；Jev 只做窄的结构化判断；数字、日期、无关上下文、对抗内容和生成不是 Jev 的可靠边界 | `resources/computer-use/gui-task-contract.ts`, `completion-verifier.ts` |
+| J2 | https://github.com/browser-use/jev-ultrafast | 动态索引动作空间；一次请求并行 operation 与 operation-specific target heads；只消费被选中的 target head | `resources/computer-use/jev.ts` |
+| J3 | https://github.com/droidrun/mobile-jev 和 https://github.com/yikangy873-gif/jev-desktop | stale decision 重观察、unknown mutation 不重放、本地 prepared text slots、独立完成验证 | `resources/computer-use/gui-task-engine.ts`, `candidate-policy.ts` |
+| J4 | https://github.com/lahfir/agent-desktop | snapshot-scoped refs、observe-resolve-preflight-dispatch、明确 delivery/retry 语义 | 由捆绑的 `pi-computer-use` 执行层承载 |
 | R1 | https://react.dev/reference/react | React hooks 与组件生命周期 | React 组件；事件订阅有清理 |
 | A1 | https://www.assistant-ui.com/docs/runtimes/custom/external-store.md | ExternalStoreRuntime、自有状态、convertMessage、onNew/onCancel | `Chat.tsx` |
 | A2 | https://www.assistant-ui.com/docs/primitives/thread.md | Root / Viewport / Messages 的 children render function、ScrollToBottom | `Chat.tsx` |

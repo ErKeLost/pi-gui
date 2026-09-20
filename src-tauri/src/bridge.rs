@@ -468,22 +468,6 @@ fn read_json_file(path: PathBuf, label: &str) -> Result<Value, String> {
         .map_err(|_| format!("{label} 不是有效 JSON"))
 }
 
-fn append_image_input(model: &mut Value) -> bool {
-    let Some(model) = model.as_object_mut() else {
-        return false;
-    };
-    let input = model.entry("input").or_insert_with(|| json!(["text"]));
-    let Some(input) = input.as_array_mut() else {
-        model.insert("input".into(), json!(["text", "image"]));
-        return true;
-    };
-    if input.iter().any(|value| value.as_str() == Some("image")) {
-        return false;
-    }
-    input.push(Value::from("image"));
-    true
-}
-
 fn complete_model_cost(model: &mut Value) -> usize {
     let Some(cost) = model.get_mut("cost").and_then(Value::as_object_mut) else {
         return 0;
@@ -511,7 +495,7 @@ fn complete_model_cost(model: &mut Value) -> usize {
     changed
 }
 
-fn append_image_input_to_custom_models(dir: &std::path::Path) -> Result<usize, String> {
+fn repair_custom_model_costs(dir: &std::path::Path) -> Result<usize, String> {
     let path = dir.join("models.json");
     if !path.exists() {
         return Ok(0);
@@ -522,7 +506,6 @@ fn append_image_input_to_custom_models(dir: &std::path::Path) -> Result<usize, S
         for provider in providers.values_mut() {
             if let Some(models) = provider.get_mut("models").and_then(Value::as_array_mut) {
                 for model in models {
-                    changed += usize::from(append_image_input(model));
                     changed += complete_model_cost(model);
                 }
             }
@@ -885,55 +868,60 @@ fn modelsdev_model<'a>(models: &'a Value, id: &str) -> Option<&'a Value> {
     (short != id).then(|| models.get(short)).flatten()
 }
 
-/// 在 models.dev 目录中定位模型条目：baseUrl host → provider id → 全局同名。
+fn normalized_identifier(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn normalized_endpoint(value: &str) -> String {
+    value.trim().trim_end_matches('/').to_ascii_lowercase()
+}
+
+/// 只根据运行时配置和目录自身的数据定位模型，不维护厂商或域名映射表。
 fn modelsdev_lookup<'a>(catalog: &'a Value, provider: &str, base_url: &str, id: &str) -> Option<&'a Value> {
     let providers = catalog.as_object()?;
-    let host = base_url
-        .split_once("://")
-        .map(|(_, rest)| rest)
-        .unwrap_or(base_url)
-        .split(['/', ':'])
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
-    let well_known: &[(&str, &[&str])] = &[
-        ("bigmodel", &["zhipuai", "zai"]),
-        ("z.ai", &["zai", "zhipuai"]),
-        ("moonshot", &["moonshot"]),
-        ("deepseek", &["deepseek"]),
-        ("openrouter", &["openrouter"]),
-        ("vercel", &["vercel"]),
-        ("groq", &["groq"]),
-        ("mistral", &["mistral"]),
-        ("together", &["together"]),
-        ("fireworks", &["fireworks"]),
-        ("x.ai", &["xai"]),
-        ("anthropic", &["anthropic"]),
-        ("dashscope", &["alibaba"]),
-        ("googleapis", &["google"]),
-    ];
-    let mut candidates: Vec<String> = Vec::new();
-    for (needle, keys) in well_known {
-        if host.contains(needle) {
-            candidates.extend(keys.iter().map(|key| (*key).to_string()));
-        }
-    }
-    candidates.push(provider.to_lowercase());
-    for key in &candidates {
-        if let Some(entry) = providers
-            .get(key)
-            .and_then(|item| item.get("models"))
-            .and_then(|models| modelsdev_model(models, id))
-        {
-            return Some(entry);
-        }
-    }
-    // 不同目录里同名模型的元数据基本一致
-    providers.values().find_map(|item| {
+    let endpoint = normalized_endpoint(base_url);
+    let provider_id = normalized_identifier(provider);
+    let namespace = id
+        .split_once('/')
+        .map(|(prefix, _)| normalized_identifier(prefix));
+    let matches_identity = |key: &str, item: &Value, expected: &str| {
+        normalized_identifier(key) == expected
+            || item
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|value| normalized_identifier(value) == expected)
+    };
+    let model = |item: &'a Value| {
         item.get("models")
             .and_then(|models| modelsdev_model(models, id))
-            .filter(|entry| entry.get("limit").is_some() || entry.get("modalities").is_some())
-    })
+    };
+
+    providers
+        .iter()
+        .find_map(|(_, item)| {
+            item.get("api")
+                .and_then(Value::as_str)
+                .filter(|api| normalized_endpoint(api) == endpoint)
+                .and_then(|_| model(item))
+        })
+        .or_else(|| {
+            providers
+                .iter()
+                .find_map(|(key, item)| matches_identity(key, item, &provider_id).then(|| model(item)).flatten())
+        })
+        .or_else(|| {
+            namespace.as_deref().and_then(|namespace| {
+                providers.iter().find_map(|(key, item)| {
+                    matches_identity(key, item, namespace)
+                        .then(|| model(item))
+                        .flatten()
+                })
+            })
+        })
 }
 
 /// 模型目录归一化管道：provider 接口字段优先，缺失字段由 models.dev 补齐，
@@ -1026,7 +1014,6 @@ fn pi_model_from_meta(entry: &Value) -> Option<Value> {
         }
         model["cost"] = Value::Object(cost);
     }
-    append_image_input(&mut model);
     Some(model)
 }
 
@@ -1499,27 +1486,8 @@ mod default_model_tests {
 }
 
 #[cfg(test)]
-mod image_input_tests {
+mod custom_model_cost_tests {
     use super::*;
-
-    #[test]
-    fn preserves_existing_inputs_and_appends_image() {
-        let dir =
-            std::env::temp_dir().join(format!("pi-gui-image-input-test-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("models.json"), r#"{"providers":{"relay":{"models":[{"id":"a"},{"id":"b","input":["text"]},{"id":"c","input":["text","image"]}]}}}"#).unwrap();
-
-        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 2);
-        let config = read_json_file(dir.join("models.json"), "models").unwrap();
-        let models = config["providers"]["relay"]["models"].as_array().unwrap();
-        assert_eq!(models[0]["input"], json!(["text", "image"]));
-        assert_eq!(models[1]["input"], json!(["text", "image"]));
-        assert_eq!(models[2]["input"], json!(["text", "image"]));
-        assert!(dir.join("models.json.pi-gui.bak").exists());
-        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 0);
-
-        fs::remove_dir_all(dir).unwrap();
-    }
 
     #[test]
     fn repairs_incomplete_costs_that_make_pi_reject_models_json() {
@@ -1527,7 +1495,7 @@ mod image_input_tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("models.json"), r#"{"providers":{"relay":{"models":[{"id":"a","input":["text","image"],"cost":{"input":1,"output":2}},{"id":"b","input":["text","image"],"cost":{"input":1,"output":2,"cacheRead":3,"cacheWrite":4}}]}}}"#).unwrap();
 
-        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 2);
+        assert_eq!(repair_custom_model_costs(&dir).unwrap(), 2);
         let config = read_json_file(dir.join("models.json"), "models").unwrap();
         let models = config["providers"]["relay"]["models"].as_array().unwrap();
         assert_eq!(
@@ -1539,7 +1507,7 @@ mod image_input_tests {
             json!({"input":1,"output":2,"cacheRead":3,"cacheWrite":4})
         );
         assert!(dir.join("models.json.pi-gui.bak").exists());
-        assert_eq!(append_image_input_to_custom_models(&dir).unwrap(), 0);
+        assert_eq!(repair_custom_model_costs(&dir).unwrap(), 0);
 
         fs::remove_dir_all(dir).unwrap();
     }
@@ -1551,7 +1519,7 @@ mod metadata_tests {
 
     fn dev_catalog() -> Value {
         json!({
-            "zhipuai": {"models": {
+            "zhipuai": {"api": "https://open.bigmodel.cn/api/paas/v4", "models": {
                 "glm-5": {"name": "GLM-5", "limit": {"context": 204800, "output": 131072}, "modalities": {"input": ["text"], "output": ["text"]}, "reasoning": true, "cost": {"input": 1.0, "output": 3.2, "cache_read": 0.2, "cache_write": 0.0}}
             }},
             "zai": {"models": {"glm-4.6": {"limit": {"context": 204800}}}}
@@ -1559,11 +1527,11 @@ mod metadata_tests {
     }
 
     #[test]
-    fn lookup_matches_by_base_url_host_then_global() {
+    fn lookup_uses_runtime_endpoint_and_provider_identity() {
         let catalog = dev_catalog();
         assert!(modelsdev_lookup(&catalog, "Zhipu", "https://open.bigmodel.cn/api/paas/v4", "glm-5").is_some());
         assert!(modelsdev_lookup(&catalog, "z-ai", "https://api.z.ai/api/paas/v4", "glm-4.6").is_some());
-        assert!(modelsdev_lookup(&catalog, "whatever", "https://example.com/v1", "glm-5").is_some());
+        assert!(modelsdev_lookup(&catalog, "whatever", "https://example.com/v1", "glm-5").is_none());
         assert!(modelsdev_lookup(&catalog, "whatever", "https://example.com/v1", "glm-unknown").is_none());
     }
 
@@ -1574,7 +1542,7 @@ mod metadata_tests {
     }
 
     #[test]
-    fn normalizes_provider_aliases() {
+    fn normalizes_catalog_field_aliases() {
         // OpenRouter 风格：context_length、architecture.input_modalities、per-token 字符串价格
         let item = json!({
             "id": "z-ai/glm-4.6",
@@ -1648,7 +1616,7 @@ mod metadata_tests {
         assert_eq!(model["name"], "GLM-5");
         assert_eq!(model["contextWindow"], 204800);
         assert_eq!(model["maxTokens"], 131072);
-        assert_eq!(model["input"], json!(["text", "image"]));
+        assert_eq!(model["input"], json!(["text"]));
         assert_eq!(model["reasoning"], true);
         assert_eq!(model["cost"], json!({"input": 1.0, "output": 3.2, "cacheRead": 0.2, "cacheWrite": 0.0}));
         // thinking_levels 非空时开启 reasoning 并写入映射
@@ -1688,7 +1656,7 @@ pub async fn pi_connect(
     #[cfg(desktop)]
     {
         let path = project(&cwd)?;
-        append_image_input_to_custom_models(&agent_dir()?)?;
+        repair_custom_model_costs(&agent_dir()?)?;
         let (pi, pi_source) = pi_path_for_project(Some(&app), &path)?;
         let (node, _) = node_runtime()?;
         let pi_version = pi_version(&node, &pi);

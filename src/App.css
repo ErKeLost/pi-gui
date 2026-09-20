@@ -3517,6 +3517,7 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   background: var(--background);
 }
 .app-header-workspace {
+  gap: 8px;
   padding-left: 18px;
 }
 .app-header-workspace-full,
@@ -3596,8 +3597,8 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   max-width: min(32em, calc(100% - 180px));
   height: 30px;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px 0 0;
+  gap: 10px;
+  padding: 0 10px;
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
@@ -3729,7 +3730,7 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   margin-left: auto;
 }
 .app-header-workspace .app-header-more {
-  margin-left: 2px;
+  margin-left: 4px;
 }
 .app-shell > [data-slot="resizable-panel-group"] {
   flex: 1 1 0 !important;

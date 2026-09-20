@@ -38,6 +38,12 @@
 .mobile-access-host-card > .settings-item .settings-item-copy p { max-width: 620px; margin-top: 5px; font-size: 10px; }
 .mobile-access-host-card > .settings-item .remote-host-status { display: none; }
 .mobile-access-host-card > .settings-item .settings-item-control { margin-left: auto; }
+.mobile-access-host-card > .remote-address-setting,
+.mobile-access-host-card > .remote-relay-setting { min-height: 76px; padding-block: 18px; border-top: 1px solid var(--border); }
+.remote-address-setting [data-slot="select-trigger"],
+.remote-relay-setting [data-slot="input"] { width: min(360px, 42vw); height: 36px; }
+.remote-address-setting [data-slot="select-trigger"],
+.remote-relay-setting [data-slot="input"] { font: 10px/1.4 var(--font-mono); }
 .mobile-access-host-body { display: grid; justify-items: center; gap: 12px; padding: 26px 40px 30px; border-top: 1px solid var(--border); background: color-mix(in oklch, var(--card) 74%, var(--background)); }
 .mobile-access-qr-copy { color: var(--muted-foreground); font-size: 12px; }
 .mobile-access-qr { display: grid; place-items: center; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
@@ -415,6 +421,9 @@
     width: 100%;
     justify-content: space-between;
   }
+
+  .remote-address-setting [data-slot="select-trigger"],
+  .remote-relay-setting [data-slot="input"] { width: 100%; }
 
   .remote-host-detail,
   .remote-host-pairing {
