@@ -14,24 +14,14 @@ export const native=isTauri()
 export type ProviderModel={
   id:string
   name?:string
-  object?:string
-  created?:number
-  owned_by?:string
-  context_length?:number
   context_window?:number
   max_output_tokens?:number
-  max_tokens?:number
-  display_name?:string
-  capability_tags?:string[]
-  provider_id?:string
   input_modalities?:string[]
   output_modalities?:string[]
-  architecture?:{modality?:string;input_modalities?:string[];output_modalities?:string[];tokenizer?:string;instruct_type?:string|null}
-  reasoning?:boolean|{mandatory?:boolean;default_enabled?:boolean;supported_efforts?:string[];default_effort?:string}
-  pricing?:Record<string,string|number>
-  supported_parameters?:string[]
-  supported_endpoint_types?:string[]
-  [key:string]:unknown
+  reasoning?:boolean
+  thinking_levels?:Record<string,string>
+  pricing?:Record<string,number>
+  raw?:Record<string,unknown>
 }
 export type ProviderProfile={id:string;name?:string;baseUrl?:string;modelsUrl?:string;api?:string;authHeader?:boolean;defaultModel?:string;models?:ProviderModel[];hasApiKey:boolean;modelCount:number}
 type Snapshot=Pick<Workspace,'transcript'|'telemetry'|'state'|'connection'|'error'|'draft'|'dialogs'|'notices'|'statuses'|'widgets'|'agents'>

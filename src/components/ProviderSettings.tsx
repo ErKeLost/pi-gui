@@ -56,6 +56,12 @@ const display = (value: unknown) => {
   return String(value);
 };
 
+const formatPricing = (pricing?: Record<string, number>) => {
+  if (!pricing) return undefined;
+  const parts = Object.entries(pricing).filter(([, value]) => typeof value === "number");
+  return parts.length ? parts.map(([key, value]) => `$${value}/M ${key}`).join(" · ") : undefined;
+};
+
 function ModelDetails({ model, onUse, disabled }: { model: ProviderModel; onUse: () => void; disabled: boolean }) {
   const inputs = modelModalities(model, "input");
   const outputs = modelModalities(model, "output");
@@ -64,18 +70,18 @@ function ModelDetails({ model, onUse, disabled }: { model: ProviderModel; onUse:
       <dl className="provider-meta-grid">
         <div><dt>ID</dt><dd>{display(model.id)}</dd></div>
         <div><dt>名称</dt><dd>{display(modelDisplayName(model))}</dd></div>
-        <div><dt>上下文长度</dt><dd>{display(model.context_length ?? model.context_window)}</dd></div>
-        <div><dt>最大输出</dt><dd>{display(model.max_output_tokens ?? model.max_tokens)}</dd></div>
+        <div><dt>上下文长度</dt><dd>{display(model.context_window)}</dd></div>
+        <div><dt>最大输出</dt><dd>{display(model.max_output_tokens)}</dd></div>
         <div><dt>输入类型</dt><dd>{display(inputs)}</dd></div>
         <div><dt>输出类型</dt><dd>{display(outputs)}</dd></div>
-        <div><dt>端点类型</dt><dd>{display(model.supported_endpoint_types)}</dd></div>
+        <div><dt>端点类型</dt><dd>{display(model.raw?.supported_endpoint_types)}</dd></div>
         <div><dt>Thinking / reasoning</dt><dd>{display(model.reasoning)}</dd></div>
-        <div><dt>支持参数</dt><dd>{display(model.supported_parameters)}</dd></div>
-        <div><dt>价格</dt><dd>{display(model.pricing)}</dd></div>
+        <div><dt>支持参数</dt><dd>{display(model.raw?.supported_parameters)}</dd></div>
+        <div><dt>价格（美元 / 百万 tokens）</dt><dd>{formatPricing(model.pricing)}</dd></div>
       </dl>
       <Button variant="outline" className="provider-use-model" disabled={disabled} onClick={onUse}><Icon name="check" />使用此模型</Button>
       <Disclosure title={<span className="provider-disclosure-title"><Icon name="code" />接口原始元数据</span>}>
-        <pre className="provider-raw-metadata">{JSON.stringify(model, null, 2)}</pre>
+        <pre className="provider-raw-metadata">{JSON.stringify(model.raw, null, 2)}</pre>
       </Disclosure>
     </div>
   );
@@ -270,7 +276,7 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
        </div></section>
        <footer className="provider-actions"><div className="provider-save-note"><Icon name="arrows-clockwise"/><span>保存会更新 Pi 模型配置并重新连接当前项目。</span></div><div><Button variant="outline" disabled={!!busy || !provider.trim() || !baseUrl.trim() || Boolean(providerConflict)} onClick={() => void probe()}><Icon name="play-circle" />{busy === "probe" ? "正在查询…" : "测试连接"}</Button><Button variant="default" disabled={!!busy || !provider.trim() || !baseUrl.trim() || Boolean(providerConflict)} onClick={() => void save()}><Icon name="floppy-disk" />{busy === "save" ? "正在保存并同步…" : "保存并同步"}</Button></div></footer>
       </div>
-      {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong><Icon name="cpu" />可用模型（{visibleModels.length}/{models.length}）</strong><label className="provider-catalog-search"><Icon name="magnifying-glass" /><Input aria-label="筛选模型" value={search} onChange={(event) => update({ search: event.target.value })} placeholder="筛选模型" /></label></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelDisplayName(model)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_length ?? model.context_window)}{typeof (model.context_length ?? model.context_window) === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
+      {models.length > 0 && <div className="provider-catalog-panel"><div className="provider-catalog-header"><strong><Icon name="cpu" />可用模型（{visibleModels.length}/{models.length}）</strong><label className="provider-catalog-search"><Icon name="magnifying-glass" /><Input aria-label="筛选模型" value={search} onChange={(event) => update({ search: event.target.value })} placeholder="筛选模型" /></label></div><div className="provider-model-table"><div className="provider-model-table-head" aria-hidden="true"><span>模型</span><span>上下文</span><span>输入模态</span><span>输出模态</span></div><div className="provider-model-list provider-settings-list">{visibleModels.map((model) => { const inputs = modelModalities(model, "input"); const outputs = modelModalities(model, "output"); return <Disclosure key={model.id} title={<span className="provider-model-title"><span className="provider-model-name"><ModelLogo modelId={model.id} size={19} /><strong>{modelDisplayName(model)}</strong></span><span className="provider-model-context">{formatContextLength(model.context_window)}{typeof model.context_window === "number" && <small> tokens</small>}</span><ModelModalities values={inputs} /><ModelModalities values={outputs} /></span>}><ModelDetails model={model} disabled={!!busy || running || !cwd} onUse={() => void applyModel(model)} /></Disclosure> })}</div></div></div>}
     </section>
   );
 }
