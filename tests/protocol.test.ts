@@ -15,6 +15,15 @@ describe('Pi 0.85.1 JSONL event projection',()=>{
   state=reduceEvent(state,{type:'agent_end'});expect(state.running).toBe(true)
   state=reduceEvent(state,{type:'agent_settled'});expect(state.running).toBe(false)
  })
+ test('steered assistant continuation keeps the turn duration on the first segment only',()=>{
+  let state=reduceEvent(emptyTranscript(),{type:'agent_start'})
+  state=reduceEvent(state,{type:'message_start',message:{role:'assistant',content:[{type:'thinking',thinking:'原始任务'}]}})
+  state=reduceEvent(state,{type:'message_start',message:{role:'assistant',content:[{type:'text',text:'steer 后继续'}]}})
+  state=reduceEvent(state,{type:'agent_settled'})
+  expect(state.messages).toHaveLength(2)
+  expect(state.messages[0].elapsedMs).toBeTypeOf('number')
+  expect(state.messages[1].elapsedMs).toBeUndefined()
+ })
  test('thinking ends before the agent settles, retaining deltas when the end omits content',()=>{
   let state=reduceEvent(emptyTranscript(),{type:'agent_start'})
   state=reduceEvent(state,{type:'message_start',message:{role:'assistant',content:[]}})

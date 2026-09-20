@@ -89,15 +89,18 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
     case 'agent_start': return { ...state, active: -1, running: true, phase: '正在思考', error: null, turnStartedAt: state.turnStartedAt ?? Date.now() }
     case 'agent_settled': {
       const elapsedMs = state.turnStartedAt == null ? undefined : Math.max(0, Date.now() - state.turnStartedAt)
+      let durationOwner = false
       return {
         ...state,
         running: false,
         phase: '就绪',
         bash: state.bash ? { ...state.bash, running: false } : null,
         turnStartedAt: null,
-        messages: elapsedMs == null ? state.messages : state.messages.map(item =>
-          item.startedAt === state.turnStartedAt ? { ...item, elapsedMs } : item,
-        ),
+        messages: elapsedMs == null ? state.messages : state.messages.map(item => {
+          if (durationOwner || item.startedAt !== state.turnStartedAt || item.message.role !== 'assistant') return item
+          durationOwner = true
+          return { ...item, elapsedMs }
+        }),
       }
     }
     case 'agent_end': return state
