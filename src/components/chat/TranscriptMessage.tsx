@@ -101,7 +101,7 @@ type TranscriptMessageProps = {
   tools: Record<string, Tool>;
   streaming: boolean;
   thinking: boolean;
-  savedDuration?: number;
+  elapsedMs?: number;
   activity?: ReactNode;
 };
 
@@ -238,7 +238,7 @@ function MessageContextActions({ text, role, onCopy }: { text: string; role: "us
   return <ContextMenuContent className="w-40"><ContextMenuItem onClick={onCopy}><Icon name="copy" />{role === "user" ? "复制消息" : "复制回复"}</ContextMenuItem></ContextMenuContent>;
 }
 
-function TranscriptMessageComponent({ items, tools, streaming, thinking, savedDuration, activity }: TranscriptMessageProps) {
+function TranscriptMessageComponent({ items, tools, streaming, thinking, elapsedMs, activity }: TranscriptMessageProps) {
   const item = items[0];
   const role = item.message.role === "user" ? "user" : "assistant";
   const [copied, setCopied] = useState(false);
@@ -250,7 +250,6 @@ function TranscriptMessageComponent({ items, tools, streaming, thinking, savedDu
   const text = responseText(finalOnly ? content.filter(part => part.messageIndex === items.length - 1) : content);
   if (nodes.progress.length === 0 && nodes.body.length === 0 && nodes.media.length === 0 && !activity) return null;
   const startedAt = items.find(entry => entry.startedAt !== undefined)?.startedAt;
-  const elapsedMs = [...items].reverse().find(entry => entry.elapsedMs !== undefined)?.elapsedMs ?? savedDuration;
   const markCopied = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1600); };
   const copy = () => void navigator.clipboard.writeText(text).then(markCopied).catch(() => undefined);
   return <ContextMenu>
@@ -262,7 +261,7 @@ function TranscriptMessageComponent({ items, tools, streaming, thinking, savedDu
 }
 
 export const TranscriptMessage = memo(TranscriptMessageComponent, (previous, next) => {
-  if (previous.streaming !== next.streaming || previous.thinking !== next.thinking || previous.savedDuration !== next.savedDuration || previous.activity !== next.activity || previous.items.length !== next.items.length || previous.items.some((item, index) => item !== next.items[index])) return false;
+  if (previous.streaming !== next.streaming || previous.thinking !== next.thinking || previous.elapsedMs !== next.elapsedMs || previous.activity !== next.activity || previous.items.length !== next.items.length || previous.items.some((item, index) => item !== next.items[index])) return false;
   const content = previous.items.flatMap(item => Array.isArray(item.message.content) ? item.message.content : []);
   return content.every(part => part.type !== "toolCall" || previous.tools[part.id ?? ""] === next.tools[part.id ?? ""]);
 });

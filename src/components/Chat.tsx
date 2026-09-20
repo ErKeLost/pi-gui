@@ -118,7 +118,6 @@ export function Chat() {
   const { ref, atBottom, scrollToBottom } = useConversationScroll();
   const proximityId = useId().replace(/[^a-zA-Z0-9_-]/g, "") || "conversation";
   const proximitySections = useConversationSections(ref, proximityId, transcript.running);
-  const messageGroups = useMemo(() => groupDisplayMessages(transcript.messages), [transcript.messages]);
   const sessionFile = useWorkspace(state => state.state?.sessionFile) ?? persistedSessionFile(project);
   const historicalDurations = useQuery({
     queryKey: ["pi", "turn-durations", sessionFile],
@@ -130,6 +129,23 @@ export function Chat() {
     ...(historicalDurations.data ?? {}),
     ...readTurnDurations(sessionFile),
   }), [historicalDurations.data, sessionFile]);
+  // Steer/follow-up splits one turn into several assistant groups sharing the
+  // same turnStartedAt; resolve each group's duration (runtime or saved) and
+  // keep only the first group per identical value so the turn duration shows
+  // once, on the leading segment.
+  const messageGroups = useMemo(() => {
+    const groups = groupDisplayMessages(transcript.messages).map(group => ({
+      ...group,
+      elapsedMs: ([...group.items].reverse().find(item => item.elapsedMs !== undefined)?.elapsedMs
+        ?? savedDurations[turnDurationId(group.items) ?? ""]) as number | undefined,
+    }));
+    const claimed = new Set<number>();
+    for (const group of groups) {
+      if (group.elapsedMs === undefined || claimed.has(group.elapsedMs)) group.elapsedMs = undefined;
+      else claimed.add(group.elapsedMs);
+    }
+    return groups;
+  }, [transcript.messages, savedDurations]);
   const { retrying, retryDetail, compacting, compactionDetail, activeHasOutput } = deriveRunStatus(transcript, telemetry);
   const openAgent = useCallback((agent: AgentNode) => {
     if (!agent.sessionPath) return;
@@ -140,8 +156,7 @@ export function Chat() {
     if (!sessionFile || transcript.running) return;
     const completed = Object.fromEntries(messageGroups.flatMap(group => {
       const id = turnDurationId(group.items);
-      const elapsed = [...group.items].reverse().find(item => item.elapsedMs !== undefined)?.elapsedMs;
-      return id && elapsed !== undefined ? [[id, elapsed]] : [];
+      return id && group.elapsedMs !== undefined ? [[id, group.elapsedMs]] : [];
     }));
     saveTurnDurations(sessionFile, completed);
   }, [messageGroups, sessionFile, transcript.running]);
@@ -169,7 +184,7 @@ export function Chat() {
             tools={transcript.tools}
             streaming={transcript.running && active}
             thinking={transcript.running && active && !group.items.at(-1)?.message.stopReason}
-            savedDuration={savedDurations[turnDurationId(group.items) ?? ""]}
+            elapsedMs={group.elapsedMs}
             activity={active && agents && (agents.active.length > 0 || agents.recent.length > 0) ? <AgentActivityFeed snapshot={agents} onOpenAgent={openAgent} /> : undefined}
           />;
         })}
