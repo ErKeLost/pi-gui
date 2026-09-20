@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { m } from "motion/react";
 import type { CSSProperties } from "react";
 import { memo, useMemo } from "react";
 
@@ -24,16 +23,15 @@ const ShimmerComponent = ({
   );
 
   return (
-    <m.span
-      animate={{ backgroundPosition: "0% center" }}
+    <span
       className={cn(
-        "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
+        "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent shimmer-animated",
         className
       )}
-      initial={{ backgroundPosition: "100% center" }}
       style={
         {
           "--spread": `${dynamicSpread}px`,
+          "--shimmer-duration": `${duration}s`,
           backgroundImage: [
             "linear-gradient(90deg, transparent 0%, transparent calc(50% - var(--spread)), color-mix(in oklch, var(--foreground) 88%, transparent) 50%, transparent calc(50% + var(--spread)), transparent 100%)",
             "linear-gradient(color-mix(in oklch, var(--muted-foreground) 58%, transparent), color-mix(in oklch, var(--muted-foreground) 58%, transparent))",
@@ -47,14 +45,9 @@ const ShimmerComponent = ({
           willChange: "background-position",
         } as CSSProperties
       }
-      transition={{
-        duration,
-        ease: "linear",
-        repeat: Number.POSITIVE_INFINITY,
-      }}
     >
       {children}
-    </m.span>
+    </span>
   );
 };
 

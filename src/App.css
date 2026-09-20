@@ -5293,3 +5293,12 @@ html[data-theme="light"] .composer-agent-mode-indicator {
 .attachment-file-meta strong { font-size: 12px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-file-meta small { font-size: 10px; color: var(--muted-foreground); }
 .attachment-file .attachment-remove { position: absolute; top: 6px; right: 6px; }
+
+/* Shimmer driven by CSS instead of per-frame JS style writes. */
+.shimmer-animated {
+  animation: shimmer-slide var(--shimmer-duration, 2s) linear infinite;
+}
+@keyframes shimmer-slide {
+  from { background-position: 100% center, 0 0; }
+  to { background-position: 0% center, 0 0; }
+}
