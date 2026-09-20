@@ -1,6 +1,6 @@
 export const RELEASES_API = "https://api.github.com/repos/ErKeLost/pi-gui/releases/latest";
-export const CHECK_TIMEOUT_MS = 8_000;
-export const CHECK_RETRIES = 1;
+export const CHECK_TIMEOUT_MS = 15_000;
+export const CHECK_RETRIES = 2;
 
 type GithubAsset = {
   name?: unknown;
@@ -65,7 +65,7 @@ export function mobileUpdateErrorMessage(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   const name = error instanceof Error ? error.name : "";
   if (name === "AbortError" || /aborted|timeout/i.test(text)) return "检查更新超时，网络不稳定，请稍后重试";
-  if (/failed to fetch|networkerror|load failed|network/i.test(text)) return "无法连接 GitHub，网络不稳定，请稍后重试";
+  if (/failed to fetch|networkerror|load failed|network/i.test(text)) return "无法连接 GitHub：若开启了 VPN，请切换到全局模式，或将本应用加入代理应用列表后重试";
   return text || "检查更新失败，请稍后重试";
 }
 
