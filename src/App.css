@@ -208,7 +208,7 @@ body,
 }
 
 .chat-root.tessera-thread-root {
-  --chat-content-width: min(920px, calc(100% - 48px));
+  --chat-content-width: min(max(920px, 55vw), 1240px);
   grid-template-rows: auto minmax(0, 1fr) auto !important;
   overflow: hidden !important;
 }
@@ -418,7 +418,7 @@ body,
 }
 
 .chat-root.tessera-thread-root {
-  --chat-content-width: min(920px, calc(100% - 48px));
+  --chat-content-width: min(max(920px, 55vw), 1240px);
 }
 .chat-root .tessera-conversation > .ai-conversation-content,
 .tessera-composer-form,
@@ -731,7 +731,7 @@ body,
   width: 100% !important;
 }
 .chat-root.tessera-thread-root {
-  --chat-content-width: min(920px, calc(100% - 48px));
+  --chat-content-width: min(max(920px, 55vw), 1240px);
 }
 .chat-root .tessera-conversation > .ai-conversation-content,
 .tessera-composer-form,
@@ -2707,16 +2707,16 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   overflow-wrap: anywhere;
 }
 
-/* Final workspace proportions: keep the conversation rail at 70% of the
-   available middle pane while leaving the sidebar and inspector intact. */
+/* Conversation rail: baseline 920px on small windows, scales with the
+   viewport on large displays, capped for readability. */
 .chat-root.tessera-thread-root {
-  --chat-content-width: min(70%, 920px);
+  --chat-content-width: min(max(920px, 55vw), 1240px);
 }
 .chat-root .tessera-conversation > .ai-conversation-content,
 .tessera-composer-form,
 .thinking-beam {
   width: var(--chat-content-width) !important;
-  max-width: 70% !important;
+  max-width: 100% !important;
 }
 @media (max-width: 720px) {
   .chat-root.tessera-thread-root { --chat-content-width: calc(100% - 24px); }

@@ -32,11 +32,14 @@ function copyConversationSelection(event: ReactClipboardEvent<HTMLDivElement>) {
 function useConversationSections(
   conversationRef: RefObject<HTMLDivElement | null>,
   proximityId: string,
+  paused: boolean,
 ) {
   const [sections, setSections] = useState<ProximitySection[]>([]);
   useEffect(() => {
     const conversation = conversationRef.current;
-    if (!conversation) return;
+    // 流式输出时每个字符都会触发 MutationObserver；目录不需要实时，
+    // 冻结扫描，流结束后重扫一次，避免每帧全量 DOM 遍历。
+    if (paused || !conversation) return;
     let frame = 0;
     const scan = () => {
       frame = 0;
@@ -55,7 +58,8 @@ function useConversationSections(
         const id = `${proximityId}-section-${index + 1}`;
         const heading = block.matches("h1, h2, h3") ? block : block.querySelector<HTMLElement>("h1, h2, h3");
         const level = heading?.tagName === "H1" ? 1 : heading?.tagName === "H2" ? 2 : heading?.tagName === "H3" ? 3 : undefined;
-        block.id = id;
+        // 写入 id 会自触发 observer（rAF 已合并），仅在变化时写避免每帧白跑
+        if (block.id !== id) block.id = id;
         const text = sectionText(block);
         const kind = messageKind(block);
         const fallbackTitle = block.matches("img") || block.querySelector("img") ? "图片" : block.matches("pre") || block.querySelector("pre") ? "代码" : block.matches("table") || block.querySelector("table") ? "表格" : block.closest(".transcript-message.user") ? "你的消息" : ({ title: "标题", section: "运行记录", body: "助手回复" }[kind] ?? "助手回复");
@@ -64,7 +68,8 @@ function useConversationSections(
           id,
           label: title,
           preview: heading ? sectionPreviewAfterHeading(heading) : text && text !== title ? sectionPreview(block) : undefined,
-          previewVersion: heading?.parentElement?.innerHTML ?? block.innerHTML,
+          // 纯文本签名（textContent 已在 sectionText 读取），替代 innerHTML 全量序列化
+          previewVersion: text,
           ...(level ? { level: level as 1 | 2 | 3 } : { kind: messageKind(block) }),
         };
       }).filter(section => section.level === 1 || section.level === 2);
@@ -74,13 +79,13 @@ function useConversationSections(
       if (!frame) frame = window.requestAnimationFrame(scan);
     };
     const observer = new MutationObserver(schedule);
-    observer.observe(conversation, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    observer.observe(conversation, { childList: true, characterData: true, subtree: true });
     schedule();
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [conversationRef, proximityId]);
+  }, [conversationRef, proximityId, paused]);
   return sections;
 }
 
@@ -112,7 +117,7 @@ export function Chat() {
   const agents = useWorkspace(state => state.agents);
   const { ref, atBottom, scrollToBottom } = useConversationScroll();
   const proximityId = useId().replace(/[^a-zA-Z0-9_-]/g, "") || "conversation";
-  const proximitySections = useConversationSections(ref, proximityId);
+  const proximitySections = useConversationSections(ref, proximityId, transcript.running);
   const messageGroups = useMemo(() => groupDisplayMessages(transcript.messages), [transcript.messages]);
   const sessionFile = useWorkspace(state => state.state?.sessionFile) ?? persistedSessionFile(project);
   const historicalDurations = useQuery({
