@@ -89,8 +89,8 @@ function ModelDetails({ model, onUse, disabled }: { model: ProviderModel; onUse:
 
 export function ProviderSettings() {
   const profiles = useQuery({ queryKey: ["provider-profiles"], queryFn: listProviderProfiles, staleTime: 10_000 });
-  const first = profiles.data?.[0];
-  return <ProviderSettingsEditor key={first?.id ?? "new-provider"} profiles={profiles} initialProfile={first} />;
+  const initialProfile = profiles.data?.find((profile) => profile.isDefault) ?? profiles.data?.[0];
+  return <ProviderSettingsEditor key={initialProfile?.id ?? "new-provider"} profiles={profiles} initialProfile={initialProfile} />;
 }
 
 type ProviderFormState = {
@@ -205,7 +205,8 @@ function ProviderSettingsEditor({ profiles, initialProfile }: { profiles: UseQue
           throw new Error(`Pi 没有加载 ${result.id} 的可用模型`);
         }
       } catch (activationError) {
-        gooeyToast.warning("模型已同步，但暂时无法切换", { description: activationError instanceof Error ? activationError.message : String(activationError), showTimestamp: false });
+        await disconnect().catch(() => undefined);
+        throw new Error(`Provider 已保存，但 Pi 未能启用：${activationError instanceof Error ? activationError.message : String(activationError)}`);
       }
       gooeyToast.success("Provider 已保存", { description: switchedModel ? `${synced.count} 个模型 · 默认 ${switchedModel.id}` : defaultModelId.trim() ? `默认 ${defaultModelId.trim()}` : `${synced.count} 个模型已写入 Pi`, showTimestamp: false });
       await queryClient.invalidateQueries({ queryKey: ["pi", "models", cwd] });

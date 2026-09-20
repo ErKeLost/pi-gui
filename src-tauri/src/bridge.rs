@@ -991,10 +991,18 @@ fn pi_model_from_meta(entry: &Value) -> Option<Value> {
     if !input.is_empty() {
         model["input"] = Value::Array(input);
     }
-    if let Some(context) = entry.get("context_window").and_then(Value::as_u64) {
+    if let Some(context) = entry
+        .get("context_window")
+        .and_then(Value::as_u64)
+        .filter(|value| *value > 0)
+    {
         model["contextWindow"] = Value::from(context);
     }
-    if let Some(max_tokens) = entry.get("max_output_tokens").and_then(Value::as_u64) {
+    if let Some(max_tokens) = entry
+        .get("max_output_tokens")
+        .and_then(Value::as_u64)
+        .filter(|value| *value > 0)
+    {
         model["maxTokens"] = Value::from(max_tokens);
     }
     if let Some(reasoning) = entry.get("reasoning").and_then(Value::as_bool) {
@@ -1195,6 +1203,7 @@ pub async fn list_provider_profiles() -> Result<Value, String> {
             "modelsUrl": saved.get("modelsUrl").and_then(Value::as_str).or_else(|| config.get("modelsUrl").and_then(Value::as_str)),
             "api": saved.get("api").and_then(Value::as_str).or_else(|| config.get("api").and_then(Value::as_str)),
             "authHeader": saved.get("authHeader").and_then(Value::as_bool).or_else(|| config.get("authHeader").and_then(Value::as_bool)),
+            "isDefault": default_provider == Some(id.as_str()),
             "defaultModel": (default_provider == Some(id.as_str())).then(|| default_model).flatten(),
             "models": config.get("models").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
             "hasApiKey": stored_api_key(&auth, &id).is_some(),
@@ -1647,6 +1656,19 @@ mod metadata_tests {
         let model = pi_model_from_meta(&entry).unwrap();
         assert_eq!(model["reasoning"], true);
         assert_eq!(model["thinkingLevelMap"]["high"], "high");
+    }
+
+    #[test]
+    fn pi_model_from_meta_omits_non_positive_limits() {
+        let entry = json!({
+            "id": "image-model",
+            "context_window": 0,
+            "max_output_tokens": 0,
+            "input_modalities": ["text", "image"]
+        });
+        let model = pi_model_from_meta(&entry).unwrap();
+        assert!(model.get("contextWindow").is_none());
+        assert!(model.get("maxTokens").is_none());
     }
 }
 
