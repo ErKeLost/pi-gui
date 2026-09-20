@@ -83,11 +83,8 @@ export default function LoadingState({
     <span className={`loading-state ${className}`}>
       <span role="status" aria-label={resolvedLabel} className="loading-state-status">
         {icon ?? <LoaderGrid variant={surfer ? "Drive" : variant} />}
-        <span className="loading-state-copy">
-          <StableShimmer text={resolvedLabel} className="loading-state-label" />
-          {detail && <StableShimmer text={detail} className="loading-detail" />}
-        </span>
-        <ElapsedTime shimmer />
+        <ElapsedTime shimmer prefix={`${resolvedLabel} `} className="loading-state-label" />
+        {detail && <StableShimmer text={detail} className="loading-detail" />}
       </span>
       {surfer && <SurferVideo key={videoSrc} src={videoSrc} />}
     </span>

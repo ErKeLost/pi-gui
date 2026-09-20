@@ -33,7 +33,7 @@ reqwest = { version = "=0.13.4", default-features = false, features = ["json", "
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2.11.0"
 tauri-plugin-process = "2.3.1"
-tungstenite = { version = "=0.26.2", default-features = false, features = ["handshake"] }
+tungstenite = { version = "=0.26.2", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
 uuid = { version = "=1.26.0", features = ["v4"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]

@@ -20,6 +20,7 @@ export function ElapsedTime({
   locale = "compact",
   prefix = "",
   shimmer = false,
+  className,
 }: {
   running?: boolean;
   value?: string;
@@ -28,6 +29,7 @@ export function ElapsedTime({
   locale?: "compact" | "zh";
   prefix?: string;
   shimmer?: boolean;
+  className?: string;
 }) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const startRef = useRef(0);
@@ -54,6 +56,6 @@ export function ElapsedTime({
   const elapsed = `${prefix}${duration}`;
 
   return shimmer
-    ? <StableShimmer text={elapsed} className="ai-elapsed-time processing-time-shimmer" />
-    : <span className="ai-elapsed-time"><span className="ai-elapsed-time-label">{prefix.trim()}</span><span className="ai-elapsed-time-value">{duration}</span></span>;
+    ? <StableShimmer text={elapsed} className={className ?? "ai-elapsed-time processing-time-shimmer"} />
+    : <span className={className ?? "ai-elapsed-time"}><span className="ai-elapsed-time-label">{prefix.trim()}</span><span className="ai-elapsed-time-value">{duration}</span></span>;
 }
