@@ -5252,3 +5252,41 @@ html[data-theme="light"] .composer-agent-mode-indicator {
 .chat-root.tessera-thread-root .thinking-beam {
   padding-inline: clamp(20px, 2.5vw, 56px) !important;
 }
+
+/* File attachment chips (Codex-style): colored extension badge, name, kind. */
+.attachment-file {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 160px;
+  max-width: 300px;
+  padding: 10px 36px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+}
+.attachment-file-badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  color: #fff;
+}
+.attachment-file-badge.tone-red { background: #e5484d; }
+.attachment-file-badge.tone-blue { background: #3b82f6; }
+.attachment-file-badge.tone-green { background: #22c55e; }
+.attachment-file-badge.tone-orange { background: #f97316; }
+.attachment-file-badge.tone-violet { background: #8b5cf6; }
+.attachment-file-badge.tone-amber { background: #d97706; }
+.attachment-file-badge.tone-pink { background: #ec4899; }
+.attachment-file-badge.tone-neutral { background: #64748b; }
+.attachment-file-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.attachment-file-meta strong { font-size: 12px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-file-meta small { font-size: 10px; color: var(--muted-foreground); }
+.attachment-file .attachment-remove { position: absolute; top: 6px; right: 6px; }

@@ -59,6 +59,8 @@ pub fn run() {
             bridge::set_project_trust_mode,
             bridge::computer_use_key_status,
             bridge::save_computer_use_key,
+            bridge::clipboard_file_paths,
+            bridge::read_file_attachment,
             bridge::pi_connect,
             bridge::pi_send,
             bridge::pi_disconnect,
