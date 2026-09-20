@@ -693,7 +693,7 @@ mod desktop {
     }
 
     fn set_relay_timeout(stream: &mut openssl::ssl::SslStream<TcpStream>) {
-        let timeout = Some(Duration::from_millis(100));
+        let timeout = Some(Duration::from_secs(1));
         let _ = stream.get_ref().set_read_timeout(timeout);
         let _ = stream.get_ref().set_write_timeout(timeout);
     }
@@ -896,7 +896,15 @@ mod desktop {
             // client traffic only arrives once registration succeeded.
             relay_connected.store(true, Ordering::Release);
             let mut relay_clients = HashMap::<String, RelayClient>::new();
+            let mut last_ping = Instant::now();
             while !stop.load(Ordering::Acquire) {
+                if last_ping.elapsed() >= Duration::from_secs(15) {
+                    if socket.send(Message::Ping(Vec::new().into())).is_err() {
+                        log::warn!("Relay 心跳发送失败，准备重连");
+                        break;
+                    }
+                    last_ping = Instant::now();
+                }
                 let outbound = relay_clients
                     .iter()
                     .flat_map(|(client_id, client)| {
@@ -997,11 +1005,17 @@ mod desktop {
                             break;
                         }
                     }
-                    Ok(Message::Close(_)) => break,
+                    Ok(Message::Close(frame)) => {
+                        log::warn!("Relay 主动关闭 Host 连接：{frame:?}");
+                        break;
+                    }
                     Ok(_) => {}
                     Err(tungstenite::Error::Io(error))
                         if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
-                    Err(_) => break,
+                    Err(error) => {
+                        log::warn!("Relay Host 连接断开：{error}");
+                        break;
+                    }
                 }
             }
             clear_relay_clients(&clients, &mut relay_clients);

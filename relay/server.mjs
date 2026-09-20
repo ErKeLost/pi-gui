@@ -87,7 +87,7 @@ const server = Bun.serve({
   },
   websocket: {
     maxPayloadLength: 1_048_576,
-    idleTimeout: 45,
+    idleTimeout: 120,
     open(socket) {
       if (socket.data.role !== "client") return
       const host = hosts.get(socket.data.hostId)
@@ -130,8 +130,9 @@ const server = Bun.serve({
       if (frame?.relay !== "frame" || typeof frame.clientId !== "string" || typeof frame.data !== "string") return
       host.clients.get(frame.clientId)?.send(frame.data)
     },
-    close(socket) {
+    close(socket, code, reason) {
       const { role, hostId, clientId } = socket.data
+      log(`socket closed role=${role} host=${hostId} client=${clientId || "-"} code=${code || "-"} reason=${reason || "-"}`)
       const host = hosts.get(hostId)
       if (!host) return
       if (role === "host") return closeHost(hostId, host)
