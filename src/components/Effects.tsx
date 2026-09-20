@@ -8,11 +8,13 @@ export function Beam({
   active = true,
   className = "",
   borderRadius = 24,
+  size = "md",
 }: {
   children: ReactNode;
   active?: boolean;
   className?: string;
   borderRadius?: number;
+  size?: "sm" | "md" | "line" | "pulse-outside" | "pulse-inner";
 }) {
   const { resolvedTheme } = useTheme();
   const visible = usePageVisible();
@@ -20,7 +22,7 @@ export function Beam({
     <BorderBeam
       className={className}
       active={active && visible}
-      size="md"
+      size={size}
       colorVariant="colorful"
       strength={0.85}
       theme={resolvedTheme === "light" ? "light" : resolvedTheme === "dark" ? "dark" : "auto"}

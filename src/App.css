@@ -5315,38 +5315,3 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   from { background-position: 100% center, 0 0; }
   to { background-position: 0% center, 0 0; }
 }
-
-/* Composer beam: pure-CSS conic gradient border, contained inside the border.
-   Replaces the canvas border-beam (per-frame repaint of a blurred layer was
-   janking typing during streaming). */
-@property --composer-beam-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-.studio-composer-beam {
-  position: relative;
-  border-radius: 14px;
-}
-.studio-composer-beam::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: conic-gradient(from var(--composer-beam-angle), #7c5cff, #ec4899, #f59e0b, #7c5cff);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity .35s ease;
-  pointer-events: none;
-}
-.studio-composer-beam[data-active="true"]::before {
-  opacity: .85;
-  animation: composer-beam-spin 4s linear infinite;
-}
-@keyframes composer-beam-spin {
-  to { --composer-beam-angle: 360deg; }
-}
