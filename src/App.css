@@ -1058,7 +1058,7 @@ body,
 }
 
 .chat-root .transcript-message.assistant .ai-message-response .streamdown-animated > :not(.md-code) {
-  max-width: min(100%, 68ch);
+  max-width: 100%;
 }
 
 .chat-root .transcript-message.assistant .md-code {
