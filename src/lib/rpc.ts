@@ -11,6 +11,14 @@ import {attachRemoteConnection,remoteHostSnapshot,runRemoteHostOperation,sendRem
 import type {RemoteJson} from './remote-protocol'
 export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000,gcTime:120000}}})
 export const native=isTauri()
+
+// Runtime knobs (PI_GUI_CONTENT_WIDTH / PI_GUI_FLUSH_MS), read once from the
+// Rust layer; absent values keep the built-in defaults.
+let flushWindowMs=100
+if(native)invoke<{contentWidth?:number|null,flushMs?:number|null}>('runtime_env').then(env=>{
+ if(env.flushMs!=null&&env.flushMs>=32)flushWindowMs=env.flushMs
+ if(env.contentWidth!=null&&env.contentWidth>=360)document.documentElement.style.setProperty('--chat-content-cap',`${env.contentWidth}px`)
+}).catch(()=>{})
 export type ProviderModel={
   id:string
   name?:string
@@ -128,7 +136,7 @@ function clearEvents(project:string){const timer=flushTimers.get(project);if(tim
 function dispatch(event:Event,project:string){
  if(!burstEvents.has(event.type)){flushEvents(project);applyEvent(event,project);return}
  const queue=eventQueues.get(project)??[];queue.push(event);eventQueues.set(project,queue)
- if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),100))
+ if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),flushWindowMs))
 }
 export function dispatchRemoteEvent(project:string,payload:unknown){
  if(!project||typeof payload!=='object'||payload===null||typeof (payload as {type?:unknown}).type!=='string')return

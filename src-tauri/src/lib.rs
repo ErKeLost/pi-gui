@@ -107,6 +107,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             runtime::runtime_environment,
             bridge::discover,
+            bridge::runtime_env,
             bridge::list_provider_models,
             bridge::list_provider_profiles,
             bridge::probe_provider_models,

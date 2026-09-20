@@ -387,6 +387,17 @@ fn mime_for_extension(extension: &str) -> Option<&'static str> {
     }
 }
 
+/// Tunable runtime knobs via PI_GUI_* environment variables; absent values
+/// fall back to the built-in defaults on the frontend.
+#[tauri::command]
+pub fn runtime_env() -> Value {
+    let number = |key: &str| std::env::var(key).ok().and_then(|value| value.trim().parse::<f64>().ok());
+    json!({
+        "contentWidth": number("PI_GUI_CONTENT_WIDTH"),
+        "flushMs": number("PI_GUI_FLUSH_MS"),
+    })
+}
+
 /// Read a dragged file as a base64 image attachment. Returns an error for
 /// non-image paths so the caller can attach them by path instead.
 #[tauri::command]
