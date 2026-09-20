@@ -376,8 +376,6 @@ fn percent_decode(input: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-const IMAGE_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
-
 fn mime_for_extension(extension: &str) -> Option<&'static str> {
     match extension {
         "png" => Some("image/png"),

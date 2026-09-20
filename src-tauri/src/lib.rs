@@ -20,10 +20,68 @@ fn normalize_path() {
     std::env::set_var("PATH", entries.join(":"));
 }
 
+/// Run the user's login shell once and capture the PATH it produces, so
+/// entries from ~/.zshrc & co (nvm, bun, cargo, npm globals…) reach agent
+/// spawns. User dirs come first; the app-inherited PATH fills the gaps.
+#[cfg(desktop)]
+fn probe_login_shell_path() -> Option<String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+    let shell = std::env::var("SHELL").ok()?;
+    if shell.ends_with("/fish") {
+        return None;
+    }
+    const MARKER: &str = "__PIGUI_PATH__";
+    let mut child = Command::new(&shell)
+        .args(["-l", "-i", "-c", &format!("printf '{MARKER}%s' \"$PATH\"")])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let start = Instant::now();
+    loop {
+        if child.try_wait().map(|status| status.is_some()).unwrap_or(false) {
+            break;
+        }
+        if start.elapsed() > Duration::from_secs(4) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    let mut stdout = Vec::new();
+    child.stdout.take()?.read_to_end(&mut stdout).ok()?;
+    let text = String::from_utf8_lossy(&stdout);
+    let line = text.lines().find(|line| line.starts_with(MARKER))?;
+    let path = &line[MARKER.len()..];
+    (!path.is_empty()).then(|| path.to_string())
+}
+
+#[cfg(desktop)]
+fn adopt_login_shell_path() {
+    let Some(login) = probe_login_shell_path() else {
+        return;
+    };
+    let current = std::env::var("PATH").unwrap_or_default();
+    let mut seen = std::collections::HashSet::new();
+    let merged: Vec<&str> = login
+        .split(':')
+        .chain(current.split(':'))
+        .filter(|dir| !dir.is_empty() && seen.insert(dir.to_string()))
+        .collect();
+    std::env::set_var("PATH", merged.join(":"));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(desktop)]
-    normalize_path();
+    {
+        normalize_path();
+        std::thread::spawn(adopt_login_shell_path);
+    }
     let builder = tauri::Builder::default();
     #[cfg(target_os = "android")]
     let builder = builder.plugin(mobile_update::init());
