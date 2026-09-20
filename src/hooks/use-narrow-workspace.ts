@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export const NARROW_WORKSPACE_QUERY = "(max-width: 760px)";
+export const NARROW_WORKSPACE_QUERY = "(max-width: 992px)";
 
 function subscribe(onChange: () => void) {
   if (typeof window === "undefined") return () => undefined;

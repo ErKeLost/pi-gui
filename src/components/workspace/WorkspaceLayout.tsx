@@ -29,7 +29,7 @@ export function WorkspaceLayout(props: WorkspaceLayoutProps) {
   const inspector = useWorkspace(state => state.inspector);
   const statuses = useWorkspace(state => state.statuses);
   return <>
-    <ResizablePanelGroup key={`workspace-layout-v5-${narrow ? "narrow" : "wide"}`} id="workspace-layout" orientation="horizontal">
+    <ResizablePanelGroup key={`workspace-layout-v6-${narrow ? "narrow" : "wide"}`} id="workspace-layout" orientation="horizontal">
     {!narrow && sidebarOpen && <>
       <ResizablePanel id="sidebar" defaultSize="260px" minSize="220px" maxSize="330px" groupResizeBehavior="preserve-pixel-size">
         <WorkspaceSidebar {...{ sidebarOpen, onToggleSidebar, online, panel, liveSessions, currentSessionFile }} />
