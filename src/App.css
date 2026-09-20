@@ -1,6 +1,6 @@
 /* ── 统一调参：改这里即可，全站生效 ── */
 :root {
-  --chat-content-cap: 100%;                     /* 聊天内容列最大宽度 */
+  --chat-content-cap: 70%;                     /* 聊天内容列最大宽度 */
   --chat-content-pad: clamp(20px, 2.5vw, 56px);  /* 内容列左右留白 */
   --project-menu-width: 260px;                   /* 项目菜单宽 */
   --project-menu-summary-h: 42px;                /* 项目菜单标题行高 */
