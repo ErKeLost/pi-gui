@@ -151,6 +151,11 @@ export function Chat() {
     if (!agent.sessionPath) return;
     void changeSession({ type: "switch_session", sessionPath: agent.sessionPath }).catch(report);
   }, []);
+  const agentStartedAt = useMemo(() => {
+    if (!agents) return undefined;
+    const times = [...agents.active, ...agents.recent].map(agent => agent.startedAt).filter((time): time is number => typeof time === "number" && Number.isFinite(time));
+    return times.length ? Math.min(...times) : undefined;
+  }, [agents]);
 
   useEffect(() => {
     if (!sessionFile || transcript.running) return;
@@ -186,6 +191,7 @@ export function Chat() {
             thinking={transcript.running && active && !group.items.at(-1)?.message.stopReason}
             elapsedMs={group.elapsedMs}
             activity={active && agents && (agents.active.length > 0 || agents.recent.length > 0) ? <AgentActivityFeed snapshot={agents} onOpenAgent={openAgent} /> : undefined}
+            activityTime={active ? agentStartedAt : undefined}
           />;
         })}
         {transcript.error && !transcript.running && <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}><ErrorOutput error={transcript.error} /></m.div>}

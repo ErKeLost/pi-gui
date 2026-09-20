@@ -103,6 +103,7 @@ type TranscriptMessageProps = {
   thinking: boolean;
   elapsedMs?: number;
   activity?: ReactNode;
+  activityTime?: number;
 };
 
 type ProjectedPart = { part: Part; key: string; active: boolean; messageIndex: number };
@@ -121,8 +122,14 @@ function specialMessage(item: DisplayMessage) {
   return <m.div className="transcript-message assistant" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}><div className="transcript-compaction"><div className="transcript-compaction-heading"><Icon name="arrows-clockwise" /><span>上下文已压缩</span></div>{summary.trim() ? <pre>{summary.trim()}</pre> : null}</div></m.div>;
 }
 
-function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Record<string, Tool>, streaming: boolean, thinking: boolean, role: "user" | "assistant", activity?: ReactNode) {
-  const progress: ReactNode[] = [];
+function messageTime(items: DisplayMessage[], messageIndex: number): number | undefined {
+  const raw = items[messageIndex]?.message.timestamp;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  return raw < 1e12 ? raw * 1000 : raw;
+}
+
+function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Record<string, Tool>, streaming: boolean, thinking: boolean, role: "user" | "assistant", activity?: ReactNode, activityTime?: number) {
+  const progress: { node: ReactNode; time?: number }[] = [];
   const media: ReactNode[] = [];
   const body: ReactNode[] = [];
   const lastMessage = items.at(-1)?.message;
@@ -140,7 +147,7 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
       if (part.type === "image") media.push(node);
       else body.push(node);
     }
-    return { progress, media, body, defaultExpanded: false, activityIndex: undefined, activityConsumed: false };
+    return { progress: [], media, body, defaultExpanded: false, activityIndex: undefined, activityConsumed: false };
   }
 
   let processParts: ProjectedPart[] = [];
@@ -152,29 +159,27 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
     const group = processParts;
     processParts = [];
     const groupKey = `${turnKey}-process-${processIndex++}`;
+    const time = Math.min(...group.map(({ messageIndex }) => messageTime(items, messageIndex) ?? Infinity));
+    const stamp = Number.isFinite(time) ? time : undefined;
     const thoughts = group.filter(({ part, active }) => part.type === "thinking" && (Boolean(part.thinking?.trim()) || (active && thinking)));
     const toolParts = group.filter(({ part }) => part.type === "toolCall");
     const latestThought = thoughts.at(-1);
     if (latestThought) {
-      progress.push(<Thinking key={`${groupKey}-thinking`} text={latestThought.part.thinking ?? ""} running={live && streaming} />);
+      progress.push({ node: <Thinking key={`${groupKey}-thinking`} text={latestThought.part.thinking ?? ""} running={live && streaming} />, time: stamp });
     }
     if (toolParts.length > 0) {
       const toolRows = toolParts.map(({ part, key, active }) => <PartView key={key} part={part} tools={tools} running={active} thinking={false} />);
-      const spawnIndex = activityConsumed ? -1 : toolParts.findIndex(({ part }) => (part.name ?? tools[part.id ?? ""]?.name) === "spawn_agent");
-      const operationChildren = toolRows.flatMap((row, index) => index === spawnIndex && activity
-        ? [row, <Fragment key={`${turnKey}-agent-activity`}>{activity}</Fragment>]
-        : [row]);
-      if (activity && spawnIndex >= 0) activityConsumed = true;
-      progress.push(
-        <ToolActivityGroup
+      progress.push({
+        node: <ToolActivityGroup
           key={`${groupKey}-tools`}
           toolNames={toolParts.map(({ part }) => part.name ?? tools[part.id ?? ""]?.name ?? "工具")}
           running={toolParts.some(({ part }) => tools[part.id ?? ""]?.running)}
           hasError={toolParts.some(({ part }) => tools[part.id ?? ""]?.isError)}
         >
-          {operationChildren}
+          {toolRows}
         </ToolActivityGroup>,
-      );
+        time: stamp,
+      });
     }
   };
 
@@ -189,15 +194,23 @@ function buildNodes(content: ProjectedPart[], items: DisplayMessage[], tools: Re
     if (hasFinalResponse && messageIndex === items.length - 1 && (part.type === "text" || part.type === "image")) {
       body.push(node);
     } else {
-      progress.push(node);
+      progress.push({ node, time: messageTime(items, messageIndex) });
     }
   }
   flushProcess(true);
   if (activity && !activityConsumed) {
-    progress.push(activity);
+    const node = <Fragment key={`${turnKey}-agent-activity`}>{activity}</Fragment>;
+    if (activityTime !== undefined && Number.isFinite(activityTime)) {
+      // Insert after the last block that happened before the agents spawned.
+      let index = 0;
+      while (index < progress.length && (progress[index].time ?? Infinity) <= activityTime) index += 1;
+      progress.splice(index, 0, { node, time: activityTime });
+    } else {
+      progress.push({ node });
+    }
     activityConsumed = true;
   }
-  return { progress, media, body, defaultExpanded: !hasFinalResponse, activityIndex: undefined, activityConsumed };
+  return { progress: progress.map(entry => entry.node), media, body, defaultExpanded: !hasFinalResponse, activityIndex: undefined, activityConsumed };
 }
 
 function responseText(content: ProjectedPart[]) {
@@ -238,14 +251,14 @@ function MessageContextActions({ text, role, onCopy }: { text: string; role: "us
   return <ContextMenuContent className="w-40"><ContextMenuItem onClick={onCopy}><Icon name="copy" />{role === "user" ? "复制消息" : "复制回复"}</ContextMenuItem></ContextMenuContent>;
 }
 
-function TranscriptMessageComponent({ items, tools, streaming, thinking, elapsedMs, activity }: TranscriptMessageProps) {
+function TranscriptMessageComponent({ items, tools, streaming, thinking, elapsedMs, activity, activityTime }: TranscriptMessageProps) {
   const item = items[0];
   const role = item.message.role === "user" ? "user" : "assistant";
   const [copied, setCopied] = useState(false);
   const special = specialMessage(item);
   if (special) return special;
   const content = projectParts(items, streaming);
-  const nodes = buildNodes(content, items, tools, streaming, thinking, role, activity);
+  const nodes = buildNodes(content, items, tools, streaming, thinking, role, activity, activityTime);
   const finalOnly = role === "assistant" && !nodes.defaultExpanded;
   const text = responseText(finalOnly ? content.filter(part => part.messageIndex === items.length - 1) : content);
   if (nodes.progress.length === 0 && nodes.body.length === 0 && nodes.media.length === 0 && !activity) return null;
