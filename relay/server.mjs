@@ -46,10 +46,15 @@ function recordFailure(ip) {
   authFailures.set(ip, recent)
 }
 
+function log(message) {
+  console.log(new Date().toISOString(), message)
+}
+
 function closeHost(hostId, host) {
   if (hosts.get(hostId) !== host) return
   hosts.delete(hostId)
   hostCountsByIp.set(host.ip, Math.max(0, (hostCountsByIp.get(host.ip) || 1) - 1))
+  log(`host ${hostId} disconnected from ${host.ip}`)
   for (const client of host.clients.values()) client.close(1012, "Orbit Host disconnected")
   host.clients.clear()
 }
@@ -71,6 +76,7 @@ const server = Bun.serve({
       const host = hosts.get(data.hostId)
       if (!host || !safeEqual(host.clientToken, data.token)) {
         recordFailure(data.ip)
+        log(`client rejected for ${data.hostId} from ${data.ip} (host ${host ? "token mismatch" : "not registered"})`)
         return new Response("Orbit Host unavailable", { status: 404 })
       }
       if (host.clients.size >= maxClientsPerHost) return new Response("Too many clients", { status: 429 })
@@ -89,6 +95,7 @@ const server = Bun.serve({
       const clientId = crypto.randomUUID()
       socket.data.clientId = clientId
       host.clients.set(clientId, socket)
+      log(`client ${clientId} attached to ${socket.data.hostId} from ${socket.data.ip}`)
       host.socket.send(JSON.stringify({ relay: "connect", clientId }))
     },
     message(socket, message) {
@@ -98,6 +105,7 @@ const server = Bun.serve({
         try { frame = JSON.parse(String(message)) } catch { frame = null }
         if (frame?.relay !== "register" || !safeEqual(String(frame.hostKey || ""), configuredHostKey) || !/^[A-Za-z0-9_-]{32,256}$/.test(String(frame.clientToken || ""))) {
           recordFailure(ip)
+          log(`host registration DENIED for ${hostId} from ${ip}`)
           return socket.close(1008, "Invalid host credentials")
         }
         const previous = hosts.get(hostId)
@@ -106,6 +114,7 @@ const server = Bun.serve({
         const host = { socket, ip, clientToken: frame.clientToken, clients: new Map() }
         hosts.set(hostId, host)
         hostCountsByIp.set(ip, (hostCountsByIp.get(ip) || 0) + 1)
+        log(`host ${hostId} registered from ${ip}`)
         socket.send(JSON.stringify({ relay: "registered" }))
         return
       }
@@ -128,6 +137,7 @@ const server = Bun.serve({
       if (role === "host") return closeHost(hostId, host)
       if (host.clients.get(clientId) !== socket) return
       host.clients.delete(clientId)
+      log(`client ${clientId} detached from ${hostId}`)
       host.socket.send(JSON.stringify({ relay: "disconnect", clientId }))
     },
   },

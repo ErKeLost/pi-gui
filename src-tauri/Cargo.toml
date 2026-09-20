@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.2.53"
+version = "0.2.54"
 description = "A local desktop workspace for Orbit"
 authors = ["you"]
 license = ""
@@ -22,6 +22,7 @@ base64 = "=0.22.1"
 serde_json = "=1.0.151"
 serde = { version = "=1.0.229", features = ["derive"] }
 log = "=0.4.34"
+rustls = { version = "=0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
 tauri = { version = "=2.11.5", features = [] }
 tauri-plugin-log = "=2.9.1"
 tauri-plugin-dialog = "=2.7.3"
@@ -32,9 +33,11 @@ reqwest = { version = "=0.13.4", default-features = false, features = ["json", "
 # the shared TypeScript client and do not bundle a server.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 aes-gcm = "=0.10.3"
+openssl = { version = "=0.10.73", features = ["vendored"] }
+openssl-probe = "=0.1.6"
 tauri-plugin-updater = "2.11.0"
 tauri-plugin-process = "2.3.1"
-tungstenite = { version = "=0.26.2", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
+tungstenite = { version = "=0.26.2", default-features = false, features = ["handshake", "native-tls"] }
 uuid = { version = "=1.26.0", features = ["v4"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]

@@ -81,6 +81,10 @@ fn adopt_login_shell_path() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // The dependency tree enables both rustls crypto backends (ring via
+    // tungstenite, aws-lc-rs via reqwest). Without an explicit default,
+    // rustls panics on first use — silently killing the relay thread.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     #[cfg(desktop)]
     {
         normalize_path();

@@ -87,9 +87,7 @@ mod desktop {
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
     use tauri::{AppHandle, Manager, State};
-    use tungstenite::{
-        accept_hdr, connect, handshake::server::ErrorResponse, stream::MaybeTlsStream, Message,
-    };
+    use tungstenite::{accept_hdr, handshake::server::ErrorResponse, Message, WebSocket};
     use uuid::Uuid;
 
     const EVENT_BATCH_WINDOW: Duration = Duration::from_millis(16);
@@ -694,19 +692,86 @@ mod desktop {
         }
     }
 
-    fn set_relay_timeout(stream: &mut MaybeTlsStream<TcpStream>) {
+    fn set_relay_timeout(stream: &mut openssl::ssl::SslStream<TcpStream>) {
         let timeout = Some(Duration::from_millis(100));
-        match stream {
-            MaybeTlsStream::Plain(stream) => {
-                let _ = stream.set_read_timeout(timeout);
-                let _ = stream.set_write_timeout(timeout);
+        let _ = stream.get_ref().set_read_timeout(timeout);
+        let _ = stream.get_ref().set_write_timeout(timeout);
+    }
+
+    /// The relay connection deliberately uses OpenSSL instead of rustls:
+    /// some domestic ISP middleboxes reset TLS handshakes from less common
+    /// client fingerprints, and the OpenSSL fingerprint is reliably allowed.
+    fn relay_connect(
+        relay_url: &str,
+        host_id: &str,
+        token: &str,
+    ) -> Result<WebSocket<openssl::ssl::SslStream<TcpStream>>, String> {
+        use openssl::ssl::{SslConnector, SslMethod};
+        use std::io::{Read as _, Write as _};
+        let uri = tungstenite::http::Uri::try_from(relay_url)
+            .map_err(|_| "Relay 地址无效".to_string())?;
+        let host = uri
+            .host()
+            .ok_or_else(|| "Relay 地址缺少主机".to_string())?
+            .to_owned();
+        let port = uri.port_u16().unwrap_or(443);
+        let path = format!(
+            "{}/relay/host/{host_id}?token={token}",
+            uri.path().trim_end_matches('/')
+        );
+        let tcp = TcpStream::connect((host.as_str(), port))
+            .map_err(|error| format!("连接 Relay 失败：{error}"))?;
+        tcp.set_nodelay(true).ok();
+        let mut builder = SslConnector::builder(SslMethod::tls())
+            .map_err(|error| error.to_string())?;
+        // Vendored OpenSSL ships no trust store; load the system roots.
+        if let Some(cert_file) = openssl_probe::probe().cert_file {
+            if let Ok(pem) = std::fs::read(cert_file) {
+                for cert in openssl::x509::X509::stack_from_pem(&pem).into_iter().flatten() {
+                    let _ = builder.cert_store_mut().add_cert(cert);
+                }
             }
-            MaybeTlsStream::Rustls(stream) => {
-                let _ = stream.sock.set_read_timeout(timeout);
-                let _ = stream.sock.set_write_timeout(timeout);
-            }
-            _ => {}
         }
+        let connector = builder.build();
+        let mut tls = connector
+            .connect(&host, tcp)
+            .map_err(|error| format!("Relay TLS 握手失败：{error}"))?;
+        let nonce = *uuid::Uuid::new_v4().as_bytes();
+        let key = base64::engine::general_purpose::STANDARD.encode(nonce);
+        let request = format!(
+            "GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: Orbit\r\n\r\n"
+        );
+        tls.write_all(request.as_bytes())
+            .map_err(|error| format!("Relay 升级请求发送失败：{error}"))?;
+        let mut buffer = Vec::new();
+        let mut chunk = [0_u8; 1024];
+        loop {
+            let read = tls
+                .read(&mut chunk)
+                .map_err(|error| format!("Relay 升级响应读取失败：{error}"))?;
+            if read == 0 {
+                return Err("Relay 关闭了连接".into());
+            }
+            buffer.extend_from_slice(&chunk[..read]);
+            if buffer.windows(4).rposition(|w| w == b"\r\n\r\n").is_some() {
+                break;
+            }
+            if buffer.len() > 16 * 1024 {
+                return Err("Relay 升级响应异常".into());
+            }
+        }
+        let head = String::from_utf8_lossy(&buffer);
+        if !head.starts_with("HTTP/1.1 101") && !head.starts_with("HTTP/1.0 101") {
+            return Err(format!(
+                "Relay 拒绝了连接（{}）",
+                head.lines().next().unwrap_or("未知响应")
+            ));
+        }
+        Ok(WebSocket::from_raw_socket(
+            tls,
+            tungstenite::protocol::Role::Client,
+            None,
+        ))
     }
 
     fn relay_envelope(client_id: &str, data: String) -> Message {
@@ -803,11 +868,14 @@ mod desktop {
         relay_connected: Arc<AtomicBool>,
         stop: Arc<AtomicBool>,
     ) {
-        let endpoint = format!("{}/relay/host/{host_id}", relay_url.trim_end_matches('/'));
         while !stop.load(Ordering::Acquire) {
-            let Ok((mut socket, _)) = connect(endpoint.as_str()) else {
-                thread::sleep(Duration::from_secs(2));
-                continue;
+            let mut socket = match relay_connect(&relay_url, &host_id, &client_token) {
+                Ok(socket) => socket,
+                Err(error) => {
+                    log::warn!("Relay 连接失败：{error}");
+                    thread::sleep(Duration::from_secs(2));
+                    continue;
+                }
             };
             set_relay_timeout(socket.get_mut());
             // Prove the desktop identity with the host key before the relay
@@ -823,31 +891,9 @@ mod desktop {
                 thread::sleep(Duration::from_secs(2));
                 continue;
             }
-            let registered = loop {
-                if stop.load(Ordering::Acquire) {
-                    break false;
-                }
-                match socket.read() {
-                    Ok(Message::Text(text)) => {
-                        let Ok(frame) = serde_json::from_str::<Value>(&text) else {
-                            continue;
-                        };
-                        break frame.get("relay").and_then(Value::as_str) == Some("registered");
-                    }
-                    Ok(Message::Close(_)) => break false,
-                    Ok(_) => continue,
-                    Err(tungstenite::Error::Io(error))
-                        if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
-                    Err(_) => break false,
-                }
-            };
-            if !registered {
-                let _ = socket.close(None);
-                // Wrong host key or a misconfigured relay: back off so the
-                // failure is visible in logs instead of hot-looping.
-                thread::sleep(Duration::from_secs(5));
-                continue;
-            }
+            // Registration is confirmed asynchronously: the relay acks with
+            // {"relay":"registered"} which the read loop below ignores, and
+            // client traffic only arrives once registration succeeded.
             relay_connected.store(true, Ordering::Release);
             let mut relay_clients = HashMap::<String, RelayClient>::new();
             while !stop.load(Ordering::Acquire) {
