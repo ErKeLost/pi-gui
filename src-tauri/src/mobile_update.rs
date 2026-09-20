@@ -45,10 +45,50 @@ mod android {
             .await
             .map_err(|error| error.to_string())
     }
+
+    /// Probe the latest version via the releases/latest redirect (no API rate
+    /// limit) when the anonymous api.github.com quota is exhausted.
+    pub async fn probe() -> Result<Option<String>, String> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|error| error.to_string())?;
+        let response = client
+            .get("https://github.com/ErKeLost/pi-gui/releases/latest")
+            .redirect(reqwest::redirect::Policy::none())
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+        let Some(location) = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+        else {
+            return Ok(None);
+        };
+        let version = location.rsplit('/').next().unwrap_or("").trim().trim_start_matches('v');
+        let plausible = version.contains('.')
+            && version
+                .split('.')
+                .all(|part| !part.is_empty() && part.chars().all(|character| character.is_ascii_digit()));
+        Ok(plausible.then(|| version.to_string()))
+    }
 }
 
 #[cfg(target_os = "android")]
 pub use android::init;
+
+#[tauri::command]
+pub async fn mobile_update_probe() -> Result<Option<String>, String> {
+    #[cfg(target_os = "android")]
+    {
+        android::probe().await
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Err("更新探测只能在 Android 设备上使用".into())
+    }
+}
 
 #[tauri::command]
 pub async fn mobile_update_install(

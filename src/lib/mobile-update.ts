@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { native } from "./rpc";
+
 export const RELEASES_API = "https://api.github.com/repos/ErKeLost/pi-gui/releases/latest";
 export const CHECK_TIMEOUT_MS = 15_000;
 export const CHECK_RETRIES = 2;
@@ -95,5 +98,15 @@ async function fetchGithubRelease(fetcher: typeof fetch): Promise<unknown> {
 }
 
 export async function checkMobileUpdate(currentVersion: string, fetcher: typeof fetch = fetch): Promise<MobileUpdate | null> {
-  return parseMobileUpdate(currentVersion, await fetchGithubRelease(fetcher));
+  try {
+    return parseMobileUpdate(currentVersion, await fetchGithubRelease(fetcher));
+  } catch (error) {
+    // api.github.com serves 60 anonymous requests/hour/IP; VPN exit IPs share
+    // that budget. Fall back to the releases/latest redirect probe, which has
+    // no quota. The asset URL is assembled locally, so it passes the whitelist.
+    if (!native) throw error;
+    const probeVersion = await invoke<string | null>("mobile_update_probe").catch(() => null);
+    if (!probeVersion || !isNewerVersion(currentVersion, probeVersion)) throw error;
+    return { version: probeVersion, body: "新版本已经可以安装。", downloadUrl: `https://github.com/ErKeLost/pi-gui/releases/download/v${probeVersion}/orbit-android-arm64-v${probeVersion}.apk` };
+  }
 }

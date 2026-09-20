@@ -128,6 +128,7 @@ pub fn run() {
             bridge::session_turn_durations,
             bridge::open_pi_terminal,
             mobile_update::mobile_update_install,
+            mobile_update::mobile_update_probe,
             remote::remote_host_start,
             remote::remote_host_status,
             remote::remote_host_stop,
