@@ -5315,3 +5315,8 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   from { background-position: 100% center, 0 0; }
   to { background-position: 0% center, 0 0; }
 }
+
+/* Border beam: render inside only — hide the outward bloom halo layer. */
+[data-beam-bloom] {
+  display: none !important;
+}
