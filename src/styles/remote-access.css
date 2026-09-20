@@ -28,11 +28,12 @@
   margin-inline: auto;
 }
 
-.mobile-access-panel .panel-heading { align-items: flex-start; margin-bottom: 32px; }
+.mobile-access-panel .panel-heading { align-items: flex-start; gap: 28px; margin-bottom: 32px; }
+.mobile-access-panel .panel-heading > div { min-width: 0; }
 .mobile-access-panel .panel-heading h1 { display: inline-flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 600; letter-spacing: -.4px; }
 .mobile-access-panel .panel-heading h1 > svg { width: 26px; height: 26px; }
 .mobile-access-panel .panel-heading p { max-width: 620px; margin-top: 7px; color: var(--muted-foreground); font-size: 10px; line-height: 1.55; }
-.mobile-access-version { flex: none; margin-top: 4px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted-foreground); font: 10px/1 var(--font-mono); white-space: nowrap; }
+.mobile-access-version { flex: none; margin-top: 4px; margin-left: auto; padding: 6px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted-foreground); font: 10px/1 var(--font-mono); white-space: nowrap; }
 .mobile-access-host-card, .mobile-access-devices-card { overflow: hidden; border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-shadow: 0 14px 40px color-mix(in oklch, var(--background) 14%, transparent); }
 .mobile-access-host-card > .settings-item { min-height: 126px; padding: 30px 40px; }
 .mobile-access-host-card > .settings-item .settings-item-copy strong { font-size: 14px; font-weight: 600; }
@@ -430,6 +431,7 @@
   .remote-address-setting [data-slot="select-trigger"],
   .remote-relay-setting [data-slot="input"] { width: 100%; }
 
+  .mobile-access-panel .panel-heading { gap: 16px; }
   .mobile-access-version { margin-top: 0; }
 
   .remote-host-detail,
