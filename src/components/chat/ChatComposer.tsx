@@ -56,7 +56,9 @@ function fileKindLabel(name: string): string {
 export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean; onSubmitted: () => void }) {
   const project = useWorkspace(state => state.cwd);
   const connectionId = useWorkspace(state => state.connectionId);
-  const transcript = useWorkspace(state => state.transcript);
+  const transcriptRunning = useWorkspace(state => state.transcript.running);
+  const steeringCount = useWorkspace(state => state.transcript.queue.steering.length);
+  const followUpCount = useWorkspace(state => state.transcript.queue.followUp.length);
   const online = useWorkspace(state => state.connection === "online");
   const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const composerKey = connectionId || project;
@@ -117,12 +119,12 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
     deliveryOverride.current = null;
     useWorkspace.getState().event({ type: "prompt_submitted" });
     try {
-      if (!transcript.running) await Promise.all([syncMultiAgentMode(project), syncComputerUseMode(project)]);
+      if (!transcriptRunning) await Promise.all([syncMultiAgentMode(project), syncComputerUseMode(project)]);
     const fileChips = attachments.filter((attachment): attachment is FileAttachment => attachment.kind === "file");
     const images = attachments.filter((attachment): attachment is ImageAttachment => attachment.kind === "image");
     const prefix = fileChips.map(attachment => `[文件] ${attachment.path}`).join("\n");
     const text = prefix ? `${prefix}\n\n${message.text}`.trim() : message.text;
-      await request({ type: "prompt", message: text, images: images.map(attachment => ({ type: "image" as const, data: attachment.data, mimeType: attachment.mimeType })), ...(transcript.running ? { streamingBehavior } : {}) }, 45000, project);
+      await request({ type: "prompt", message: text, images: images.map(attachment => ({ type: "image" as const, data: attachment.data, mimeType: attachment.mimeType })), ...(transcriptRunning ? { streamingBehavior } : {}) }, 45000, project);
       setAttachments([]);
       setDraft("");
       onSubmitted();
@@ -132,7 +134,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
   }
 
   return <div className="composer-container tessera-composer-dock"><div className="tessera-composer-form">
-    <Beam className="studio-composer-beam" size="line" borderRadius={14} active={transcript.running || compacting}>
+    <Beam className="studio-composer-beam" size="line" borderRadius={14} active={transcriptRunning || compacting}>
       <PromptInput onSubmit={message => void submit(message)} className="composer studio-composer" allowEmpty={attachments.length > 0}>
         <AnimatePresence>{attachments.length > 0 && <m.div className="attachments" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
           {attachments.map(attachment => attachment.kind === "image"
@@ -152,9 +154,9 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
           <div className="composer-tool-cluster"><Button variant="ghost" className="size-8 rounded-full p-0 text-muted-foreground hover:text-foreground hover:bg-accent" aria-label="上传附件" title="上传图片" onClick={() => fileInput.current?.click()}><Icon name="plus" className="size-4" /></Button></div>
           <ComposerModelSelector />
           <ComposerAgentMode />
-          {(transcript.queue.steering.length > 0 || transcript.queue.followUp.length > 0) && <span className="composer-queue-status" aria-live="polite">已排队 {transcript.queue.steering.length + transcript.queue.followUp.length}</span>}
+          {(steeringCount > 0 || followUpCount > 0) && <span className="composer-queue-status" aria-live="polite">已排队 {steeringCount + followUpCount}</span>}
           {runtimeTarget !== "mobile" && <ComposerContext />}
-          <PromptInputSubmit status={transcript.running ? "streaming" : "ready"} disabled={!online} title={transcript.running ? "暂停生成" : "发送消息"} aria-label={transcript.running ? "暂停生成" : "发送消息"} onClick={transcript.running ? () => void stop().catch(report) : undefined} />
+          <PromptInputSubmit status={transcriptRunning ? "streaming" : "ready"} disabled={!online} title={transcriptRunning ? "暂停生成" : "发送消息"} aria-label={transcriptRunning ? "暂停生成" : "发送消息"} onClick={transcriptRunning ? () => void stop().catch(report) : undefined} />
         </div>
       </PromptInput>
     </Beam>

@@ -1,5 +1,5 @@
 import { Wifi } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useState, type ClipboardEvent as ReactClipboardEvent, type RefObject } from "react";
+import { useCallback, useDeferredValue, useEffect, useId, useMemo, useState, type ClipboardEvent as ReactClipboardEvent, type RefObject } from "react";
 import { m } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../lib/store";
@@ -112,8 +112,12 @@ function deriveRunStatus(transcript: Transcript, telemetry: Telemetry) {
 export function Chat() {
   const project = useWorkspace(state => state.cwd);
   const runtimeTarget = useWorkspace(state => state.runtimeTarget);
-  const transcript = useWorkspace(state => state.transcript);
-  const telemetry = useWorkspace(state => state.telemetry);
+  const liveTranscript = useWorkspace(state => state.transcript);
+  const liveTelemetry = useWorkspace(state => state.telemetry);
+  // Keep typing and other high-priority UI interactions ahead of expensive
+  // streaming transcript/Markdown reconciliation.
+  const transcript = useDeferredValue(liveTranscript);
+  const telemetry = useDeferredValue(liveTelemetry);
   const agents = useWorkspace(state => state.agents);
   const { ref, atBottom, scrollToBottom } = useConversationScroll();
   const proximityId = useId().replace(/[^a-zA-Z0-9_-]/g, "") || "conversation";
