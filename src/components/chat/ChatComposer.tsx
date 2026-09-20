@@ -4,7 +4,6 @@ import { AnimatePresence, m } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../lib/store";
 import { report, request, stop, syncComputerUseMode, syncMultiAgentMode } from "../../lib/rpc";
-import { Beam } from "../Effects";
 import { Icon } from "../Icon";
 import { PromptInput, PromptInputSubmit, PromptInputTextarea, type PromptInputMessage } from "../ai-elements/prompt-input";
 import { Button } from "../ui/button";
@@ -132,7 +131,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
   }
 
   return <div className="composer-container tessera-composer-dock"><div className="tessera-composer-form">
-    <Beam className="studio-composer-beam" borderRadius={14} active={transcript.running || compacting}>
+    <div className="studio-composer-beam" data-active={transcript.running || compacting}>
       <PromptInput onSubmit={message => void submit(message)} className="composer studio-composer" allowEmpty={attachments.length > 0}>
         <AnimatePresence>{attachments.length > 0 && <m.div className="attachments" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
           {attachments.map(attachment => attachment.kind === "image"
@@ -157,6 +156,6 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
           <PromptInputSubmit status={transcript.running ? "streaming" : "ready"} disabled={!online} title={transcript.running ? "暂停生成" : "发送消息"} aria-label={transcript.running ? "暂停生成" : "发送消息"} onClick={transcript.running ? () => void stop().catch(report) : undefined} />
         </div>
       </PromptInput>
-    </Beam>
+    </div>
   </div></div>;
 }
