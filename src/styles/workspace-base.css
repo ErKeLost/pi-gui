@@ -1,5 +1,5 @@
 /* Application layout and component surfaces. */
-.app-shell{--sidebar-width:238px;display:flex;flex-direction:row;width:100%;height:100dvh;overflow:hidden;background:var(--background)}
+.app-shell{--sidebar-width:208px;display:flex;flex-direction:row;width:100%;height:100dvh;overflow:hidden;background:var(--background)}
 .app-shell>[data-slot="resizable-panel-group"]{flex:1;min-width:0;width:100%;height:100%}
 [data-slot="resizable-panel"]{min-width:0;min-height:0;overflow:hidden}
 .sidebar{display:flex;flex-direction:column;min-width:0;overflow:hidden;padding:20px 14px 12px;background:var(--sidebar);border-right:1px solid var(--border)}
