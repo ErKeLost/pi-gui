@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { FolderClosed } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useProjects } from "../../lib/projects"
@@ -12,10 +13,11 @@ export function SessionRoots({ title, rawTitle }: { title?: string; rawTitle?: s
   const homeDir = useWorkspace(state => state.homeDir)
   const online = useWorkspace(state => state.connection === "online")
   const extras = extraRootsFromStatus(useWorkspace(state => state.statuses))
+  const extraSet = useMemo(() => new Set(extras), [extras])
   const { projects, update } = useProjects()
   const project = projects.find(item => item.path === cwd)
   const attached = [cwd, ...extras]
-  const available = projects.filter(project => project.path !== cwd && !extras.includes(project.path))
+  const available = projects.filter(project => project.path !== cwd && !extraSet.has(project.path))
 
   function saveRoots(next: string[]) {
     if (project) update({ ...project, roots: [cwd, ...next] })

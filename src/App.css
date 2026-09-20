@@ -5236,3 +5236,9 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
 }
+
+/* Keep scroll gestures inside the conversation rail: chaining to the page
+   behind (rubber-banding past the top/bottom) steals frames on long threads. */
+.chat-root.tessera-thread-root .ai-conversation {
+  overscroll-behavior: contain;
+}

@@ -51,7 +51,7 @@ function ToolPart({ part, tools }: PartViewProps) {
 function PartView(props: PartViewProps) {
   if (props.part.type === "text") return <TextPart {...props} />;
   if (props.part.type === "thinking") return <ThinkingPart {...props} />;
-  if (props.part.type === "image") return <img className="message-image" src={`data:${props.part.mimeType};base64,${props.part.data}`} alt="会话附件" />;
+  if (props.part.type === "image") return <img className="message-image" src={`data:${props.part.mimeType};base64,${props.part.data}`} alt="会话附件" decoding="async" />;
   if (props.part.type === "toolCall") return <ToolPart {...props} />;
   return null;
 }
