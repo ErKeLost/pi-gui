@@ -4789,7 +4789,10 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   flex-direction: column;
   margin-top: 8px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+.sidebar-library::-webkit-scrollbar {
+  display: none;
 }
 .sidebar-projects-title {
   position: sticky;
