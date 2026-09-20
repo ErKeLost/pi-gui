@@ -5225,3 +5225,14 @@ html[data-theme="light"] .composer-agent-mode-indicator {
     transition: none !important;
   }
 }
+
+/* Long conversations: skip layout & paint for messages outside the viewport
+   so scrolling a long thread doesn't rasterize everything at once (white
+   flashes while tiles catch up). `auto` makes the engine remember the last
+   rendered size of each message, so the scrollbar stays stable after the
+   first pass. DOM stays intact — anchors, sidebar sections and search still
+   see every message. */
+.chat-root.tessera-thread-root .transcript-message {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
