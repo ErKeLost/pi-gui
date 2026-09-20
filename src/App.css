@@ -208,7 +208,7 @@ body,
 }
 
 .chat-root.tessera-thread-root {
-  --chat-content-width: 100%;
+  --chat-content-width: min(100%, 1500px);
   grid-template-rows: auto minmax(0, 1fr) auto !important;
   overflow: hidden !important;
 }
@@ -418,7 +418,7 @@ body,
 }
 
 .chat-root.tessera-thread-root {
-  --chat-content-width: 100%;
+  --chat-content-width: min(100%, 1500px);
 }
 .chat-root .tessera-conversation > .ai-conversation-content,
 .tessera-composer-form,
@@ -731,7 +731,7 @@ body,
   width: 100% !important;
 }
 .chat-root.tessera-thread-root {
-  --chat-content-width: 100%;
+  --chat-content-width: min(100%, 1500px);
 }
 .chat-root .tessera-conversation > .ai-conversation-content,
 .tessera-composer-form,
@@ -2710,7 +2710,7 @@ html[data-theme="light"] .composer-agent-mode-indicator {
 /* Conversation rail: fill the full middle pane like Codex, with a readable
    inline gutter that scales with the window. */
 .chat-root.tessera-thread-root {
-  --chat-content-width: 100%;
+  --chat-content-width: min(100%, 1500px);
 }
 .chat-root .tessera-conversation > .ai-conversation-content,
 .tessera-composer-form,
