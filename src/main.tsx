@@ -7,4 +7,6 @@ import './index.css'
 import 'goey-toast/styles.css'
 import {Providers} from './components/Providers'
 document.title = import.meta.env.DEV ? 'Workspace · DEV (HMR)' : 'Workspace'
+const contentWidth = Number(import.meta.env.VITE_CHAT_CONTENT_WIDTH)
+if (contentWidth >= 360) document.documentElement.style.setProperty('--chat-content-cap', `${contentWidth}px`)
 createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={queryClient}><Providers><App/></Providers></QueryClientProvider></StrictMode>)
