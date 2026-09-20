@@ -51,11 +51,11 @@ mod android {
     pub async fn probe() -> Result<Option<String>, String> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| error.to_string())?;
         let response = client
             .get("https://github.com/ErKeLost/pi-gui/releases/latest")
-            .redirect(reqwest::redirect::Policy::none())
             .send()
             .await
             .map_err(|error| error.to_string())?;
@@ -66,11 +66,16 @@ mod android {
         else {
             return Ok(None);
         };
-        let version = location.rsplit('/').next().unwrap_or("").trim().trim_start_matches('v');
+        let version = location
+            .rsplit('/')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .trim_start_matches('v');
         let plausible = version.contains('.')
-            && version
-                .split('.')
-                .all(|part| !part.is_empty() && part.chars().all(|character| character.is_ascii_digit()));
+            && version.split('.').all(|part| {
+                !part.is_empty() && part.chars().all(|character| character.is_ascii_digit())
+            });
         Ok(plausible.then(|| version.to_string()))
     }
 }

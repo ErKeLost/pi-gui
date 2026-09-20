@@ -329,11 +329,30 @@ pub fn computer_use_key_status() -> Result<Value, String> {
 pub fn clipboard_file_paths() -> Vec<String> {
     let (program, args) = if cfg!(target_os = "macos") {
         let script = "on run\n  set out to \"\"\n  try\n    set theItems to the clipboard as «class furl»\n    if class of theItems is list then\n      repeat with p in theItems\n        set out to out & POSIX path of p & linefeed\n      end repeat\n    else\n      set out to POSIX path of theItems & linefeed\n    end if\n  end try\n  return out\nend run";
-        ("/usr/bin/osascript", vec!["-e".to_string(), script.to_string()])
+        (
+            "/usr/bin/osascript",
+            vec!["-e".to_string(), script.to_string()],
+        )
     } else if cfg!(target_os = "windows") {
-        ("powershell", vec!["-NoProfile".to_string(), "-Command".to_string(), "Get-Clipboard -Format FileDropList | ForEach-Object { $_.FullName }".to_string()])
+        (
+            "powershell",
+            vec![
+                "-NoProfile".to_string(),
+                "-Command".to_string(),
+                "Get-Clipboard -Format FileDropList | ForEach-Object { $_.FullName }".to_string(),
+            ],
+        )
     } else {
-        ("xclip", vec!["-o".to_string(), "-selection".to_string(), "clipboard".to_string(), "-t".to_string(), "text/uri-list".to_string()])
+        (
+            "xclip",
+            vec![
+                "-o".to_string(),
+                "-selection".to_string(),
+                "clipboard".to_string(),
+                "-t".to_string(),
+                "text/uri-list".to_string(),
+            ],
+        )
     };
     let Ok(output) = Command::new(program).args(args).output() else {
         return Vec::new();
@@ -363,7 +382,9 @@ fn percent_decode(input: &str) -> String {
     let mut index = 0;
     while index < bytes.len() {
         if bytes[index] == b'%' && index + 2 < bytes.len() {
-            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok().and_then(|value| u8::from_str_radix(value, 16).ok());
+            let hex = std::str::from_utf8(&bytes[index + 1..index + 3])
+                .ok()
+                .and_then(|value| u8::from_str_radix(value, 16).ok());
             if let Some(byte) = hex {
                 out.push(byte);
                 index += 3;
@@ -609,7 +630,10 @@ fn decimal_scaled(text: &str, places: usize) -> Option<f64> {
         Some((int_part, frac_part)) => (int_part, frac_part),
         None => (text, ""),
     };
-    if !int_part.bytes().chain(frac_part.bytes()).all(|byte| byte.is_ascii_digit())
+    if !int_part
+        .bytes()
+        .chain(frac_part.bytes())
+        .all(|byte| byte.is_ascii_digit())
         || int_part.is_empty() && frac_part.is_empty()
     {
         return None;
@@ -645,10 +669,13 @@ fn meta_pricing(
     );
     let mut known = false;
     for (source, target) in rates {
-        let Some(raw) = object.get(*source) else { continue };
+        let Some(raw) = object.get(*source) else {
+            continue;
+        };
         let value = match raw {
             Value::Number(number) => number.as_f64().map(|value| value * scale),
-            Value::String(text) => decimal_scaled(text, 6).or_else(|| text.parse::<f64>().ok().map(|value| value * scale)),
+            Value::String(text) => decimal_scaled(text, 6)
+                .or_else(|| text.parse::<f64>().ok().map(|value| value * scale)),
             _ => None,
         };
         if let Some(value) = value {
@@ -667,8 +694,12 @@ fn meta_modalities(item: &Value, direction: &str) -> Option<Vec<String>> {
             .and_then(|value| value.get(format!("{direction}_modalities"))),
     )
     .or_else(|| meta_strings(item.get(format!("{direction}_modalities"))))
-    .or_else(|| meta_strings(item.get("modalities").and_then(|value| value.get(direction)))
-    )
+    .or_else(|| {
+        meta_strings(
+            item.get("modalities")
+                .and_then(|value| value.get(direction)),
+        )
+    })
 }
 
 /// capability_tags（部分中转站只提供 tags）推导模态。
@@ -748,7 +779,10 @@ fn normalize_provider_model(item: &Value) -> ModelMeta {
 /// models.dev 条目 → 规范元数据（cost 本身就是美元/百万 tokens）。
 fn normalize_modelsdev_model(entry: &Value) -> ModelMeta {
     ModelMeta {
-        name: entry.get("name").and_then(Value::as_str).map(str::to_string),
+        name: entry
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         context_window: entry
             .get("limit")
             .and_then(|limit| limit.get("context"))
@@ -757,8 +791,14 @@ fn normalize_modelsdev_model(entry: &Value) -> ModelMeta {
             .get("limit")
             .and_then(|limit| limit.get("output"))
             .and_then(Value::as_u64),
-        input_modalities: meta_strings(entry.get("modalities").and_then(|value| value.get("input"))),
-        output_modalities: meta_strings(entry.get("modalities").and_then(|value| value.get("output"))),
+        input_modalities: meta_strings(
+            entry.get("modalities").and_then(|value| value.get("input")),
+        ),
+        output_modalities: meta_strings(
+            entry
+                .get("modalities")
+                .and_then(|value| value.get("output")),
+        ),
         reasoning: entry.get("reasoning").and_then(Value::as_bool),
         thinking_levels: None,
         pricing: entry.get("cost").and_then(|cost| {
@@ -881,7 +921,12 @@ fn normalized_endpoint(value: &str) -> String {
 }
 
 /// 只根据运行时配置和目录自身的数据定位模型，不维护厂商或域名映射表。
-fn modelsdev_lookup<'a>(catalog: &'a Value, provider: &str, base_url: &str, id: &str) -> Option<&'a Value> {
+fn modelsdev_lookup<'a>(
+    catalog: &'a Value,
+    provider: &str,
+    base_url: &str,
+    id: &str,
+) -> Option<&'a Value> {
     let providers = catalog.as_object()?;
     let endpoint = normalized_endpoint(base_url);
     let provider_id = normalized_identifier(provider);
@@ -909,9 +954,11 @@ fn modelsdev_lookup<'a>(catalog: &'a Value, provider: &str, base_url: &str, id: 
                 .and_then(|_| model(item))
         })
         .or_else(|| {
-            providers
-                .iter()
-                .find_map(|(key, item)| matches_identity(key, item, &provider_id).then(|| model(item)).flatten())
+            providers.iter().find_map(|(key, item)| {
+                matches_identity(key, item, &provider_id)
+                    .then(|| model(item))
+                    .flatten()
+            })
         })
         .or_else(|| {
             namespace.as_deref().and_then(|namespace| {
@@ -941,7 +988,9 @@ async fn normalized_model_catalog(
     };
     let mut data = Vec::with_capacity(items.len());
     for item in items {
-        let Some(id) = item.get("id").and_then(Value::as_str) else { continue };
+        let Some(id) = item.get("id").and_then(Value::as_str) else {
+            continue;
+        };
         let mut meta = normalize_provider_model(item);
         if let Some(entry) = dev
             .as_ref()
@@ -1221,8 +1270,15 @@ pub async fn probe_provider_models(
         .filter(|value| !value.trim().is_empty())
         .or_else(|| stored_api_key(&auth, &provider))
         .unwrap_or_default();
-    normalized_model_catalog(&provider, &base_url, models_url.as_deref(), &key, &api, auth_header)
-        .await
+    normalized_model_catalog(
+        &provider,
+        &base_url,
+        models_url.as_deref(),
+        &key,
+        &api,
+        auth_header,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1529,16 +1585,34 @@ mod metadata_tests {
     #[test]
     fn lookup_uses_runtime_endpoint_and_provider_identity() {
         let catalog = dev_catalog();
-        assert!(modelsdev_lookup(&catalog, "Zhipu", "https://open.bigmodel.cn/api/paas/v4", "glm-5").is_some());
-        assert!(modelsdev_lookup(&catalog, "z-ai", "https://api.z.ai/api/paas/v4", "glm-4.6").is_some());
-        assert!(modelsdev_lookup(&catalog, "whatever", "https://example.com/v1", "glm-5").is_none());
-        assert!(modelsdev_lookup(&catalog, "whatever", "https://example.com/v1", "glm-unknown").is_none());
+        assert!(modelsdev_lookup(
+            &catalog,
+            "Zhipu",
+            "https://open.bigmodel.cn/api/paas/v4",
+            "glm-5"
+        )
+        .is_some());
+        assert!(
+            modelsdev_lookup(&catalog, "z-ai", "https://api.z.ai/api/paas/v4", "glm-4.6").is_some()
+        );
+        assert!(
+            modelsdev_lookup(&catalog, "whatever", "https://example.com/v1", "glm-5").is_none()
+        );
+        assert!(modelsdev_lookup(
+            &catalog,
+            "whatever",
+            "https://example.com/v1",
+            "glm-unknown"
+        )
+        .is_none());
     }
 
     #[test]
     fn lookup_resolves_prefixed_model_ids() {
         let catalog = json!({"zai": {"models": {"glm-4.6": {"limit": {"context": 204800}}}}});
-        assert!(modelsdev_lookup(&catalog, "z-ai", "https://api.z.ai/v1", "z-ai/glm-4.6").is_some());
+        assert!(
+            modelsdev_lookup(&catalog, "z-ai", "https://api.z.ai/v1", "z-ai/glm-4.6").is_some()
+        );
     }
 
     #[test]
@@ -1553,7 +1627,10 @@ mod metadata_tests {
         });
         let meta = normalize_provider_model(&item);
         assert_eq!(meta.context_window, Some(204800));
-        assert_eq!(meta.input_modalities.as_deref(), Some(["text".to_string(), "image".to_string()].as_slice()));
+        assert_eq!(
+            meta.input_modalities.as_deref(),
+            Some(["text".to_string(), "image".to_string()].as_slice())
+        );
         assert_eq!(meta.reasoning, Some(true));
         let json = meta.to_json();
         assert_eq!(json["pricing"]["input"], 0.6);
@@ -1571,7 +1648,10 @@ mod metadata_tests {
         let meta = normalize_provider_model(&item);
         assert_eq!(meta.context_window, Some(1000000));
         assert_eq!(meta.max_output_tokens, Some(128000));
-        assert_eq!(meta.input_modalities.as_deref(), Some(["text".to_string(), "image".to_string()].as_slice()));
+        assert_eq!(
+            meta.input_modalities.as_deref(),
+            Some(["text".to_string(), "image".to_string()].as_slice())
+        );
     }
 
     #[test]
@@ -1580,7 +1660,13 @@ mod metadata_tests {
         let mut meta = normalize_provider_model(&item);
         assert_eq!(meta.context_window, None);
         let dev = dev_catalog();
-        let entry = modelsdev_lookup(&dev, "Zhipu", "https://open.bigmodel.cn/api/paas/v4", "glm-5").unwrap();
+        let entry = modelsdev_lookup(
+            &dev,
+            "Zhipu",
+            "https://open.bigmodel.cn/api/paas/v4",
+            "glm-5",
+        )
+        .unwrap();
         merge_meta(&mut meta, normalize_modelsdev_model(entry));
         assert_eq!(meta.context_window, Some(204800));
         assert_eq!(meta.max_output_tokens, Some(131072));
@@ -1589,13 +1675,23 @@ mod metadata_tests {
         assert_eq!(meta.pricing.as_ref().unwrap()["output"], 3.2);
 
         // 接口已有值不被覆盖；models.dev 未覆盖的字段保持 None
-        let item = json!({"id": "glm-5", "context_length": 999, "input_modalities": ["text", "image"]});
+        let item =
+            json!({"id": "glm-5", "context_length": 999, "input_modalities": ["text", "image"]});
         let mut meta = normalize_provider_model(&item);
         let dev = dev_catalog();
-        let entry = modelsdev_lookup(&dev, "Zhipu", "https://open.bigmodel.cn/api/paas/v4", "glm-5").unwrap();
+        let entry = modelsdev_lookup(
+            &dev,
+            "Zhipu",
+            "https://open.bigmodel.cn/api/paas/v4",
+            "glm-5",
+        )
+        .unwrap();
         merge_meta(&mut meta, normalize_modelsdev_model(entry));
         assert_eq!(meta.context_window, Some(999));
-        assert_eq!(meta.input_modalities.as_deref(), Some(["text".to_string(), "image".to_string()].as_slice()));
+        assert_eq!(
+            meta.input_modalities.as_deref(),
+            Some(["text".to_string(), "image".to_string()].as_slice())
+        );
         assert_eq!(meta.max_output_tokens, Some(131072));
     }
 
@@ -1618,7 +1714,10 @@ mod metadata_tests {
         assert_eq!(model["maxTokens"], 131072);
         assert_eq!(model["input"], json!(["text"]));
         assert_eq!(model["reasoning"], true);
-        assert_eq!(model["cost"], json!({"input": 1.0, "output": 3.2, "cacheRead": 0.2, "cacheWrite": 0.0}));
+        assert_eq!(
+            model["cost"],
+            json!({"input": 1.0, "output": 3.2, "cacheRead": 0.2, "cacheWrite": 0.0})
+        );
         // thinking_levels 非空时开启 reasoning 并写入映射
         let entry = json!({"id": "m", "reasoning": false, "thinking_levels": {"low": "low", "high": "high"}});
         let model = pi_model_from_meta(&entry).unwrap();

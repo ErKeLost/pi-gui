@@ -1,35 +1,39 @@
 import { invoke } from "@tauri-apps/api/core"
 import { REMOTE_PROTOCOL, type RemoteTheme } from "./remote-protocol"
 
-export type RemoteHostAddresses = {
-  lan: string
-  tailscale?: string | null
+export type RelaySettingsStatus = {
+  relayUrl: string
+  hasHostKey: boolean
 }
 
 export type RemoteHostInfo = {
   running: true
+  mode: "lan" | "relay"
   protocol: typeof REMOTE_PROTOCOL
   hostId: string
-  bindAddress: string
   advertisedAddress: string
   port: number
   token: string
   pairingUri: string
-  lanPairingUri: string
   machineName: string
   connectedClients: number
+  relayUrl?: string | null
+  relayConnected: boolean
 }
 
-export function getRemoteHostAddresses(): Promise<RemoteHostAddresses> {
-  return invoke<RemoteHostAddresses>("remote_host_addresses")
+export function relaySettingsStatus(): Promise<RelaySettingsStatus> {
+  return invoke<RelaySettingsStatus>("relay_settings_status")
 }
 
-export function startRemoteHost(options: { bindAddress?: string; addressMode?: "lan" | "tailscale"; port?: number } = {}): Promise<RemoteHostInfo> {
+export function saveRelaySettings(settings: { relayUrl: string; hostKey: string }): Promise<RelaySettingsStatus> {
+  return invoke<RelaySettingsStatus>("save_relay_settings", { settings })
+}
+
+export function startRemoteHost(options: { mode?: "lan" | "relay"; port?: number } = {}): Promise<RemoteHostInfo> {
   return invoke<RemoteHostInfo>("remote_host_start", {
-    bindAddress: options.bindAddress ?? null,
-    addressMode: options.addressMode ?? null,
+    bindAddress: null,
+    mode: options.mode ?? null,
     port: options.port ?? null,
-    relayUrl: null,
   })
 }
 

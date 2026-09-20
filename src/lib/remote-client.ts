@@ -12,6 +12,7 @@ import {
   type RemoteJson,
   type RemoteRequest,
 } from "./remote-protocol"
+import { decryptRemoteFrame, encryptRemoteFrame } from "./remote-crypto"
 
 export type RemoteClientState = "offline" | "connecting" | "online"
 
@@ -108,8 +109,9 @@ export class OrbitRemoteClient {
       }
       socket.onmessage = event => {
         if (typeof event.data !== "string") return
-        const message = decodeRemoteMessage(event.data)
-        if (isRemoteEvent(message)) this.receive(message)
+        void this.decodeFrame(event.data).then(message => {
+          if (isRemoteEvent(message)) this.receive(message)
+        }).catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))))
       }
       socket.onerror = () => {
         if (this.socket !== socket) return
@@ -132,7 +134,22 @@ export class OrbitRemoteClient {
 
   send(request: RemoteRequest): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) throw new Error("Orbit Host 未连接")
-    this.socket.send(encodeRemoteMessage(request))
+    const socket = this.socket
+    const raw = encodeRemoteMessage(request)
+    const endpoint = this.endpoint
+    if (endpoint?.mode !== "relay") {
+      socket.send(raw)
+      return
+    }
+    void encryptRemoteFrame(raw, endpoint.encryptionKey).then(frame => {
+      if (this.socket === socket && socket.readyState === WebSocket.OPEN) socket.send(frame)
+    }).catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))))
+  }
+
+  private async decodeFrame(raw: string) {
+    const endpoint = this.endpoint
+    const value = endpoint?.mode === "relay" ? await decryptRemoteFrame(raw, endpoint.encryptionKey) : raw
+    return decodeRemoteMessage(value)
   }
 
   sendPiCommand(project: string, command: Record<string, RemoteJson>, timeoutMs = 30_000): Promise<void> {

@@ -44,6 +44,10 @@
 .remote-relay-setting [data-slot="input"] { width: min(360px, 42vw); height: 36px; }
 .remote-address-setting [data-slot="select-trigger"],
 .remote-relay-setting [data-slot="input"] { font: 10px/1.4 var(--font-mono); }
+.remote-relay-config { border-top: 1px solid var(--border); }
+.remote-host-key-row { display: flex; align-items: center; gap: 8px; }
+.remote-host-key-row [data-slot="input"] { flex: 1; }
+.remote-relay-actions { display: flex; justify-content: flex-end; padding: 0 40px 18px; }
 .mobile-access-host-body { display: grid; justify-items: center; gap: 12px; padding: 26px 40px 30px; border-top: 1px solid var(--border); background: color-mix(in oklch, var(--card) 74%, var(--background)); }
 .mobile-access-qr-copy { color: var(--muted-foreground); font-size: 12px; }
 .mobile-access-qr { display: grid; place-items: center; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }

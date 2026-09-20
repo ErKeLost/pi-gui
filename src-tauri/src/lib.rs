@@ -42,7 +42,11 @@ fn probe_login_shell_path() -> Option<String> {
         .ok()?;
     let start = Instant::now();
     loop {
-        if child.try_wait().map(|status| status.is_some()).unwrap_or(false) {
+        if child
+            .try_wait()
+            .map(|status| status.is_some())
+            .unwrap_or(false)
+        {
             break;
         }
         if start.elapsed() > Duration::from_secs(4) {
@@ -130,7 +134,8 @@ pub fn run() {
             mobile_update::mobile_update_install,
             mobile_update::mobile_update_probe,
             remote::remote_host_start,
-            remote::remote_host_addresses,
+            remote::relay_settings_status,
+            remote::save_relay_settings,
             remote::remote_host_status,
             remote::remote_host_stop,
             remote::remote_host_set_theme
