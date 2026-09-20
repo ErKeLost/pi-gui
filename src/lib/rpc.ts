@@ -11,7 +11,6 @@ import {attachRemoteConnection,remoteHostSnapshot,runRemoteHostOperation,sendRem
 import type {RemoteJson} from './remote-protocol'
 export const queryClient=new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false,staleTime:15000,gcTime:120000}}})
 export const native=isTauri()
-const flushWindowMs=Number(import.meta.env.VITE_FLUSH_MS)||100
 export type ProviderModel={
   id:string
   name?:string
@@ -129,7 +128,7 @@ function clearEvents(project:string){const timer=flushTimers.get(project);if(tim
 function dispatch(event:Event,project:string){
  if(!burstEvents.has(event.type)){flushEvents(project);applyEvent(event,project);return}
  const queue=eventQueues.get(project)??[];queue.push(event);eventQueues.set(project,queue)
- if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),flushWindowMs))}
+ if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),100))}
 export function dispatchRemoteEvent(project:string,payload:unknown){
  if(!project||typeof payload!=='object'||payload===null||typeof (payload as {type?:unknown}).type!=='string')return
  dispatch(payload as Event,project)
