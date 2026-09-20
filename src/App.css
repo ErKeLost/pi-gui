@@ -5245,3 +5245,10 @@ html[data-theme="light"] .composer-agent-mode-indicator {
 .chat-root.tessera-thread-root .ai-conversation {
   overscroll-behavior: contain;
 }
+
+/* Keep the composer and thinking beam flush with the conversation text:
+   same inline gutter, same visual edges, like Codex. */
+.chat-root.tessera-thread-root .tessera-composer-form,
+.chat-root.tessera-thread-root .thinking-beam {
+  padding-inline: clamp(20px, 2.5vw, 56px) !important;
+}
