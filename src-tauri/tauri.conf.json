@@ -52,6 +52,18 @@
     "android": {
       "debugApplicationIdSuffix": ".debug"
     },
+    "linux": {
+      "deb": {
+        "depends": [
+          "nodejs (>= 22.19.0)"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "nodejs >= 22.19.0"
+        ]
+      }
+    },
     "resources": [
       "resources/gui-extension.ts",
       "resources/workspace.ts",

@@ -4,11 +4,16 @@ Pushing a `v*` tag starts the `Release desktop app` GitHub Actions workflow.
 It publishes signed installers for Apple Silicon macOS, Intel macOS, Linux x86_64,
 and Windows, then uploads `latest.json` for the built-in Tauri updater.
 
-Linux publishes an AppImage, a Debian package, and an RPM package. Fedora KDE
-Plasma users can install the `.rpm` or run the AppImage. The official Tauri
-updater uses the signed AppImage artifact on Linux; `.deb` and `.rpm`
-installations are updated by installing a newer package manually (or through
-the user's package manager).
+Linux publishes an AppImage, a Debian package, and an RPM package. The `.deb`
+and `.rpm` declare Node.js >= 22.19.0 as a package dependency, so apt/dnf installs
+it automatically when an enabled distribution or NodeSource repository provides
+that version. This adds only package metadata to Orbit's release artifacts.
+
+Fedora KDE Plasma users can install the `.rpm` or run the AppImage. AppImage
+cannot install system dependencies, so AppImage users must provide Node.js >=
+22.19.0 separately. The official Tauri updater uses the signed AppImage artifact
+on Linux; `.deb` and `.rpm` installations are updated by installing a newer
+package manually (or through the user's package manager).
 
 The updater checks GitHub Releases at application startup in production builds.
 When a newer version is available, it offers to download, install, and relaunch
