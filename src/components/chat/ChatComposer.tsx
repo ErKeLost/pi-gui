@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { readImage } from "@tauri-apps/plugin-clipboard-manager";
 import { AnimatePresence, m } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../lib/store";
@@ -30,6 +31,37 @@ function imageAttachments(files: Iterable<File>) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   })] : []));
+}
+
+function blobData(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function nativeClipboardImage(): Promise<ImageAttachment | null> {
+  try {
+    const image = await readImage();
+    try {
+      const [{ width, height }, rgba] = await Promise.all([image.size(), image.rgba()]);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+      if (!blob) return null;
+      return { kind: "image", id: crypto.randomUUID(), name: "粘贴的图片.png", data: await blobData(blob), mimeType: "image/png" };
+    } finally {
+      await image.close();
+    }
+  } catch {
+    return null;
+  }
 }
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"]);
@@ -86,20 +118,31 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
       const target = event.target instanceof Element ? event.target : null;
       if (!target?.closest(".composer")) return;
       const files = Array.from(event.clipboardData?.files ?? []);
-      const images = files.filter(file => file.type.startsWith("image/"));
+      const fileImages = files.filter(file => file.type.startsWith("image/"));
+      const images = fileImages.length > 0 ? fileImages : Array.from(event.clipboardData?.items ?? []).flatMap(item => {
+        if (item.kind !== "file" || !item.type.startsWith("image/")) return [];
+        const file = item.getAsFile();
+        return file ? [file] : [];
+      });
       if (images.length > 0) {
         event.preventDefault();
         void imageAttachments(images).then(next => setAttachments(current => [...current, ...next])).catch(report);
         return;
       }
-      // WKWebView drops Finder file copies on the floor; ask the native
-      // pasteboard for the absolute paths instead.
+      // WebKit can omit clipboard image/file payloads, especially on Linux.
+      // Ask the native clipboard for file paths first, then raw image pixels.
       if (files.length === 0 && !event.clipboardData?.getData("text/plain")) {
         event.preventDefault();
-        addFilePaths(await invoke<string[]>("clipboard_file_paths"));
+        const paths = await invoke<string[]>("clipboard_file_paths");
+        if (paths.length > 0) {
+          addFilePaths(paths);
+          return;
+        }
+        const image = await nativeClipboardImage();
+        if (image) setAttachments(current => [...current, image]);
       }
     };
-    window.addEventListener("paste", listener, { passive: true });
+    window.addEventListener("paste", listener);
     function listener(event: ClipboardEvent) { void pasteInto(event); }
     return () => window.removeEventListener("paste", listener);
   }, [addFilePaths]);

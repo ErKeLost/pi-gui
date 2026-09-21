@@ -8,6 +8,7 @@
   ],
   "permissions": [
     "process:default",
-    "updater:default"
+    "updater:default",
+    "clipboard-manager:allow-read-image"
   ]
 }
