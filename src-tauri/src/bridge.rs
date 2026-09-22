@@ -1,6 +1,7 @@
 //! Pi RPC framing: official docs/rpc.md. Tauri streaming: Channel, not broadcast events.
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::Path;
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
@@ -271,6 +272,93 @@ fn node_runtime() -> Result<(PathBuf, String), String> {
         ));
     }
     Ok((node, version))
+}
+
+#[cfg(target_os = "macos")]
+fn orbit_support_dir() -> Result<PathBuf, String> {
+    Ok(home_dir()?.join("Library/Application Support/ai.pi.gui"))
+}
+
+fn orbit_process_node(node: PathBuf) -> Result<PathBuf, String> {
+    #[cfg(target_os = "macos")]
+    {
+        return macos_orbit_agent(&node);
+    }
+    #[cfg(not(target_os = "macos"))]
+    Ok(node)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_orbit_agent(node: &Path) -> Result<PathBuf, String> {
+    if node.file_name().is_some_and(|name| name == "Orbit Agent") {
+        return Ok(node.to_path_buf());
+    }
+    let app = orbit_support_dir()?.join("runtime/Orbit Agent.app");
+    let macos_dir = app.join("Contents/MacOS");
+    let executable = macos_dir.join("Orbit Agent");
+    let plist = app.join("Contents/Info.plist");
+    fs::create_dir_all(&macos_dir).map_err(|error| format!("无法创建 Orbit Agent 运行时: {error}"))?;
+    let source = fs::canonicalize(node).unwrap_or_else(|_| node.to_path_buf());
+    let stale = match (fs::metadata(&source), fs::metadata(&executable)) {
+        (Ok(src), Ok(dst)) => src.len() != dst.len(),
+        _ => true,
+    };
+    if stale {
+        fs::copy(&source, &executable).map_err(|error| format!("无法安装 Orbit Agent 运行时: {error}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).ok();
+        }
+    }
+    fs::write(&plist, r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>Orbit</string>
+  <key>CFBundleExecutable</key>
+  <string>Orbit Agent</string>
+  <key>CFBundleIdentifier</key>
+  <string>ai.pi.gui.agent</string>
+  <key>CFBundleName</key>
+  <string>Orbit</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>LSUIElement</key>
+  <true/>
+</dict>
+</plist>
+"#).map_err(|error| format!("无法写入 Orbit Agent 信息: {error}"))?;
+    let _ = Command::new("/usr/bin/codesign")
+        .args(["--force", "--sign", "-", "--identifier", "ai.pi.gui.agent"])
+        .arg(&app)
+        .status();
+    Ok(executable)
+}
+
+fn apply_orbit_runtime_env(command: &mut Command, app: &AppHandle, node: &Path, pi: &Path, pi_source: &str, pi_version: &Option<String>) {
+    command
+        .env("ORBIT_HOST_BUNDLE_ID", "ai.pi.gui")
+        .env("ORBIT_AGENT_BUNDLE_ID", "ai.pi.gui.agent")
+        .env("ORBIT_PI_CLI_PATH", pi)
+        .env("ORBIT_PI_NODE_PATH", node)
+        .env("ORBIT_PI_SOURCE", pi_source);
+    if let Some(version) = pi_version {
+        command.env("ORBIT_PI_VERSION", version);
+    }
+    if let Ok(key_path) = typesafe_key_path() {
+        command.env("ORBIT_TYPESAFE_KEY_PATH", key_path);
+    }
+    if let Ok(modules) = app.path().resolve("resources/node_modules", BaseDirectory::Resource) {
+        let current = std::env::var("NODE_PATH").unwrap_or_default();
+        let merged = if current.is_empty() {
+            modules.display().to_string()
+        } else {
+            format!("{modules}{sep}{current}", modules = modules.display(), sep = if cfg!(windows) { ";" } else { ":" }, current = current)
+        };
+        command.env("NODE_PATH", merged);
+    }
 }
 fn home_dir() -> Result<PathBuf, String> {
     std::env::var_os("HOME")
@@ -1757,7 +1845,8 @@ pub async fn pi_connect(
         let path = project(&cwd)?;
         repair_custom_model_costs(&agent_dir()?)?;
         let (pi, pi_source) = pi_path_for_project(Some(&app), &path)?;
-        let (node, _) = node_runtime()?;
+        let (detected_node, _) = node_runtime()?;
+        let node = orbit_process_node(detected_node)?;
         let pi_version = pi_version(&node, &pi);
         // Explicit executable paths also work when Finder's PATH lacks the Node version manager.
         // Connection id lets one project keep multiple live Pi processes (one session each).
@@ -1774,18 +1863,8 @@ pub async fn pi_connect(
         command
             .arg("--extension")
             .arg(extension)
-            .current_dir(&path)
-            // Child-agent extensions can use these values to spawn the exact same
-            // CLI/runtime as the parent connection, without consulting PATH.
-            .env("ORBIT_PI_CLI_PATH", &pi)
-            .env("ORBIT_PI_NODE_PATH", &node)
-            .env("ORBIT_PI_SOURCE", pi_source);
-        if let Some(version) = &pi_version {
-            command.env("ORBIT_PI_VERSION", version);
-        }
-        if let Ok(key_path) = typesafe_key_path() {
-            command.env("ORBIT_TYPESAFE_KEY_PATH", key_path);
-        }
+            .current_dir(&path);
+        apply_orbit_runtime_env(&mut command, &app, &node, &pi, pi_source, &pi_version);
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

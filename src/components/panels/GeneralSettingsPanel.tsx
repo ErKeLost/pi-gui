@@ -96,7 +96,7 @@ function ComputerUseSettings({ desktop, online, running }: { desktop: boolean; o
     finally { setBusy(false); }
   }
   return <>
-    <SettingRow title="电脑操作" description={desktop ? "由你手动打开。打开后用平常说话即可，例如「打开日历翻到上个月」。底层由 Cua Driver 执行，macOS 需要辅助功能与屏幕录制权限。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
+    <SettingRow title="电脑操作" description={desktop ? "由你手动打开。打开后用平常说话即可，例如「打开日历翻到上个月」。macOS 请在系统设置里允许「Orbit」的辅助功能和屏幕录制（两页都要开），不要去找 Node。改完后完全退出 Orbit 再打开。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
       {desktop ? <Switch aria-label="电脑操作" checked={enabled} disabled={!online || running} onChange={checked => void setComputerUseMode(checked).catch(report)} /> : <span className="remote-settings-note">电脑端设置</span>}
     </SettingRow>
     <SettingRow title="Jev API Key" description={desktop ? "从 TypeSafe 控制台粘贴，只存在这台电脑。保存不等于打开电脑操作，开关仍由你控制。" : "Jev Key 由电脑端保管。"}>

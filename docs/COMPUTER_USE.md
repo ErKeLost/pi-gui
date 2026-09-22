@@ -32,6 +32,20 @@ User -> Pi typed target + phase plan
 
 Orbit 不向 Pi 注册 Cua Driver 的原始工具。`gui_task` 首次执行时懒加载同进程 native SDK，会话关闭时显式 shutdown；Jev无法访问 Driver实例、element token、截图或坐标，也不能绕过 phase 与 verifier。
 
+## 运行时身份与路径
+
+macOS 辅助功能按**进程代码签名**授权，不能把权限从 Pi GUI.app 传给系统 Node。因此 Pi 会话在 macOS 上通过 `~/Library/Application Support/ai.pi.gui/runtime/Orbit Agent.app` 启动：这是带 `ai.pi.gui.agent` 标识、显示名为 Orbit 的包装运行时，用户只需在系统设置里允许 **Orbit** 的辅助功能和屏幕录制。
+
+| 变量 | 含义 |
+| --- | --- |
+| `ORBIT_HOST_BUNDLE_ID` | 主应用 `ai.pi.gui` |
+| `ORBIT_AGENT_BUNDLE_ID` | 电脑操作运行时 `ai.pi.gui.agent` |
+| `ORBIT_PI_NODE_PATH` | 实际启动 Pi 的可执行文件（macOS 为 Orbit Agent） |
+| `ORBIT_PI_CLI_PATH` | 捆绑的 Pi CLI |
+| `ORBIT_TYPESAFE_KEY_PATH` | Jev Key 文件 |
+| `NODE_PATH` | 捆绑的 `@trycua` / `@typesafe-ai` 模块 |
+
+
 ## 任务协议
 
 `gui_task` 只有一套当前协议：

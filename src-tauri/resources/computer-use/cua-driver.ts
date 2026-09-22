@@ -23,7 +23,7 @@ async function runtime(): Promise<{ api: CuaModule; driver: CuaRuntime }> {
     if (process.platform === "darwin") {
       let permissions = api.currentMacOsPermissionStatus()
       if (!permissions.accessibility || !permissions.screenRecording) permissions = api.requestMacOsPermissions()
-      if (!permissions.accessibility || !permissions.screenRecording) throw new Error(`Cua Driver requires macOS Accessibility and Screen Recording permissions. accessibility=${permissions.accessibility} screenRecording=${permissions.screenRecording}`)
+      if (!permissions.accessibility || !permissions.screenRecording) throw new Error(macosPermissionError(permissions))
     }
     const driver = api.CuaDriver.create(undefined)
     if (!driver.isAvailable()) throw new Error("Cua Driver is unavailable on this platform")
@@ -240,6 +240,20 @@ async function callTool(current: CuaContext, name: string, args: Record<string, 
     }
     throw error
   }
+}
+
+function macosPermissionError(permissions: { accessibility: boolean; screenRecording: boolean }): string {
+  const missing = [
+    permissions.accessibility ? null : "辅助功能",
+    permissions.screenRecording ? null : "屏幕录制",
+  ].filter((item): item is string => item !== null)
+  return [
+    `Cua Driver 没有 macOS ${missing.join("和")} 授权。`,
+    `电脑操作跑在 Orbit Agent（${process.execPath}），系统设置里应出现「Orbit」，不是 Node、Pi GUI 或 CuaDriver.app。`,
+    `请打开 系统设置 → 隐私与安全性 → ${missing.join(" / ")}，允许 Orbit，然后完全退出 Orbit 再打开。`,
+    `辅助功能和屏幕录制是两页，都要开。`,
+    `当前状态 accessibility=${permissions.accessibility} screenRecording=${permissions.screenRecording}`,
+  ].join(" ")
 }
 
 function abortOptions(signal?: AbortSignal): { signal: AbortSignal } | undefined {
