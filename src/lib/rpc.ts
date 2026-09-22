@@ -298,7 +298,7 @@ export async function forgetProject(project:string){
  const files=readSessionFiles();delete files[project];localStorage.setItem(SESSION_FILES_KEY,JSON.stringify(files))
  if(useWorkspace.getState().cwd===project)useWorkspace.getState().set({...fresh(),cwd:'',connectionId:''})
 }
-export async function stop(){const id=route(),cleared=await request<{steering:string[];followUp:string[]}>({type:'clear_queue'},30000,id);await request({type:'abort'},60000,id);patch(id,{draft:[current(id).draft,...cleared.steering,...cleared.followUp].filter(Boolean).join('\n')});await refresh(id)}
+export async function stop(){const id=route(),cleared=await request<{steering:string[];followUp:string[]}>({type:'clear_queue'},30000,id);await request({type:'abort'},60000,id);const s=current(id);patch(id,{draft:[s.draft,...cleared.steering,...cleared.followUp].filter(Boolean).join('\n'),transcript:reduceEvent(s.transcript,{type:'queued_preview_clear'})});await refresh(id)}
 export async function changeSession(command:RpcCommand){
  const cwd=useWorkspace.getState().cwd,active=route(cwd),running=current(active).transcript.running
  if(command.type==='switch_session'){

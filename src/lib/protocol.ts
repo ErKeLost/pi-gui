@@ -70,6 +70,18 @@ export function normalizeMessage(message: PiMessage): PiMessage {
   if(message.role==='bashExecution')return {...message,content:`Bash: ${message.command ?? ''}\n\n${message.output ?? ''}`}
   return {...message,content:message.summary ?? ''}
 }
+export function messagePlainText(message: PiMessage | undefined): string {
+  if (!message) return ''
+  if (typeof message.content === 'string') return message.content
+  if (!Array.isArray(message.content)) return ''
+  return message.content.flatMap(part => part.type === 'text' && part.text ? [part.text] : []).join('\n')
+}
+const isQueuedPreview = (item: DisplayMessage) => item.id.startsWith('queued-')
+const queuedStillPending = (item: DisplayMessage, queue: Transcript['queue']) => {
+  if (!isQueuedPreview(item)) return true
+  const text = messagePlainText(item.message)
+  return queue.steering.includes(text) || queue.followUp.includes(text)
+}
 export function hydrate(messages: PiMessage[]): Transcript {
   const state = emptyTranscript()
   for (const raw of messages) {
@@ -96,11 +108,11 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
         phase: '就绪',
         bash: state.bash ? { ...state.bash, running: false } : null,
         turnStartedAt: null,
-        messages: elapsedMs == null ? state.messages : state.messages.map(item => {
+        messages: (elapsedMs == null ? state.messages : state.messages.map(item => {
           if (durationOwner || item.startedAt !== state.turnStartedAt || item.message.role !== 'assistant') return item
           durationOwner = true
           return { ...item, elapsedMs }
-        }),
+        })).filter(item => queuedStillPending(item, state.queue)),
       }
     }
     case 'agent_end': return state
@@ -109,14 +121,34 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
     case 'auto_retry_start': return { ...state, running: true, phase: '正在重试' }
     case 'extension_error': return { ...state, error: String(event.error ?? event.errorMessage ?? '扩展执行失败') }
     case 'queue_update': return { ...state, queue: { steering: event.steering ?? [], followUp: event.followUp ?? [] } }
+    case 'queued_preview': {
+      if (!event.message || event.message.role !== 'user') return state
+      const id = typeof event.id === 'string' ? event.id : `queued-${state.messages.length}`
+      return { ...state, messages: [...state.messages, { id, message: normalizeMessage(event.message) }] }
+    }
+    case 'queued_preview_revert': {
+      const id = typeof event.id === 'string' ? event.id : ''
+      return id ? { ...state, messages: state.messages.filter(item => item.id !== id) } : state
+    }
+    case 'queued_preview_clear': return { ...state, messages: state.messages.filter(item => !isQueuedPreview(item)) }
     case 'message_start': {
       if (!event.message || event.message.role === 'toolResult' || (event.message.role==='custom'&&event.message.display===false)) return state
-      state.messages = [...state.messages, {
+      const message = normalizeMessage(event.message)
+      const entry: DisplayMessage = {
         id: `live-${state.messages.length}-${event.message.timestamp ?? 0}`,
-        message: normalizeMessage(event.message),
-        ...(event.message.role === 'assistant' ? { startedAt: state.turnStartedAt ?? Date.now() } : {}),
-      }]
-      if (event.message.role === 'assistant') state.active = state.messages.length - 1
+        message,
+        ...(message.role === 'assistant' ? { startedAt: state.turnStartedAt ?? Date.now() } : {}),
+      }
+      if (message.role === 'user') {
+        const preview = state.messages.findIndex(isQueuedPreview)
+        if (preview >= 0) {
+          state.messages = [...state.messages]
+          state.messages[preview] = entry
+          return state
+        }
+      }
+      state.messages = [...state.messages, entry]
+      if (message.role === 'assistant') state.active = state.messages.length - 1
       return state
     }
     case 'message_update': {

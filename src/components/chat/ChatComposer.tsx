@@ -89,8 +89,6 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
   const project = useWorkspace(state => state.cwd);
   const connectionId = useWorkspace(state => state.connectionId);
   const transcriptRunning = useWorkspace(state => state.transcript.running);
-  const steeringCount = useWorkspace(state => state.transcript.queue.steering.length);
-  const followUpCount = useWorkspace(state => state.transcript.queue.followUp.length);
   const online = useWorkspace(state => state.connection === "online");
   const runtimeTarget = useWorkspace(state => state.runtimeTarget);
   const composerKey = connectionId || project;
@@ -161,17 +159,30 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
     const streamingBehavior = deliveryOverride.current ?? "steer";
     deliveryOverride.current = null;
     useWorkspace.getState().event({ type: "prompt_submitted" });
+    const previewId = `queued-${crypto.randomUUID()}`;
     try {
       if (!transcriptRunning) await Promise.all([syncMultiAgentMode(project), syncComputerUseMode(project)]);
     const fileChips = attachments.filter((attachment): attachment is FileAttachment => attachment.kind === "file");
     const images = attachments.filter((attachment): attachment is ImageAttachment => attachment.kind === "image");
     const prefix = fileChips.map(attachment => `[文件] ${attachment.path}`).join("\n");
     const text = prefix ? `${prefix}\n\n${message.text}`.trim() : message.text;
+      if (transcriptRunning) {
+        const content = [
+          ...(text ? [{ type: "text" as const, text }] : []),
+          ...images.map(attachment => ({ type: "image" as const, data: attachment.data, mimeType: attachment.mimeType })),
+        ];
+        useWorkspace.getState().event({
+          type: "queued_preview",
+          id: previewId,
+          message: { role: "user", content: content.length === 1 && content[0]?.type === "text" ? text : content, timestamp: Date.now() },
+        });
+      }
       await request({ type: "prompt", message: text, images: images.map(attachment => ({ type: "image" as const, data: attachment.data, mimeType: attachment.mimeType })), ...(transcriptRunning ? { streamingBehavior } : {}) }, 45000, project);
       setAttachments([]);
       setDraft("");
       onSubmitted();
     } catch (error) {
+      if (transcriptRunning) useWorkspace.getState().event({ type: "queued_preview_revert", id: previewId });
       report(error);
     }
   }
@@ -197,7 +208,6 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
           <div className="composer-tool-cluster"><Button variant="ghost" className="size-8 rounded-full p-0 text-muted-foreground hover:text-foreground hover:bg-accent" aria-label="上传附件" title="上传图片" onClick={() => fileInput.current?.click()}><Icon name="plus" className="size-4" /></Button></div>
           <ComposerModelSelector />
           <ComposerAgentMode />
-          {(steeringCount > 0 || followUpCount > 0) && <span className="composer-queue-status" aria-live="polite">已排队 {steeringCount + followUpCount}</span>}
           {runtimeTarget !== "mobile" && <ComposerContext />}
           <PromptInputSubmit status={transcriptRunning ? "streaming" : "ready"} disabled={!online} title={transcriptRunning ? "暂停生成" : "发送消息"} aria-label={transcriptRunning ? "暂停生成" : "发送消息"} onClick={transcriptRunning ? () => void stop().catch(report) : undefined} />
         </div>

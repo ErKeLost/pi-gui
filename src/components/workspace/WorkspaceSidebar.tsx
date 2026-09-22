@@ -88,10 +88,17 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
     finally { setBusyProject(""); }
   }
 
-  async function newSession() {
-    await changeSession({ type: "new_session" });
-    const project = useProjects.getState().projects.find(item => item.path === cwd);
-    if (project) await syncProjectRoots(project);
+  async function newSession(projectPath = cwd) {
+    setBusyProject(projectPath);
+    setCollapsed(current => { const next = new Set(current); next.delete(projectPath); return next; });
+    try {
+      if (cwd !== projectPath || workspaceMode !== "project" || !online) await connect(projectPath, "project");
+      await changeSession({ type: "new_session" });
+      const project = useProjects.getState().projects.find(item => item.path === projectPath);
+      if (project) await syncProjectRoots(project);
+      onNavigate?.();
+    } catch (error) { report(error); }
+    finally { setBusyProject(""); }
   }
 
   async function saveProject(project: Project) {
@@ -140,7 +147,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
   return <div className="sidebar-pane">
     {!hideTitlebar && <WorkspaceTitlebar variant="sidebar" sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />}
     <aside className="sidebar">
-      <Button variant="outline" className="new-session" disabled={!online} onClick={() => { onNavigate?.(); void newSession().catch(report); }}><Icon name="plus" />新建会话<kbd>⌘ N</kbd></Button>
+      <Button variant="outline" className="new-session" disabled={!online} onClick={() => void newSession().catch(report)}><Icon name="plus" />新建会话<kbd>⌘ N</kbd></Button>
       <nav aria-label="主导航">{navigation.map(item => <Button key={item.id} className={`nav-item ${panel === item.id ? "selected" : ""}`} onClick={() => { useWorkspace.getState().set({ panel: item.id }); onNavigate?.(); }}><Icon name={item.icon} /><span>{item.label}</span>{item.id === "commands" && <Icon name="arrow-up-right" />}</Button>)}</nav>
 
       <div className="sidebar-library">
@@ -159,9 +166,10 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
                       <Icon name={isExpanded ? "folder-open" : "folder-simple"} /><span title={project.path}>{project.name}</span>{busyProject === project.path && <i className="session-working-indicator" aria-hidden />}
                     </CollapsibleTrigger>
                   </ContextMenuTrigger>
+                  <Button className="sidebar-project-new" title={`在 ${project.name} 新建会话`} aria-label={`在 ${project.name} 新建会话`} disabled={busyProject === project.path} onClick={event => { event.preventDefault(); event.stopPropagation(); void newSession(project.path); }}><Icon name="note-pencil" /></Button>
                   <ProjectActions project={project} homeDir={homeDir} taskCount={merged.sessions.length} onEdit={() => setEditingProject(project)} />
                 </div>
-                <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => setEditingProject(project)}><Icon name="gear-six" />编辑项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
+                <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => void newSession(project.path)}><Icon name="note-pencil" />新建会话</ContextMenuItem><ContextMenuItem onClick={() => setEditingProject(project)}><Icon name="gear-six" />编辑项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
               </ContextMenu>
               <CollapsibleContent className="sidebar-project-panel"><div className="sidebar-project-sessions">
                 {merged.sessions.map(session => {

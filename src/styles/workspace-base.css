@@ -53,6 +53,7 @@
 .composer.studio-composer .composer-selectors [data-slot="select-value"] { font-size: 18px; color: var(--foreground); }
 .composer.studio-composer .composer-selectors [data-slot="select-value"] { font-size: 18px; }
 .composer-session-modes { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.composer-mode-tooltip { display: grid; min-width: 0; place-items: stretch; }
 .composer-agent-mode { display: inline-grid; grid-template-columns: repeat(2, 32px); height: 30px; padding: 2px; border: 1px solid color-mix(in oklch, var(--border) 76%, transparent); border-radius: var(--radius-2xl); background: var(--muted); }
 .composer-computer-use { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid color-mix(in oklch, var(--border) 76%, transparent); border-radius: var(--radius-2xl); background: var(--muted); color: var(--muted-foreground); }
 .composer-computer-use.selected { color: var(--foreground); background: var(--background); box-shadow: 0 1px 3px color-mix(in oklch, var(--foreground) 10%, transparent); }
