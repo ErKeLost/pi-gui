@@ -86,6 +86,12 @@ function patch(id:string,value:Partial<Snapshot>){
  if(previous.state?.sessionFile!==next.state?.sessionFile&&next.state?.sessionFile)invalidateSessionList(id)
 }
 function failPending(project:string,message:string){for(const [id,p]of pending){if(p.project!==project)continue;clearTimeout(p.timeout);p.reject(new Error(message));pending.delete(id)}}
+export function suspendRemoteConnection(message='电脑连接已断开，正在重连'){
+ if(!mobileRuntime())return
+ const ids=new Set([...connections.keys(),useWorkspace.getState().connectionId].filter(Boolean))
+ for(const id of ids){clearEvents(id);failPending(id,message);patch(id,{connection:'connecting',error:null})}
+ queryClient.cancelQueries()
+}
 function applyEvent(event:Event,project:string){
  if(event.type==='response'){
   const response=event as unknown as RpcResponse;if(!response.id)return;const p=pending.get(response.id)

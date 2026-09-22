@@ -60,7 +60,7 @@ export class OrbitRemoteClient {
     this.handlers = handlers
     this.options = {
       reconnectBaseMs: options.reconnectBaseMs ?? 500,
-      reconnectMaxMs: options.reconnectMaxMs ?? 15_000,
+      reconnectMaxMs: options.reconnectMaxMs ?? 5_000,
       heartbeatMs: options.heartbeatMs ?? 15_000,
       heartbeatTimeoutMs: options.heartbeatTimeoutMs ?? 5_000,
     }

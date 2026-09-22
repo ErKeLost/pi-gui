@@ -7,11 +7,11 @@ type RuntimeContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel" |
 type ToolResult = AgentToolResult<AgentSnapshot & { agent?: AgentNode; output?: string; results?: AgentResult[] }>
 
 export const SUBAGENT_TOOL_NAMES = ["spawn_agent", "spawn_agents", "send_message", "followup_task", "wait_agent", "interrupt_agent", "list_agents"] as const
-const ROOT_ORCHESTRATION_INSTRUCTIONS = `
+export const ROOT_ORCHESTRATION_INSTRUCTIONS = `
 <multi_agent_mode>
 You are the supervisor for this task and remain responsible for the final answer. Delegate when a specialist or independent parallel work will improve the result; do not delegate trivial requests by habit. Use spawn_agent for one bounded delegation: it waits for that child and returns its completed result. Use spawn_agents for independent tasks: it runs them in parallel and returns all completed results together. After receiving delegation results, decide whether to synthesize, continue, or delegate a follow-up. Do not use send_message, wait_agent, or process state as a substitute for the delegation result unless you are controlling an already-running task.
 </multi_agent_mode>`
-const CHILD_ORCHESTRATION_INSTRUCTIONS = `
+export const CHILD_ORCHESTRATION_INSTRUCTIONS = `
 <multi_agent_mode>
 You are a specialist delegated by a parent supervisor. Complete only the assigned task, use the available repository tools, and return a concise result with evidence and changed files. Delegate further only when the assigned task has a genuinely independent workstream that cannot be handled directly; otherwise return your result to the parent.
 </multi_agent_mode>`

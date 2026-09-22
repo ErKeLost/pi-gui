@@ -1769,21 +1769,8 @@ pub async fn pi_connect(
             .path()
             .resolve("resources/gui-extension.ts", BaseDirectory::Resource)
             .map_err(|e| e.to_string())?;
-        let computer_use = app
-            .path()
-            .resolve(
-                "resources/pi-computer-use/extensions/computer-use.ts",
-                BaseDirectory::Resource,
-            )
-            .ok()
-            .filter(|path| path.is_file());
         let mut command = Command::new(&node);
         command.arg(&pi).args(["--mode", "rpc", "--offline"]);
-        // Load Computer Use before the GUI extension so session_start can disable
-        // those tools until the user explicitly turns the mode on.
-        if let Some(path) = &computer_use {
-            command.arg("--extension").arg(path);
-        }
         command
             .arg("--extension")
             .arg(extension)
@@ -1796,8 +1783,8 @@ pub async fn pi_connect(
         if let Some(version) = &pi_version {
             command.env("ORBIT_PI_VERSION", version);
         }
-        if let Some(key) = typesafe_api_key() {
-            command.env("TYPESAFE_API_KEY", key);
+        if let Ok(key_path) = typesafe_key_path() {
+            command.env("ORBIT_TYPESAFE_KEY_PATH", key_path);
         }
         let mut child = command
             .stdin(Stdio::piped())

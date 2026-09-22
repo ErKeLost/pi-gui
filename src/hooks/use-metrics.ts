@@ -5,7 +5,8 @@ import { useWorkspace } from "../lib/store";
 import { usePageVisible } from "../lib/page-visibility";
 
 export type Stats = Extract<RpcResponse, { command: "get_session_stats"; success: true }>["data"];
-export type RuntimeInfo = { compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }; retry: { enabled: boolean; maxRetries: number; baseDelayMs: number }; providerRetry: Record<string, unknown>; transport: string; projectTrusted: boolean; systemPrompt: string; thinkingBudgets?: Record<string, number>; idle: boolean; pending: boolean; scopedModels: unknown[] };
+export type ContextBreakdown = { systemChars?: number; skillsChars?: number; rulesChars?: number; toolChars?: number; dynamicChars?: number; subagentChars?: number };
+export type RuntimeInfo = { compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }; retry: { enabled: boolean; maxRetries: number; baseDelayMs: number }; providerRetry: Record<string, unknown>; transport: string; projectTrusted: boolean; systemPrompt: string; thinkingBudgets?: Record<string, number>; idle: boolean; pending: boolean; scopedModels: unknown[]; breakdown?: ContextBreakdown };
 
 export function useMetrics() {
   const cwd = useWorkspace(state => state.cwd);

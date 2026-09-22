@@ -96,6 +96,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
   const [draft, setDraft] = useState(() => useWorkspace.getState().draft || composerCache.get(composerKey)?.text || "");
   const deliveryOverride = useRef<"steer" | "followUp" | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const composerForm = useRef<HTMLFormElement>(null);
 
   const addFilePaths = useCallback((paths: string[]) => {
     if (!paths.length) return;
@@ -189,7 +190,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
 
   return <div className="composer-container tessera-composer-dock"><div className="tessera-composer-form">
     <Beam className="studio-composer-beam" size="line" borderRadius={14} active={transcriptRunning || compacting}>
-      <PromptInput onSubmit={message => void submit(message)} className="composer studio-composer" allowEmpty={attachments.length > 0}>
+      <PromptInput ref={composerForm} onSubmit={message => void submit(message)} className="composer studio-composer" allowEmpty={attachments.length > 0}>
         <AnimatePresence>{attachments.length > 0 && <m.div className="attachments" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
           {attachments.map(attachment => attachment.kind === "image"
             ? <div className="attachment-preview" key={attachment.id}><img src={`data:${attachment.mimeType};base64,${attachment.data}`} alt={attachment.name} decoding="async" /><Button type="button" variant="secondary" size="icon" className="attachment-remove" title={`移除 ${attachment.name}`} aria-label={`移除 ${attachment.name}`} onClick={() => setAttachments(current => current.filter(item => item.id !== attachment.id))}><Icon name="x" /></Button></div>
@@ -208,7 +209,7 @@ export function ChatComposer({ compacting, onSubmitted }: { compacting: boolean;
           <div className="composer-tool-cluster"><Button variant="ghost" className="size-8 rounded-full p-0 text-muted-foreground hover:text-foreground hover:bg-accent" aria-label="上传附件" title="上传图片" onClick={() => fileInput.current?.click()}><Icon name="plus" className="size-4" /></Button></div>
           <ComposerModelSelector />
           <ComposerAgentMode />
-          {runtimeTarget !== "mobile" && <ComposerContext />}
+          {runtimeTarget !== "mobile" && <ComposerContext container={composerForm} />}
           <PromptInputSubmit status={transcriptRunning ? "streaming" : "ready"} disabled={!online} title={transcriptRunning ? "暂停生成" : "发送消息"} aria-label={transcriptRunning ? "暂停生成" : "发送消息"} onClick={transcriptRunning ? () => void stop().catch(report) : undefined} />
         </div>
       </PromptInput>

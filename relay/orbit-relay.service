@@ -13,7 +13,8 @@ Environment=PORT=8787
 Environment=MAX_CLIENTS_PER_HOST=8
 Environment=MAX_HOSTS_PER_IP=4
 Environment=MAX_AUTH_FAILURES_PER_MINUTE=20
-ExecStart=/usr/local/bin/bun /opt/orbit-relay/server.mjsRestart=always
+ExecStart=/usr/local/bin/bun /opt/orbit-relay/server.mjs
+Restart=always
 RestartSec=2
 NoNewPrivileges=true
 PrivateTmp=true

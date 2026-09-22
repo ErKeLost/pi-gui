@@ -1,19 +1,13 @@
-import { useRef, type CompositionEvent, type FormEvent, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useRef, type CompositionEvent, type FormEvent, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { Icon } from "../Icon";
 import { shouldSubmitComposer } from "../../lib/composer";
 export type PromptInputMessage = { text: string; files?: File[] };
-export function PromptInput({
-  onSubmit,
-  children,
-  className = "",
-  allowEmpty = false,
-  ...props
-}: Omit<React.FormHTMLAttributes<HTMLFormElement>, "onSubmit"> & {
+export const PromptInput = forwardRef<HTMLFormElement, Omit<React.FormHTMLAttributes<HTMLFormElement>, "onSubmit"> & {
   onSubmit: (message: PromptInputMessage) => void;
   allowEmpty?: boolean;
-}) {
+}>(function PromptInput({ onSubmit, children, className = "", allowEmpty = false, ...props }, ref) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -26,13 +20,14 @@ export function PromptInput({
   return (
     <form
       {...props}
+      ref={ref}
       className={`ai-prompt-input ${className}`}
       onSubmit={submit}
     >
       {children}
     </form>
   );
-}
+});
 export function PromptInputTextarea({
   value,
   onChange,

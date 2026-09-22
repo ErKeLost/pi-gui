@@ -9,7 +9,7 @@ const output = resolve(root, "src-tauri/resources/pi-runtime");
 const bun = process.platform === "win32" ? resolve(root, "node_modules/bun/bin/bun.exe") : resolve(root, "node_modules/.bin/bun");
 const marker = resolve(output, "package.json");
 const current = existsSync(marker) ? JSON.parse(readFileSync(marker, "utf8")) : null;
-const buildFormat = 3;
+const buildFormat = 4;
 
 const computerUse = spawnSync(process.execPath, [resolve(root, "scripts/sync-computer-use.mjs")], { cwd: root, stdio: "inherit" });
 if (computerUse.status !== 0) process.exit(computerUse.status ?? 1);

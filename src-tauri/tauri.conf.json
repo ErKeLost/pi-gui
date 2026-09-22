@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Orbit",
-  "version": "0.2.64",
+  "version": "0.2.65",
   "identifier": "ai.pi.gui",
   "build": {
     "frontendDist": "../dist",
@@ -69,7 +69,7 @@
       "resources/workspace.ts",
       "resources/subagents",
       "resources/computer-use",
-      "resources/pi-computer-use",
+      "resources/node_modules",
       "resources/pi-runtime"
     ],
     "createUpdaterArtifacts": true

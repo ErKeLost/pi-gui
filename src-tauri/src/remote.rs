@@ -693,7 +693,9 @@ mod desktop {
     }
 
     fn set_relay_timeout(stream: &mut openssl::ssl::SslStream<TcpStream>) {
-        let timeout = Some(Duration::from_secs(1));
+        // Keep the relay loop responsive to outbound Pi events. A one-second
+        // blocking read made every phone update appear noticeably delayed.
+        let timeout = Some(SOCKET_POLL_INTERVAL);
         let _ = stream.get_ref().set_read_timeout(timeout);
         let _ = stream.get_ref().set_write_timeout(timeout);
     }

@@ -109,7 +109,12 @@ const server = Bun.serve({
           return socket.close(1008, "Invalid host credentials")
         }
         const previous = hosts.get(hostId)
-        if (previous) previous.socket.close(1012, "Orbit Host replaced")
+        if (previous) {
+          // Remove the old registration before installing the replacement. Its
+          // close callback may run later and must not tear down the new host.
+          closeHost(hostId, previous)
+          previous.socket.close(1012, "Orbit Host replaced")
+        }
         socket.data.authenticated = true
         const host = { socket, ip, clientToken: frame.clientToken, clients: new Map() }
         hosts.set(hostId, host)
@@ -135,7 +140,12 @@ const server = Bun.serve({
       log(`socket closed role=${role} host=${hostId} client=${clientId || "-"} code=${code || "-"} reason=${reason || "-"}`)
       const host = hosts.get(hostId)
       if (!host) return
-      if (role === "host") return closeHost(hostId, host)
+      if (role === "host") {
+        // A replaced host closes asynchronously. Only the socket that still
+        // owns this registration is allowed to remove it.
+        if (host.socket !== socket) return
+        return closeHost(hostId, host)
+      }
       if (host.clients.get(clientId) !== socket) return
       host.clients.delete(clientId)
       log(`client ${clientId} detached from ${hostId}`)

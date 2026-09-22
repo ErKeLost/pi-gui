@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useProjects } from "../lib/projects";
-import { changeSession, connect, connectRemoteConnection, dispatchRemoteEvent, loadMessages, report } from "../lib/rpc";
+import { changeSession, connect, connectRemoteConnection, dispatchRemoteEvent, loadMessages, report, suspendRemoteConnection } from "../lib/rpc";
 import { detectRuntimeEnvironment } from "../lib/runtime-environment";
 import { openRemoteRuntime, remoteHostSnapshot, storedPairingUri } from "../lib/remote-runtime";
 import type { RemoteConnection, RemoteHostSnapshot } from "../lib/remote-protocol";
@@ -72,7 +72,7 @@ export function useWorkspaceBootstrap() {
         onState: state => {
           if (useWorkspace.getState().runtimeTarget !== "mobile" || !remoteReady.current) return;
           if (state === "online") { void recoverRemote(); return; }
-          useWorkspace.getState().set({ connection: "connecting", error: null });
+          suspendRemoteConnection();
           setPairing(current => ({ ...current, required: false, connecting: true, error: null }));
         },
         onError: error => { if (!remoteReady.current) useWorkspace.getState().set({ error: error.message }); },
