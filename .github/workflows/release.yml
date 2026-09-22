@@ -77,6 +77,35 @@ jobs:
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
 
+  updater-json:
+    name: Public updater URLs
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Rewrite latest.json to browser download URLs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release download "$tag" --pattern latest.json --repo "${GITHUB_REPOSITORY}"
+          python3 - <<'PY'
+          import json, pathlib, subprocess, os
+          tag = os.environ['GITHUB_REF_NAME']
+          repo = os.environ['GITHUB_REPOSITORY']
+          data = json.loads(subprocess.check_output(['gh','release','view',tag,'--json','assets'], text=True))
+          id_to_url = {asset['apiUrl'].rstrip('/').split('/')[-1]: asset['url'] for asset in data['assets']}
+          latest = json.loads(pathlib.Path('latest.json').read_text())
+          for meta in latest.get('platforms', {}).values():
+            url = meta.get('url', '')
+            if '/releases/assets/' in url:
+              meta['url'] = id_to_url[url.rstrip('/').split('/')[-1]]
+          pathlib.Path('latest.json').write_text(json.dumps(latest, indent=2) + '\n')
+          PY
+          gh release upload "$tag" latest.json --clobber --repo "${GITHUB_REPOSITORY}"
+
   android:
     name: Android ARM64
     runs-on: ubuntu-22.04
