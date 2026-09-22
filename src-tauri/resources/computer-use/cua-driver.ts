@@ -14,34 +14,23 @@ type WindowInfo = import("@trycua/cua-driver").WindowInfo
 type CuaContext = { api: CuaModule; driver: CuaRuntime }
 type WindowTarget = { pid: number; windowId: bigint; appName: string; title: string; appResolution: TargetResolution; windowResolution?: TargetResolution }
 
-let sharedRuntime: Promise<{ api: CuaModule; driver: CuaRuntime }> | undefined
 const session = `orbit-gui-${process.pid}`
 
-async function runtime(): Promise<{ api: CuaModule; driver: CuaRuntime }> {
-  if (sharedRuntime) return sharedRuntime
-  const creating = import("@trycua/cua-driver").then(api => {
-    if (process.platform === "darwin") {
-      let permissions = api.currentMacOsPermissionStatus()
-      if (!permissions.accessibility || !permissions.screenRecording) permissions = api.requestMacOsPermissions()
-      if (!permissions.accessibility || !permissions.screenRecording) throw new Error(macosPermissionError(permissions))
-    }
-    const driver = api.CuaDriver.create(undefined)
-    if (!driver.isAvailable()) throw new Error("Cua Driver is unavailable on this platform")
-    return { api, driver }
-  })
-  sharedRuntime = creating
-  try { return await creating }
-  catch (error) {
-    if (sharedRuntime === creating) sharedRuntime = undefined
-    throw error
+async function createRuntime(): Promise<{ api: CuaModule; driver: CuaRuntime }> {
+  const api = await import("@trycua/cua-driver")
+  if (process.platform === "darwin") {
+    let permissions = api.currentMacOsPermissionStatus()
+    if (!permissions.accessibility || !permissions.screenRecording) permissions = api.requestMacOsPermissions()
+    if (!permissions.accessibility || !permissions.screenRecording) throw new Error(macosPermissionError(permissions))
   }
+  const driver = api.CuaDriver.create(undefined)
+  if (!driver.isAvailable()) throw new Error("Cua Driver is unavailable on this platform")
+  return { api, driver }
 }
 
-export async function shutdownCuaDriver(): Promise<void> {
-  const current = sharedRuntime
-  sharedRuntime = undefined
-  if (!current) return
-  const resolved = await current.catch(() => undefined)
+async function disposeRuntime(runtime: Promise<{ api: CuaModule; driver: CuaRuntime }> | undefined): Promise<void> {
+  if (!runtime) return
+  const resolved = await runtime.catch(() => undefined)
   if (!resolved) return
   const { driver } = resolved
   await driver.shutdown().catch(() => undefined)
@@ -49,24 +38,29 @@ export async function shutdownCuaDriver(): Promise<void> {
   destructible.uniffiDestroy?.()
 }
 
-export function createCuaDriver(_ctx: unknown, signal?: AbortSignal): GuiTaskDriver {
+export async function shutdownCuaDriver(): Promise<void> {
+  // Runtimes are task-scoped now; kept for the session_shutdown hook.
+}
+
+export function createCuaDriver(_ctx: unknown, signal?: AbortSignal): GuiTaskDriver & { dispose?: () => Promise<void> } {
   let input: GuiTaskInput | undefined
   let target: WindowTarget | undefined
+  const taskRuntime = createRuntime()
   return {
     async start(task) {
       input = task
-      const current = await runtime()
+      const current = await taskRuntime
       target = await resolveTarget(current, task, signal)
       return observe(current, target, task, signal)
     },
     async refresh() {
       if (!input || !target) throw new Error("Cua Driver observation has no task owner")
-      return observe(await runtime(), target, input, signal)
+      return observe(await taskRuntime, target, input, signal)
     },
     async act(observation, action) {
       if (!input || !target) throw new Error("Cua Driver observation has no task owner")
       assertCurrentTarget(observation, action)
-      const current = await runtime()
+      const current = await taskRuntime
       const executed = await executeAction(current, target, action, signal)
       const next = await observe(current, target, input, signal)
       const observed = action.action === "typeText" && next.presentSlotIds.includes(action.slotId)
@@ -75,6 +69,9 @@ export function createCuaDriver(_ctx: unknown, signal?: AbortSignal): GuiTaskDri
         : undefined
       if (textDelivery === "verified" && action.action === "typeText" && !next.presentSlotIds.includes(action.slotId)) next.presentSlotIds.push(action.slotId)
       return { observation: next, outcome: textDelivery === "verified" ? "worked" : executed.outcome, textDelivery } satisfies GuiActionResult
+    },
+    async dispose() {
+      await disposeRuntime(taskRuntime)
     },
   }
 }

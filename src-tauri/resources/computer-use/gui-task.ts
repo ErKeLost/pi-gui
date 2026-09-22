@@ -151,10 +151,11 @@ export function registerGuiTask(pi: ExtensionAPI): void {
     parameters: taskSchema,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const input = params as GuiTaskInput
+      const driver = createCuaDriver(ctx, signal)
       try {
         const result = await runGuiTaskEngine({
           input,
-          driver: createCuaDriver(ctx, signal),
+          driver,
           decide: (goal, candidates, context, history, decisionSignal, options) => decide(goal, candidates, context, history, decisionSignal, options),
           signal,
           emit: event => publishProgress(onUpdate, event),
@@ -166,6 +167,8 @@ export function registerGuiTask(pi: ExtensionAPI): void {
         const result: GuiTaskResult = { status, actions: 0, decisions: 0, evidence: "", verification: { passed: false, reasons: status === "aborted" ? [] : [message] }, metrics: { elapsedMs: 0, targetResolutionMs: 0, targetDecisions: 0, observationMs: 0, decisionMs: 0, actionMs: 0, waits: 0, inputTokens: 0, outputTokens: 0 }, trace: [] }
         publishProgress(onUpdate, { type: "status", step: 0, status, payload: status === "aborted" ? {} : { message } })
         return { content: [{ type: "text", text: status === "aborted" ? "[aborted]" : `[error] ${message}` }], details: result }
+      } finally {
+        await driver.dispose?.().catch(() => undefined)
       }
     },
   })
