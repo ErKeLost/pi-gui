@@ -11,12 +11,13 @@ import { sessionGlyph } from "../../lib/session-visual";
 import { Button, Modal } from "../UI";
 import { Icon } from "../Icon";
 import { DeleteSessionDialog } from "../DeleteSessionDialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../ui/context-menu";
+import { FlowerRail, type FlowerRailItem } from "./FlowerRail";
 import { WorkspaceTitlebar } from "./WorkspaceTitlebar";
 import { ProjectActions } from "./ProjectActions";
 import { ProjectEditorDialog } from "./ProjectEditorDialog";
 
+const SESSION_PREVIEW = 5;
 const navigation: { id: Panel; label: string; icon: string }[] = [
   { id: "chat", label: "工作台", icon: "chat-circle-text" },
   { id: "commands", label: "技能与命令", icon: "puzzle-piece" },
@@ -48,6 +49,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
   const [deletingSession, setDeletingSession] = useState<SessionTarget | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [expandedMore, setExpandedMore] = useState<Set<string>>(() => new Set());
 
   async function syncProjectRoots(project: Project) {
     await setSessionRoots(projectExtraRoots(project));
@@ -136,6 +138,14 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
     finally { setBusyProject(""); }
   }
 
+  function toggleMore(path: string) {
+    setExpandedMore(current => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  }
+
   function setProjectExpanded(path: string, open: boolean) {
     setCollapsed(current => {
       const next = new Set(current);
@@ -147,48 +157,59 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
   return <div className="sidebar-pane">
     {!hideTitlebar && <WorkspaceTitlebar variant="sidebar" sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />}
     <aside className="sidebar">
-      <Button variant="outline" className="new-session" disabled={!online} onClick={() => void newSession().catch(report)}><Icon name="plus" />新建会话<kbd>⌘ N</kbd></Button>
       <nav aria-label="主导航">{navigation.map(item => <Button key={item.id} className={`nav-item ${panel === item.id ? "selected" : ""}`} onClick={() => { useWorkspace.getState().set({ panel: item.id }); onNavigate?.(); }}><Icon name={item.icon} /><span>{item.label}</span>{item.id === "commands" && <Icon name="arrow-up-right" />}</Button>)}</nav>
 
       <div className="sidebar-library">
         <div className="sidebar-section-title sidebar-projects-title"><span><Icon name="folder-simple" />项目</span><Button title="添加项目" disabled={!desktopRuntime()} onClick={() => void addProjects().catch(report)}><Icon name="plus" /></Button></div>
-        <div className="sidebar-project-groups">
-          {visibleProjects.map((project, index) => {
-            const group = sessionGroups[index];
-            const merged = mergeProjectSessions(project.path, group?.query.data ?? [], liveSessions);
+        <div className="sidebar-flower">
+          <FlowerRail items={visibleProjects.flatMap((project, index) => {
+            const merged = mergeProjectSessions(project.path, sessionGroups[index]?.query.data ?? [], liveSessions);
             const isActiveProject = workspaceMode === "project" && project.path === cwd;
             const isExpanded = !collapsed.has(project.path);
-            return <Collapsible open={isExpanded} onOpenChange={open => setProjectExpanded(project.path, open)} className={`sidebar-project-group${isActiveProject ? " active" : ""}`} key={project.path}>
-              <ContextMenu>
-                <div className="sidebar-project-row">
-                  <ContextMenuTrigger render={<div className="sidebar-project-main-shell" />}>
-                    <CollapsibleTrigger render={<button type="button" className="sidebar-project-main" disabled={busyProject === project.path} aria-current={isActiveProject ? "true" : undefined} onClick={event => { if (!isActiveProject) { event.preventDefault(); void chooseProject(project.path); } }} />}>
-                      <Icon name={isExpanded ? "folder-open" : "folder-simple"} /><span title={project.path}>{project.name}</span>{busyProject === project.path && <i className="session-working-indicator" aria-hidden />}
-                    </CollapsibleTrigger>
+            const showAll = expandedMore.has(project.path);
+            const sessions = isExpanded ? (showAll ? merged.sessions : merged.sessions.slice(0, SESSION_PREVIEW)) : [];
+            const activeSession = isActiveProject && sessions.some(session => session.path === currentSessionFile);
+            const items: FlowerRailItem[] = [{ id: project.path, kind: "project", active: Boolean(isActiveProject && !activeSession) }];
+            for (const session of sessions) items.push({ id: session.path, kind: "session", active: Boolean(isActiveProject && session.path === currentSessionFile) });
+            if (isExpanded && merged.sessions.length > SESSION_PREVIEW) items.push({ id: `${project.path}-more`, kind: "session", active: false });
+            return items;
+          })} />
+          <div className="sidebar-flower-list">
+            {visibleProjects.flatMap((project, index) => {
+              const merged = mergeProjectSessions(project.path, sessionGroups[index]?.query.data ?? [], liveSessions);
+              const isActiveProject = workspaceMode === "project" && project.path === cwd;
+              const isExpanded = !collapsed.has(project.path);
+              const showAll = expandedMore.has(project.path);
+              const sessions = isExpanded ? (showAll ? merged.sessions : merged.sessions.slice(0, SESSION_PREVIEW)) : [];
+              const rows = [<ContextMenu key={project.path}>
+                <div className={`sidebar-flower-row is-project${isActiveProject ? " is-current" : ""}`}>
+                  <ContextMenuTrigger render={<button type="button" className="sidebar-flower-main" disabled={busyProject === project.path} aria-current={isActiveProject ? "true" : undefined} onClick={() => { if (!isActiveProject) void chooseProject(project.path); else setProjectExpanded(project.path, !isExpanded); }} />}>
+                    <Icon name={isExpanded ? "folder-open" : "folder-simple"} /><span title={project.path}>{project.name}</span>{busyProject === project.path && <i className="session-working-indicator" aria-hidden />}
                   </ContextMenuTrigger>
                   <Button className="sidebar-project-new" title={`在 ${project.name} 新建会话`} aria-label={`在 ${project.name} 新建会话`} disabled={busyProject === project.path} onClick={event => { event.preventDefault(); event.stopPropagation(); void newSession(project.path); }}><Icon name="note-pencil" /></Button>
                   <ProjectActions project={project} homeDir={homeDir} taskCount={merged.sessions.length} onEdit={() => setEditingProject(project)} />
                 </div>
                 <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => void newSession(project.path)}><Icon name="note-pencil" />新建会话</ContextMenuItem><ContextMenuItem onClick={() => setEditingProject(project)}><Icon name="gear-six" />编辑项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
-              </ContextMenu>
-              <CollapsibleContent className="sidebar-project-panel"><div className="sidebar-project-sessions">
-                {merged.sessions.map(session => {
+              </ContextMenu>];
+              if (isExpanded) {
+                for (const session of sessions) {
                   const working = liveSessions.some(live => live.cwd === project.path && live.running && live.path === session.path);
                   const label = session.name || session.firstMessage || "未命名会话";
                   const active = isActiveProject && session.path === currentSessionFile;
-                  return <ContextMenu key={session.id}>
-                    <ContextMenuTrigger render={<div className={`recent-session-row ${active ? "active" : ""}${working ? " working" : ""}`} />}>
-                      <button type="button" className="recent-session-main" aria-busy={working} onClick={() => void openSession(project.path, session)}>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name={sessionGlyph(session.icon)} className="recent-session-glyph" />}<span className="recent-session-title">{label}</span></button>
+                  rows.push(<ContextMenu key={session.id}>
+                    <ContextMenuTrigger render={<div className={`sidebar-flower-row is-session${active ? " is-active" : ""}${working ? " working" : ""}`} />}>
+                      <button type="button" className="sidebar-flower-main" aria-busy={working} onClick={() => void openSession(project.path, session)}>{working ? <span className="session-working-indicator" title="正在工作" aria-hidden /> : <Icon name={sessionGlyph(session.icon)} className="recent-session-glyph" />}<span className="recent-session-title">{label}</span></button>
                       {merged.listedPaths.has(session.path) && <button type="button" className="recent-session-delete" title="删除会话" aria-label={`删除会话 ${label}`} onClick={event => { event.stopPropagation(); setDeletingSession({ session, projectPath: project.path }); }}><Icon name="trash" /></button>}
                     </ContextMenuTrigger>
                     <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void openSession(project.path, session)}><Icon name="chats" />打开会话</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(label)}><Icon name="copy" />复制标题</ContextMenuItem>{merged.listedPaths.has(session.path) && <><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingSession({ session, projectPath: project.path })}><Icon name="trash" />删除会话</ContextMenuItem></>}</ContextMenuContent>
-                  </ContextMenu>;
-                })}
-                {!group?.query.isLoading && !merged.sessions.length && <p>暂无会话</p>}
-              </div></CollapsibleContent>
-            </Collapsible>;
-          })}
-          {!visibleProjects.length && <div className="sidebar-project-empty"><span>添加项目后，会话会按目录显示。</span></div>}
+                  </ContextMenu>);
+                }
+                if (merged.sessions.length > SESSION_PREVIEW) rows.push(<button key={`${project.path}-more`} type="button" className="sidebar-flower-row is-session sidebar-flower-more" onClick={() => toggleMore(project.path)}><span className="sidebar-flower-main"><Icon name={showAll ? "caret-up" : "caret-down"} /><span>{showAll ? "收起" : "展示更多"}</span></span></button>);
+              }
+              return rows;
+            })}
+            {!visibleProjects.length && <div className="sidebar-project-empty"><span>添加项目后，会话会按目录显示。</span></div>}
+          </div>
         </div>
       </div>
 
