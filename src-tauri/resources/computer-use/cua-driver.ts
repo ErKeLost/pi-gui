@@ -103,10 +103,25 @@ async function resolveTarget(current: CuaContext, task: GuiTaskInput, signal?: A
   const resolvedWindow = await resolveWindowIntent(task.goal, target.windowTitle, windows, signal)
   const window = resolvedWindow.window
   if (target.activation === "foreground") {
-    const liveApp = (await listApps(current, signal)).find(candidate => candidate.running && sameAppIdentity(candidate, app))
+    const findLiveApp = async () => (await listApps(current, signal)).find(candidate => candidate.running && sameAppIdentity(candidate, app))
+    const windowIsFrontmost = async () => {
+      const windows = (await listWindows(current, app.pid, signal)).filter(w => w.isOnScreen && !w.minimized)
+      const target = windows.find(w => w.windowId === window.windowId)
+      if (!target?.zIndex) return false
+      const topZ = windows.reduce((max, w) => (w.zIndex ?? -1n) > max ? w.zIndex! : max, -1n)
+      return target.zIndex >= topZ
+    }
+    let liveApp = await findLiveApp()
     if (!liveApp?.active) {
       const activation = await callTool(current, "bring_to_front", { pid: app.pid, window_id: safeWindowId(window.windowId) }, signal)
-      if (toolResultOutcome(current.api, activation) !== "worked") throw new Error(`Cua Driver could not verify foreground activation for: ${app.name}`)
+      const outcome = toolResultOutcome(current.api, activation)
+      if (outcome === "didnt") throw new Error(`Cua Driver could not bring ${app.name} to the front: the system refused the activation`)
+      for (let waited = 0; waited < 3000; waited += 300) {
+        if ((await findLiveApp())?.active || await windowIsFrontmost()) break
+        await delay(300)
+      }
+      liveApp = await findLiveApp()
+      if (!liveApp?.active && !(await windowIsFrontmost())) throw new Error(`Cua Driver could not verify foreground activation for: ${app.name} (outcome=${outcome})`)
     }
   }
   return {
