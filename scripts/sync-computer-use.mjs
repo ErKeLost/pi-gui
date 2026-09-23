@@ -25,8 +25,8 @@ const binaryNames = {
 }
 const binaryName = binaryNames[platform]
 if (!binaryName) {
-  console.error(`agent-desktop 不支持当前平台 ${platform}`)
-  process.exit(1)
+  console.warn(`agent-desktop 不支持当前平台 ${platform}，跳过 Computer Use 原生资源同步`)
+  process.exit(0)
 }
 const copiedBin = resolve(root, "src-tauri/resources/node_modules/agent-desktop/bin")
 for (const name of [binaryName, ...(process.platform === "darwin" ? ["agent-desktop-macos-helper"] : [])]) {
