@@ -6,7 +6,7 @@ const root = resolve(import.meta.dirname, "..");
 const packageRoot = resolve(root, "node_modules/@earendil-works/pi-coding-agent");
 const packageJson = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8"));
 const output = resolve(root, "src-tauri/resources/pi-runtime");
-const bun = process.platform === "win32" ? resolve(root, "node_modules/bun/bin/bun.exe") : resolve(root, "node_modules/.bin/bun");
+const bun = process.env.ORBIT_BUN_PATH || "bun";
 const marker = resolve(output, "package.json");
 const current = existsSync(marker) ? JSON.parse(readFileSync(marker, "utf8")) : null;
 const buildFormat = 4;
@@ -32,6 +32,7 @@ const result = spawnSync(bun, [
   "--sourcemap=none",
 ], { cwd: root, stdio: "inherit" });
 
+if (result.error) console.error(`无法启动 Bun 打包 Pi runtime: ${result.error.message}`);
 if (result.status !== 0) process.exit(result.status ?? 1);
 
 const themeSource = resolve(packageRoot, "dist/modes/interactive/theme");
