@@ -32,6 +32,9 @@ jobs:
         with:
           bun-version: 1.4.2
 
+      - name: Resolve Bun executable
+        run: echo "ORBIT_BUN_PATH=$(command -v bun)" >> "$GITHUB_ENV"
+
       - uses: dtolnay/rust-toolchain@stable
         if: runner.os != 'Windows'
 
