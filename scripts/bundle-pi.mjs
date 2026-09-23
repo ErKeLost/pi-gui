@@ -6,7 +6,8 @@ const root = resolve(import.meta.dirname, "..");
 const packageRoot = resolve(root, "node_modules/@earendil-works/pi-coding-agent");
 const packageJson = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8"));
 const output = resolve(root, "src-tauri/resources/pi-runtime");
-const bun = process.env.ORBIT_BUN_PATH || "bun";
+const bun = process.env.ORBIT_BUN_PATH
+  || (process.env.BUN_INSTALL ? resolve(process.env.BUN_INSTALL, "bin", process.platform === "win32" ? "bun.exe" : "bun") : "bun");
 const marker = resolve(output, "package.json");
 const current = existsSync(marker) ? JSON.parse(readFileSync(marker, "utf8")) : null;
 const buildFormat = 4;

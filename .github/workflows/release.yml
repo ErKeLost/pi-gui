@@ -45,7 +45,7 @@ jobs:
           tauriScript: bun run tauri
           tagName: v__VERSION__
           releaseName: Orbit v__VERSION__
-          releaseBody: Orbit installers for macOS, Linux, Windows, and Android.
+          releaseBody: Orbit installer for macOS Apple Silicon. This build is distributed without Apple Developer signing or notarization.
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
