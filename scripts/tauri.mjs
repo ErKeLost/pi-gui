@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { resolve, delimiter } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 const root=resolve(import.meta.dirname,'..')
@@ -12,6 +12,10 @@ const syncAndroidIcons=()=>spawnSync(process.execPath,[resolve(root,'scripts/syn
 if(androidIndex>=0&&syncAndroidIcons().status!==0)process.exit(1)
 const bundle=spawnSync(process.execPath,[resolve(root,'scripts/bundle-pi.mjs')],{cwd:root,env,stdio:'inherit'})
 if(bundle.status!==0)process.exit(bundle.status??1)
+if(androidIndex<0&&['dev','build'].includes(args[0])){
+  const profile=args[0]==='dev'?'debug':'release'
+  for(const name of ['computer-use','node_modules','pi-computer-use'])rmSync(resolve(root,'src-tauri/target',profile,'resources',name),{recursive:true,force:true})
+}
 if(existsSync(resolve(local,'cargo/bin/rustup'))){
   env.RUSTUP_HOME=resolve(local,'rustup')
   env.CARGO_HOME=resolve(local,'cargo')

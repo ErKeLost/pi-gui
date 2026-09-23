@@ -2,7 +2,7 @@
 
 Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beautifului.dev/) 的 Reasoning / Drive 组件，保留其 [MIT 许可](licenses/beautiful-ui.txt)。演示用固定阶段与示例文本已替换为 Pi 实际推理内容和运行事件；支持减少动态效果，计时器使用实际经过时间。
 
-核对日期：2026-09-18。使用官方文档、发布注册表和安装包自带源码作为依据。项目中的演示状态已移除，连接、模型、工具和会话数据均来自 Pi。
+核对日期：2026-09-23。使用官方文档、发布注册表和安装包自带源码作为依据。项目中的演示状态已移除，连接、模型、工具和会话数据均来自 Pi。
 
 | 编号 | 官方来源 | 已读取 / 核对的内容 | 实现位置 |
 | --- | --- | --- | --- |
@@ -18,11 +18,9 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 | P3 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md | registerCommand、getAllTools、getActiveTools、setActiveTools、setLabel、ctx.navigateTree、waitForIdle | `gui-extension.ts` |
 | P4 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md 和 settings.md | 模型定义、reasoning 开关、动态可用 thinking levels、默认模型与 thinking | 复用已有 Pi 配置；GUI 不硬编码支持的 effort |
 | P5 | Pi 0.85.1 安装包 `examples/extensions/subagent/` | 独立 Pi 进程、JSON 事件、并行调度、取消与用量聚合的官方扩展示例 | `resources/subagents/` 的执行基础；Orbit 另加持久 RPC、父子通信和状态树 |
-| P6 | https://github.com/trycua/cua | Cua Driver：跨平台 exact-window AX/UIA/AT-SPI、截图、snapshot-bound element token、background/foreground delivery、TypeScript SDK 与 Jev bounded-choice reference | 固定 `@trycua/cua-driver` 0.28.2；`resources/computer-use/cua-driver.ts` 只通过官方 SDK观察和执行，Draft perception 按 capability 延后启用 |
-| J1 | https://docs.typesafe.ai/concepts/how-to-build-with-system-one 和 https://docs.typesafe.ai/model-jaggedness/jev-1.13 | 代码掌控流程和副作用；Jev 只做窄的结构化判断；数字、日期、无关上下文、对抗内容和生成不是 Jev 的可靠边界 | `resources/computer-use/gui-task-contract.ts`, `completion-verifier.ts` |
-| J3 | https://github.com/yikangy873-gif/jev-desktop | 本地 prepared text slots 与独立完成验证 | `resources/computer-use/gui-task-engine.ts`, `candidate-policy.ts` |
-| J4 | https://github.com/lahfir/agent-desktop | snapshot-scoped refs、observe-resolve-preflight-dispatch、明确 delivery/retry 语义 | 作为设计参考；生产执行边界由 Cua Driver 承载 |
-| J5 | https://github.com/trycua/cua/tree/main/libs/cua-driver/examples/jev-use 和 https://github.com/trycua/cua/blob/main/rfcs/3931-cua-perception-and-jev-use.md | `jev-use` 的本地完整候选、opaque ID、capture-bound 视觉区域、`reobserve` / `abstain`、单 observation 最多授权一次 mutation、外部事实验证 | `resources/computer-use/candidate-policy.ts`, `gui-task-engine.ts`, `jev.ts` |
+| J1 | https://docs.typesafe.ai/concepts/how-to-build-with-system-one 和 https://docs.typesafe.ai/model-jaggedness/jev-1.13 | 代码掌控流程和副作用；Jev 只在本地提供的有界候选中选择；输入值、执行和重试权留在本地 | `resources/computer-use/jev.ts`, `gui-task-engine.ts` |
+| J2 | https://github.com/lahfir/agent-desktop/releases/tag/v0.9.4、安装包和本地 `work/reference/agent-desktop` 源码 | macOS AX skeleton/drill、snapshot-qualified refs、retained live re-identification、Chromium AX activation、actionability、auto-wait、post-state、delivery/retry、App 生命周期、官方 `jev-desktop` loop 和预编译 CLI | 固定 `agent-desktop` 0.9.4；`agent-desktop-client.ts`, `desktop-observation.ts`, `gui-task-engine.ts` |
+| J3 | macOS Spotlight `kMDItemDisplayName`、`kMDItemCFBundleIdentifier`、`kMDItemContentType` | 已安装 App 的本地化显示名与稳定 bundle identity；精确事实优先于模型解析 | `desktop-app-resolver.ts` |
 | R1 | https://react.dev/reference/react | React hooks 与组件生命周期 | React 组件；事件订阅有清理 |
 | A1 | https://www.assistant-ui.com/docs/runtimes/custom/external-store.md | ExternalStoreRuntime、自有状态、convertMessage、onNew/onCancel | `Chat.tsx` |
 | A2 | https://www.assistant-ui.com/docs/primitives/thread.md | Root / Viewport / Messages 的 children render function、ScrollToBottom | `Chat.tsx` |

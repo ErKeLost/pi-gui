@@ -35,7 +35,7 @@
 | 分支摘要导航 | 会话树同时提供普通导航和 `navigateTree({ summarize: true })` |
 | 会话附加项目 | 顶栏标题弹出 roots；同一 session 可挂多个侧栏项目，扩展写入会话记录并注入根列表与各项目 AGENTS.md |
 | 动态多 agent | 父 Pi 通过 `spawn_agent` / `spawn_agents` 以完成结果为边界进行 supervisor 委派；子进程复用 Orbit 内置 Pi，支持显式并行、嵌套、消息、跟进、等待、中止、状态树与持久化子会话。架构见 [MULTI_AGENT.md](MULTI_AGENT.md) |
-| 电脑操作（Computer Use） | 可选。Pi 生成类型化目标与 phase plan；本地 resolver 将自然语言应用意图解析到 Cua inventory，生命周期层取得精确 pid/windowId；官方 `@trycua/cua-driver` TypeScript SDK 采集可访问性树和窗口截图并执行 exact-window 动作；本地层建立结构 collection、reading-order ordinal 和 phase ledger；Jev只在有界目标或当前 phase 候选中选择 opaque ID。本地 verifier 验证应用就绪、prepared slot、phase transition 和媒体时间轨推进。默认关闭；输入框旁开关或设置开启。有 API/CLI 时不要用。架构见 [COMPUTER_USE.md](COMPUTER_USE.md) |
+| 电脑操作（Computer Use） | 可选。Pi 只提供目标 App、整体 goal、本地文本槽和预算；Spotlight resolver 解析本地化 App 身份；agent-desktop 负责纯 AX skeleton/drill、snapshot refs、auto-wait、动作和 post-state；Jev 每轮只在当前能力候选中选择 operation+target。默认不截图，只保留唯一生产后端。默认关闭；输入框旁开关或设置开启。有 API/CLI 时不要用。架构见 [COMPUTER_USE.md](COMPUTER_USE.md) |
 | OAuth 登录、安装/更新/移除包、终端主题与快捷键设置 | 设置中的“打开 Pi 终端”；使用原始 Pi 功能 |
 | 自定义 TUI 组件与终端专有扩展 | 原始 Pi 终端入口；RPC 的 custom() 无可移植的图形表示 |
 
