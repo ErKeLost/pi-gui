@@ -1,0 +1,84 @@
+diff --git a/es/StreamTail.mjs b/es/StreamTail.mjs
+index 9648e4da19a049877a8e594f90897b104bef937f..56dd33dcfbd7856812490e7b6c80b15aa6eb7745 100644
+--- a/es/StreamTail.mjs
++++ b/es/StreamTail.mjs
+@@ -25,7 +25,7 @@ const StreamTail = ({ node }) => {
+ 		const cached = delaysRef.current.get(item.key);
+ 		if (cached !== void 0) return cached;
+ 		const elapsed = now - item.birth;
+-		const style = elapsed >= 180 ? null : { animationDelay: `${-elapsed}ms` };
++		const style = elapsed >= 900 ? null : { animationDelay: `${-elapsed}ms` };
+ 		delaysRef.current.set(item.key, style);
+ 		return style;
+ 	};
+diff --git a/es/Streamdown.mjs b/es/Streamdown.mjs
+index 18f692f8ac03c51b35bc9d9339e8772cb7a73054..f6b532e46217fc354d0e433bb4ef58447a68c172 100644
+--- a/es/Streamdown.mjs
++++ b/es/Streamdown.mjs
+@@ -72,12 +72,12 @@ const updateBlockAnimation = ({ blocks, charDelay, getBlockState, pluginsCache,
+ 			}
+ 			const newChars = Math.max(1, nextCharCount - runtime.charCount);
+ 			let pace = charDelay;
+-			let capMs = 180;
++			let capMs = 900;
+ 			if (state === "streaming") {
+ 				revealedNewChars = true;
+ 				const gapMs = Math.min(Math.max(renderNow - revealClock.lastTs, 16), MAX_REVEAL_GAP_MS);
+ 				pace = Math.min(charDelay, Math.max(gapMs / newChars, MIN_STREAM_CHAR_PACE_MS));
+-				capMs = gapMs + 180;
++				capMs = gapMs + 900;
+ 			}
+ 			runtime.pacing = {
+ 				capMs,
+@@ -95,7 +95,7 @@ const updateBlockAnimation = ({ blocks, charDelay, getBlockState, pluginsCache,
+ 			const lastBirthTs = runtime.blockBirth ?? births.at(-1) ?? renderNow;
+ 			meta = resolveBlockAnimationMeta({
+ 				currentCharDelay: charDelay,
+-				fadeDuration: 180,
++				fadeDuration: 900,
+ 				lastElapsedMs: renderNow - lastBirthTs,
+ 				previousCharDelay: runtime.charDelay,
+ 				state
+@@ -189,7 +189,7 @@ const StreamdownBlocks = memo(({ content: smoothedContent, granularity, markdown
+ 		const runtime = blockRuntimesRef.current.get(startOffset);
+ 		const value = [...baseRehypePlugins, [rehypeStreamAnimated, {
+ 			block: runtime?.blockBirth !== void 0,
+-			fadeDuration: 180,
++			fadeDuration: 900,
+ 			granularity,
+ 			runtime
+ 		}]];
+diff --git a/es/styles.mjs b/es/styles.mjs
+index 587c62a7de1530a987448df58be3a18ab38c5c0e..0c75aaee04b5fca7207cd3e903d94c34b471b424 100644
+--- a/es/styles.mjs
++++ b/es/styles.mjs
+@@ -1,6 +1,6 @@
+ import { jsx } from "react/jsx-runtime";
+ //#region src/styles.tsx
+-const STREAM_FADE_DURATION = 180;
++const STREAM_FADE_DURATION = 900;
+ const STREAMDOWN_ANIMATED_CLASS = "streamdown-animated";
+ const css = `
+ @keyframes streamdown-fade-in {
+@@ -11,7 +11,7 @@ const css = `
+ .${STREAMDOWN_ANIMATED_CLASS} .stream-block {
+   opacity: 0;
+   animation-name: streamdown-fade-in;
+-  animation-duration: 180ms;
++  animation-duration: 900ms;
+   animation-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+   animation-fill-mode: forwards;
+ }
+diff --git a/es/useStreamQueue.mjs b/es/useStreamQueue.mjs
+index 99e74435ce4ba601fea46a7c1b1de7c079de78ac..1689bbf53b8ba89ec234b37f3f79ade1ef457d1d 100644
+--- a/es/useStreamQueue.mjs
++++ b/es/useStreamQueue.mjs
+@@ -63,7 +63,7 @@ function useStreamQueue(blocks, batchComplete = false) {
+ 			timerRef.current = null;
+ 		}
+ 		if (animatingIndex < 0) return;
+-		const totalTime = Math.max(0, (animatingCharCount - 1) * charDelay) + 180;
++		const totalTime = Math.max(0, (animatingCharCount - 1) * charDelay) + 900;
+ 		timerRef.current = setTimeout(onAnimationDone, totalTime);
+ 		return () => {
+ 			if (timerRef.current) {

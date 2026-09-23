@@ -22,6 +22,13 @@ describe("shared Markdown renderer", () => {
     expect(html).toContain("is-streaming");
   });
 
+  test("wraps the live tail per character for the streaming color trail", () => {
+    const html = renderToStaticMarkup(<Markdown content="trail" animated />);
+
+    expect(html.match(/class="stream-char"/g)).toHaveLength(5);
+    expect(html).toContain("animation-duration: 900ms");
+  });
+
   test("renders fenced code as a pre block before Shiki upgrades it", () => {
     const html = renderToStaticMarkup(<Markdown content={"```ts\nconst reveal = (chars: string[]) => chars.map((char, i) => ({ char, delay: i * 18 }));\n```"} />);
 

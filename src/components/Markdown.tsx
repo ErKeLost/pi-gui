@@ -60,7 +60,7 @@ export function Markdown({
         rehypePlugins={rehypePlugins}
         latexGuard
         preprocess={preprocessLaTeX}
-        granularity="word"
+        granularity={animated ? "char" : "word"}
         smoothing="balanced"
         components={components}
       />
