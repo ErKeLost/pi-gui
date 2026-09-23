@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useProjects } from "../lib/projects";
 import { changeSession, connect, connectRemoteConnection, dispatchRemoteEvent, loadMessages, report, suspendRemoteConnection } from "../lib/rpc";
 import { detectRuntimeEnvironment } from "../lib/runtime-environment";
+import { useRuntimeDiscovery } from "../lib/runtime-diagnostics";
 import { openRemoteRuntime, remoteHostSnapshot, storedPairingUri } from "../lib/remote-runtime";
 import type { RemoteConnection, RemoteHostSnapshot } from "../lib/remote-protocol";
 import { useWorkspace } from "../lib/store";
 
-type Discovery = { pi: string; node: string; version: string; cwd: string; home: string };
 let runtimeStarted = false;
 
 type PairingState = { uri: string; required: boolean; connecting: boolean; error: string | null };
@@ -25,11 +23,7 @@ export function useWorkspaceBootstrap() {
   const [remoteRevision, setRemoteRevision] = useState(0);
   const remoteReady = useRef(false);
   const recoveringRemote = useRef(false);
-  const discovery = useQuery({
-    queryKey: ["discovery"],
-    queryFn: () => invoke<Discovery>("discover"),
-    enabled: runtimeTarget === "desktop",
-  });
+  const discovery = useRuntimeDiscovery(runtimeTarget === "desktop");
 
   const recoverRemote = useCallback(async () => {
     if (recoveringRemote.current) return;
@@ -108,7 +102,7 @@ export function useWorkspaceBootstrap() {
 
   useEffect(() => {
     if (!discovery.data) return;
-    useWorkspace.getState().set({ homeDir: discovery.data.home, piVersion: discovery.data.version });
+    useWorkspace.getState().set({ homeDir: discovery.data.home, piVersion: discovery.data.piVersion });
     if (localStorage.getItem("pi-gui.workspaceMode") === "home") {
       void connect(discovery.data.home, "home").catch(report);
       return;

@@ -8,6 +8,7 @@ import { Eye, EyeOff, ScanLine } from "lucide-react";
 import QRCode from "antd/es/qr-code";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
+import { useRuntimeDiscovery, type RuntimeDiscovery } from "../../lib/runtime-diagnostics";
 import { computerUseKeyStatus, connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, saveComputerUseKey, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
 import { getRemoteHost, relaySettingsStatus, saveRelaySettings, startRemoteHost, stopRemoteHost, type RelaySettingsStatus, type RemoteHostInfo } from "../../lib/remote-host";
 import { checkMobileUpdate, mobileUpdateErrorMessage } from "../../lib/mobile-update";
@@ -96,7 +97,7 @@ function ComputerUseSettings({ desktop, online, running }: { desktop: boolean; o
     finally { setBusy(false); }
   }
   return <>
-    <SettingRow title="电脑操作" description={desktop ? "由你手动打开。打开后用平常说话即可，例如「打开日历翻到上个月」。macOS 请在系统设置里允许「Orbit」的辅助功能和屏幕录制（两页都要开），不要去找 Node。改完后完全退出 Orbit 再打开。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
+    <SettingRow title="电脑操作" description={desktop ? "由你手动打开。macOS 请在辅助功能和屏幕录制中同时允许「Orbit」与「Orbit Agent」；「Orbit Agent Dev」只属于 tauri dev。授权后完全退出 Orbit 再打开。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
       {desktop ? <Switch aria-label="电脑操作" checked={enabled} disabled={!online || running} onChange={checked => void setComputerUseMode(checked).catch(report)} /> : <span className="remote-settings-note">电脑端设置</span>}
     </SettingRow>
     <SettingRow title="Jev API Key" description={desktop ? "从 TypeSafe 控制台粘贴，只存在这台电脑。保存不等于打开电脑操作，开关仍由你控制。" : "Jev Key 由电脑端保管。"}>
@@ -112,6 +113,31 @@ function ToolsSettings({ tools, running }: { tools: GuiTools; running: boolean }
 
 function TerminalSettings({ cwd, desktop }: { cwd: string; desktop: boolean }) {
   return <SettingRow title="原生终端环境" description={desktop ? "在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。" : "原生终端需要在电脑端打开。"}><Button variant="outline" disabled={!desktop || !cwd} onClick={() => { if (desktopRuntime()) void invoke("open_pi_terminal", { cwd, session: null, piArgs: [] }).catch(report); }}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
+}
+
+function RuntimePath({ label, value }: { label: string; value?: string }) {
+  return <div className="settings-runtime-path"><span>{label}</span><code title={value || "未解析"}>{value || "未解析"}</code></div>;
+}
+
+function RuntimeSettings({ desktop, cwd }: { desktop: boolean; cwd: string }) {
+  const discovery = useRuntimeDiscovery(desktop);
+  if (!desktop) return <SettingRow title="运行位置" description="Pi 运行在已配对的电脑上，路径由电脑端统一管理。"><span className="remote-settings-note">远程电脑</span></SettingRow>;
+  const value: RuntimeDiscovery | undefined = discovery.data;
+  return <>
+    <div className="settings-runtime-paths" aria-busy={discovery.isLoading}>
+      <RuntimePath label="当前工作目录" value={cwd || value?.cwd} />
+      <RuntimePath label="Pi CLI" value={value?.pi} />
+      <RuntimePath label="Pi 来源" value={value?.piSource} />
+      <RuntimePath label="Node 进程" value={value?.node} />
+      <RuntimePath label="宿主 Node" value={value?.hostNode} />
+      <RuntimePath label="Node 版本" value={value?.nodeVersion} />
+      <RuntimePath label="Pi 配置" value={value?.agentDir} />
+      <RuntimePath label="会话目录" value={value?.sessionsDir} />
+      <RuntimePath label="Orbit resources" value={value?.resourcesDir} />
+      <RuntimePath label="资源依赖" value={value?.nodeModules} />
+    </div>
+    {discovery.error && <p className="settings-empty-note">运行环境读取失败：{String(discovery.error)}</p>}
+  </>;
 }
 
 function MobileAppUpdateSettings() {
@@ -405,6 +431,7 @@ export function GeneralSettingsPanel() {
     {runtimeTarget === "mobile" && <SettingsGroup title="软件更新" icon="arrows-clockwise" description="主动从 GitHub Release 检查 Android 安装包。"><MobileAppUpdateSettings /></SettingsGroup>}
     <SettingsGroup title="上下文" icon="brain" description="管理当前会话的容量与压缩方式。"><ContextSettings cwd={cwd} status={status} running={running} state={state} onCompact={manualCompact} /></SettingsGroup>
     <SettingsGroup title="消息队列" icon="chats"><QueueSettings status={status} state={state} /></SettingsGroup>
+    <SettingsGroup title="运行环境" icon="terminal-window" description="Pi、Node、配置和资源目录的实际解析结果。"><RuntimeSettings desktop={desktop} cwd={cwd} /></SettingsGroup>
     <SettingsGroup title="电脑操作" icon="desktop" description="让当前 Pi 模型通过界面观察和点击桌面应用。有可靠 API 或 CLI 时不要用。"><ComputerUseSettings desktop={desktop} online={status === "online"} running={running} /></SettingsGroup>
     <SettingsGroup title="工具与终端" icon="wrench"><ToolsSettings tools={tools} running={running} /><TerminalSettings cwd={cwd} desktop={desktop} /></SettingsGroup>
   </>;

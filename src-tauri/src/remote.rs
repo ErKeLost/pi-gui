@@ -279,11 +279,7 @@ mod desktop {
     }
 
     fn relay_settings_path() -> Result<PathBuf, String> {
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(PathBuf::from)
-            .ok_or_else(|| "找不到用户目录".to_string())?;
-        Ok(home.join(".pi/agent/orbit-relay.json"))
+        Ok(crate::bridge::agent_dir()?.join("orbit-relay.json"))
     }
 
     fn load_relay_settings() -> Result<RelaySettings, String> {
@@ -517,7 +513,7 @@ mod desktop {
                     crate::bridge::list_project_files(cwd).await
                 }
                 super::RemoteHostOperation::SessionTurnDurations { session_path } => {
-                    crate::bridge::session_turn_durations(session_path).await
+                    crate::bridge::session_turn_durations(app.clone(), session_path).await
                 }
                 super::RemoteHostOperation::SessionDelete { session_path } => {
                     crate::bridge::delete_session(session_path)

@@ -24,13 +24,13 @@ export async function observeDesktop(
   if (input.windowId) base.push("--window-id", input.windowId)
   // The tree stays local. Keeping inert descendants lets an unnamed actionable
   // parent inherit the visible text that identifies it before Jev sees candidates.
-  const args = input.root ? [...base, "--root", input.root] : base
+  const args = input.root ? [...base, "--root", input.root] : [...base, "--skeleton"]
   let snapshot = (await client.run<SnapshotData>(args, options)).data!
 
   if (!input.root) {
     const surface = findOverlay(snapshot.tree)
     if (surface) {
-      snapshot = (await client.run<SnapshotData>([...base, "--surface", surface], options)).data!
+      snapshot = (await client.run<SnapshotData>([...base, "--surface", surface, "--skeleton"], options)).data!
     }
   }
 

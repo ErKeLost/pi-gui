@@ -141,10 +141,8 @@ describe("AX-first desktop observation", () => {
     expect(result.candidates).toEqual(expect.arrayContaining([
       expect.objectContaining({ operation: "SET_VALUE", ref: "@s1:e1", slotId: "query" }),
       expect.objectContaining({ operation: "TYPE_TEXT", ref: "@s1:e1", slotId: "query" }),
-      expect.objectContaining({ operation: "CLICK", ref: "@s1:e2" }),
-      expect.objectContaining({ operation: "DRILL", ref: "@s1:e3" }),
-      expect.objectContaining({ operation: "DONE" }),
     ]))
+    expect(result.candidates.some(candidate => candidate.ref === "@s1:e2")).toBe(false)
     expect(JSON.stringify(result)).not.toContain("private song")
     expect(result.candidates.some(candidate => candidate.ref === "@s1:e4" && ["SET_VALUE", "TYPE_TEXT"].includes(candidate.operation))).toBe(false)
   })
@@ -169,6 +167,31 @@ describe("desktop goal loop", () => {
     expect(result.actions).toBe(0)
     expect(commands).toHaveLength(1)
     expect(commands[0]).toContain("--activate")
+  })
+
+  test("continues when NSWorkspace attaches to an already-running helper process", async () => {
+    const client = mockClient(args => {
+      if (args[0] === "launch") throw new AgentDesktopCommandError("launch", {
+        code: "APP_UNRESPONSIVE",
+        message: "NSWorkspace returned a different application while attaching",
+        details: { expected_pid: 42, returned_pid: 43 },
+        disposition: { delivery: "delivered_unverified", retry: "unsafe" },
+      })
+      throw new Error(`unexpected command: ${args[0]}`)
+    })
+    let observedApp = ""
+    const result = await runGuiTaskEngine({
+      input: task({ goal: "open Music", textSlots: [] }),
+      client,
+      observe: async (_client, input) => {
+        observedApp = input.app
+        return observation("ready", [{ id: "done", operation: "DONE", description: "done" }])
+      },
+      decide: async () => choice("DONE", "done"),
+      resolveApp,
+    })
+    expect(result.status).toBe("done")
+    expect(observedApp).toBe("Music")
   })
 
   test("types prepared text, submits it, then finishes", async () => {

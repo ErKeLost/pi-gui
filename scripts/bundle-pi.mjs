@@ -12,6 +12,9 @@ const marker = resolve(output, "package.json");
 const current = existsSync(marker) ? JSON.parse(readFileSync(marker, "utf8")) : null;
 const buildFormat = 4;
 
+const nodeRuntime = spawnSync(process.execPath, [resolve(root, "scripts/sync-node-runtime.mjs")], { cwd: root, stdio: "inherit" });
+if (nodeRuntime.status !== 0) process.exit(nodeRuntime.status ?? 1);
+
 const computerUse = spawnSync(process.execPath, [resolve(root, "scripts/sync-computer-use.mjs")], { cwd: root, stdio: "inherit" });
 if (computerUse.status !== 0) process.exit(computerUse.status ?? 1);
 

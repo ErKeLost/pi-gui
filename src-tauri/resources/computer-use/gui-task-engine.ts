@@ -53,7 +53,19 @@ export async function runGuiTaskEngine({
   let launched: LaunchData
   try {
     const resolved = await resolveApp(input.target.app, signal)
-    launched = (await client.run<LaunchData>(["launch", resolved.launchId, "--activate", "--timeout", String(remaining())], { timeoutMs: remaining(), signal })).data!
+    try {
+      launched = (await client.run<LaunchData>(["launch", resolved.launchId, "--activate", "--timeout", String(remaining())], { timeoutMs: remaining(), signal })).data!
+    } catch (error) {
+      const expectedPid = error instanceof AgentDesktopCommandError && error.detail.code === "APP_UNRESPONSIVE"
+        && error.detail.disposition?.delivery === "delivered_unverified"
+        && error.detail.details && typeof error.detail.details === "object"
+        ? (error.detail.details as { expected_pid?: unknown }).expected_pid
+        : undefined
+      if (typeof expectedPid !== "number") throw error
+      // Electron-style apps can return a helper PID from NSWorkspace even
+      // though the requested main app is already running and AX-addressable.
+      launched = { app: resolved.displayName, pid: expectedPid }
+    }
     if (launched.renderer === "chromium") await delay(Math.min(CHROMIUM_RENDERER_SETTLE_MS, remaining()), undefined, { signal })
   } catch (error) {
     return finish(signal?.aborted ? "aborted" : "error", undefined, safeError(error))

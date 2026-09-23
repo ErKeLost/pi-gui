@@ -13,10 +13,15 @@ cpSync(resolve(root,'src-tauri/resources/pi-runtime'),resolve(resources,'pi-runt
 cpSync(resolve(root,'src-tauri/resources/subagents'),resolve(resources,'subagents'),{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/computer-use'),resolve(resources,'computer-use'),{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/node_modules'),resolve(resources,'node_modules'),{recursive:true})
+cpSync(resolve(root,'src-tauri/resources/node-runtime'),resolve(resources,'node-runtime'),{recursive:true})
 cpSync(resolve(root,'src-tauri/resources/gui-extension.ts'),resolve(resources,'gui-extension.ts'))
+cpSync(resolve(root,'src-tauri/resources/context-payload.ts'),resolve(resources,'context-payload.ts'))
 cpSync(resolve(root,'src-tauri/resources/workspace.ts'),resolve(resources,'workspace.ts'))
-const cli=resolve(resources,'pi-runtime/cli.js'),extension=resolve(resources,'gui-extension.ts')
-const child=spawn(process.execPath,[cli,'--mode','rpc','--offline','--no-session','--extension',extension],{cwd,stdio:['pipe','pipe','pipe'],env:{...process.env,ORBIT_PI_CLI_PATH:cli,ORBIT_PI_NODE_PATH:process.execPath}})
+const cli=resolve(resources,'pi-runtime/cli.js'),extension=resolve(resources,'gui-extension.ts'),runtimeNode=resolve(resources,'node-runtime',process.platform==='win32'?'node.exe':'node'),runtimeModules=resolve(resources,'node_modules')
+const runtimeEnv={...process.env,NODE_PATH:runtimeModules,ORBIT_PI_CLI_PATH:cli,ORBIT_PI_NODE_PATH:runtimeNode,JITI_FS_CACHE:'false'}
+const clipboard=spawnSync(runtimeNode,['-e','require("@mariozechner/clipboard")'],{cwd,env:runtimeEnv,stdio:'pipe'})
+assert.equal(clipboard.status,0,'bundled native clipboard dependency loads')
+const child=spawn(runtimeNode,[cli,'--mode','rpc','--offline','--no-session','--extension',extension],{cwd,stdio:['pipe','pipe','pipe'],env:runtimeEnv})
 let buffer='',sequence=0,errors='',toolState,runtimeInfo
 const pending=new Map(),results=[]
 const collaborationTools=['spawn_agent','send_message','followup_task','wait_agent','interrupt_agent','list_agents']

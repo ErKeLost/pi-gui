@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Orbit",
-  "version": "0.2.75",
+  "version": "0.2.76",
   "identifier": "ai.pi.gui",
   "build": {
     "frontendDist": "../dist",
@@ -52,6 +52,10 @@
     "android": {
       "debugApplicationIdSuffix": ".debug"
     },
+    "macOS": {
+      "signingIdentity": "-",
+      "hardenedRuntime": false
+    },
     "linux": {
       "deb": {
         "depends": [
@@ -66,10 +70,12 @@
     },
     "resources": [
       "resources/gui-extension.ts",
+      "resources/context-payload.ts",
       "resources/workspace.ts",
       "resources/subagents",
       "resources/computer-use",
       "resources/node_modules",
+      "resources/node-runtime",
       "resources/pi-runtime"
     ],
     "createUpdaterArtifacts": false

@@ -14,7 +14,8 @@ const bundle=spawnSync(process.execPath,[resolve(root,'scripts/bundle-pi.mjs')],
 if(bundle.status!==0)process.exit(bundle.status??1)
 if(androidIndex<0&&['dev','build'].includes(args[0])){
   const profile=args[0]==='dev'?'debug':'release'
-  for(const name of ['computer-use','node_modules','pi-computer-use'])rmSync(resolve(root,'src-tauri/target',profile,'resources',name),{recursive:true,force:true})
+  for(const name of ['computer-use','node_modules','node-runtime','pi-computer-use','pi-runtime'])rmSync(resolve(root,'src-tauri/target',profile,'resources',name),{recursive:true,force:true})
+  rmSync(resolve(root,'src-tauri/target',profile,'bundle'),{recursive:true,force:true})
 }
 if(existsSync(resolve(local,'cargo/bin/rustup'))){
   env.RUSTUP_HOME=resolve(local,'rustup')

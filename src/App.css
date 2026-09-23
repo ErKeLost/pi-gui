@@ -3961,6 +3961,34 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   color: var(--muted-foreground);
   font-size: 11px;
 }
+.settings-runtime-paths {
+  display: grid;
+  gap: 0;
+}
+.settings-runtime-path {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 18px;
+  min-height: 38px;
+  padding: 9px 18px;
+  border-top: 1px solid var(--border);
+}
+.settings-runtime-path:first-child {
+  border-top: 0;
+}
+.settings-runtime-path span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.settings-runtime-path code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font: 10px/1.45 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* The remaining settings pages use the same group surface even when their
    existing content is not row-based. */
@@ -4049,6 +4077,10 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   .settings-stats > div + div {
     border-top: 1px solid var(--border);
     border-left: 0;
+  }
+  .settings-runtime-path {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 
@@ -4658,6 +4690,7 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   overflow-y: auto;
   box-sizing: border-box;
   border-radius: var(--radius-2xl);
+  box-shadow: none;
 }
 .context-usage-popover header {
   display: flex;

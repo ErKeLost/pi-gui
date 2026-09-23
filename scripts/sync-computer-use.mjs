@@ -1,8 +1,13 @@
-import { existsSync, cpSync, rmSync, mkdirSync, accessSync, constants } from "node:fs"
+import { existsSync, cpSync, rmSync, mkdirSync, accessSync, constants, readdirSync } from "node:fs"
 import { resolve } from "node:path"
 
 const root = resolve(import.meta.dirname, "..")
-const runtimePackages = ["@typesafe-ai", "agent-desktop"]
+const clipboardScope = resolve(root, "node_modules/@mariozechner")
+const clipboardPackages = existsSync(clipboardScope)
+  ? readdirSync(clipboardScope).filter(name => name === "clipboard" || name.startsWith("clipboard-"))
+    .map(name => `@mariozechner/${name}`)
+  : []
+const runtimePackages = ["@typesafe-ai", "agent-desktop", ...clipboardPackages]
 
 mkdirSync(resolve(root, "src-tauri/resources"), { recursive: true })
 

@@ -2,10 +2,10 @@ import {dirname,join} from 'node:path'
 import {realpathSync} from 'node:fs'
 import {pathToFileURL} from 'node:url'
 import type { ExtensionAPI, ExtensionCommandContext, ToolInfo } from '@earendil-works/pi-coding-agent'
-import { formatSkillsForPrompt } from '@earendil-works/pi-coding-agent'
-import {registerSubagentTools,ROOT_ORCHESTRATION_INSTRUCTIONS,SUBAGENT_TOOL_NAMES} from './subagents/index.ts'
+import {registerSubagentTools,SUBAGENT_TOOL_NAMES} from './subagents/index.ts'
 import {registerWorkspace} from './workspace.ts'
 import {COMPUTER_USE_TOOL_NAMES,registerComputerUseMode} from './computer-use/mode.ts'
+import {providerToolChars} from './context-payload.ts'
 // Pi official docs/extensions.md: registerCommand, getAllTools, setActiveTools,
 // ExtensionCommandContext.navigateTree and setLabel. Loaded only by this GUI.
 export const SESSION_META_TYPE='pi-gui-session-meta'
@@ -29,28 +29,10 @@ export function applyGuiToolSelection(requested:string[],active:string[]):string
 function toolChars(tool: ToolInfo) {
   return JSON.stringify({ name: tool.name, description: tool.description, parameters: tool.parameters }).length
 }
-function contextBreakdown(pi: ExtensionAPI, ctx: ExtensionCommandContext) {
-  const options = ctx.getSystemPromptOptions()
+function contextBreakdown(pi: ExtensionAPI, providerChars: number | undefined) {
   const active = new Set(pi.getActiveTools())
-  const readTool = ['read', 'bash'].find(name => active.has(name))
-  const skills = (options.skills ?? []).filter(skill => !skill.disableModelInvocation)
-  const rules = [...(options.contextFiles ?? []).map(file => file.content), ...(options.promptGuidelines ?? []), options.appendSystemPrompt ?? ''].join('\n').length
-  const prompt = ctx.getSystemPrompt()
-  const skillsPrompt = readTool && skills.length ? formatSkillsForPrompt(skills, readTool) : ''
-  const markers = ['\n\n<project_context>', '\n\nThe following skills provide specialized instructions', '\nCurrent working directory:']
-    .map(marker => prompt.indexOf(marker))
-    .filter(index => index >= 0)
-  const systemChars = prompt.slice(0, markers.length ? Math.min(...markers) : prompt.length).length
-  const dynamic = pi.getAllTools().filter(tool => !SUBAGENT_TOOL_NAMES.includes(tool.name as typeof SUBAGENT_TOOL_NAMES[number]) && tool.sourceInfo.source !== 'builtin' && active.has(tool.name))
-  const builtin = pi.getAllTools().filter(tool => tool.sourceInfo.source === 'builtin' && active.has(tool.name))
-  const subagentTools = pi.getAllTools().filter(tool => SUBAGENT_TOOL_NAMES.includes(tool.name as typeof SUBAGENT_TOOL_NAMES[number]) && active.has(tool.name))
   return {
-    systemChars,
-    skillsChars: skillsPrompt.length,
-    rulesChars: rules,
-    toolChars: builtin.reduce((total, tool) => total + toolChars(tool), 0),
-    dynamicChars: dynamic.reduce((total, tool) => total + toolChars(tool), 0),
-    subagentChars: subagentTools.reduce((total, tool) => total + toolChars(tool), 0) + (active.has('spawn_agent') ? ROOT_ORCHESTRATION_INSTRUCTIONS.length : 0),
+    toolChars: providerChars ?? pi.getAllTools().filter(tool => active.has(tool.name)).reduce((total, tool) => total + toolChars(tool), 0),
   }
 }
 function sessionText(ctx:ExtensionCommandContext){
@@ -62,12 +44,14 @@ function sessionText(ctx:ExtensionCommandContext){
   }).join('\n').slice(-6000)
 }
 export default async function (pi: ExtensionAPI) {
+  let latestProviderToolChars: number | undefined
   registerSubagentTools(pi)
   registerWorkspace(pi)
+  pi.on('before_provider_request',event=>{latestProviderToolChars=providerToolChars(event.payload)})
   const {SettingsManager}=await import(pathToFileURL(join(dirname(realpathSync(process.argv[1])),'index.js')).href)
   pi.registerCommand('gui-observe',{description:'GUI: observe session configuration',handler:async(_args,ctx)=>{
     const settings=SettingsManager.create(ctx.cwd,undefined,{projectTrusted:ctx.isProjectTrusted()})
-    ctx.ui.setStatus('gui-runtime',JSON.stringify({compaction:settings.getCompactionSettings(),retry:settings.getRetrySettings(),providerRetry:settings.getProviderRetrySettings(),transport:settings.getTransport(),thinkingBudgets:settings.getThinkingBudgets(),projectTrusted:ctx.isProjectTrusted(),contextUsage:ctx.getContextUsage(),systemPrompt:ctx.getSystemPrompt(),breakdown:contextBreakdown(pi,ctx),scopedModels:ctx.scopedModels.map(item=>({model:item.model.id,provider:item.model.provider,thinkingLevel:item.thinkingLevel})),idle:ctx.isIdle(),pending:ctx.hasPendingMessages()}))
+    ctx.ui.setStatus('gui-runtime',JSON.stringify({compaction:settings.getCompactionSettings(),retry:settings.getRetrySettings(),providerRetry:settings.getProviderRetrySettings(),transport:settings.getTransport(),thinkingBudgets:settings.getThinkingBudgets(),projectTrusted:ctx.isProjectTrusted(),contextUsage:ctx.getContextUsage(),systemPrompt:ctx.getSystemPrompt(),breakdown:contextBreakdown(pi,latestProviderToolChars),scopedModels:ctx.scopedModels.map(item=>({model:item.model.id,provider:item.model.provider,thinkingLevel:item.thinkingLevel})),idle:ctx.isIdle(),pending:ctx.hasPendingMessages()}))
   }})
   const publishTools = (ctx: ExtensionCommandContext) => ctx.ui.setStatus('gui-tools', JSON.stringify({
     active: pi.getActiveTools(),

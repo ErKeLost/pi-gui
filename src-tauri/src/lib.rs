@@ -88,7 +88,9 @@ pub fn run() {
     #[cfg(desktop)]
     {
         normalize_path();
-        std::thread::spawn(adopt_login_shell_path);
+        // Resolve the user's tool PATH before any Pi process can start. Node
+        // itself is bundled, but tools invoked by Pi still need the login PATH.
+        adopt_login_shell_path();
     }
     let builder = tauri::Builder::default();
     #[cfg(target_os = "android")]

@@ -18,6 +18,27 @@ struct Worker {
     stdin: ChildStdin,
     cwd: PathBuf,
 }
+
+fn safe_pi_diagnostic(lines: &[String], home: &Path) -> Option<String> {
+    let sensitive = ["authorization", "bearer ", "api_key", "apikey", "token=", "secret", "password"];
+    let useful = ["error", "cannot find", "not found", "failed", "missing", "syntax", "module", "enoent", "unsupported"];
+    let home = home.to_string_lossy();
+    let mut selected = lines
+        .iter()
+        .rev()
+        .filter_map(|line| {
+            let lower = line.to_ascii_lowercase();
+            if sensitive.iter().any(|needle| lower.contains(needle)) || !useful.iter().any(|needle| lower.contains(needle)) {
+                return None;
+            }
+            let compact = line.replace(home.as_ref(), "~").split_whitespace().collect::<Vec<_>>().join(" ");
+            (!compact.is_empty()).then(|| compact.chars().take(500).collect::<String>())
+        })
+        .take(2)
+        .collect::<Vec<_>>();
+    selected.reverse();
+    (!selected.is_empty()).then(|| selected.join(" · "))
+}
 #[derive(Default)]
 pub struct Bridge(Arc<Mutex<HashMap<String, Worker>>>);
 fn remove_worker_if_current(
@@ -247,13 +268,12 @@ fn pi_version(node: &std::path::Path, pi: &std::path::Path) -> Option<String> {
         .find(|line| !line.is_empty())
         .map(ToOwned::to_owned)
 }
-fn node_runtime() -> Result<(PathBuf, String), String> {
+fn node_version(node: &Path) -> Result<String, String> {
     const REQUIRED: (u32, u32) = (22, 19);
-    let node = executable("node")?;
-    let output = Command::new(&node)
+    let output = Command::new(node)
         .arg("--version")
         .output()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("Orbit 内置 Node 无法启动：{error}"))?;
     let version = String::from_utf8_lossy(&output.stdout)
         .trim()
         .trim_start_matches('v')
@@ -267,51 +287,174 @@ fn node_runtime() -> Result<(PathBuf, String), String> {
     );
     if !output.status.success() || detected < REQUIRED {
         return Err(format!(
-            "Orbit 内置 Pi 需要 Node >= {}.{}，当前为 {}",
+            "Orbit 内置 Node 需要 >= {}.{}，当前为 {}",
             REQUIRED.0, REQUIRED.1, version
         ));
     }
-    Ok((node, version))
+    Ok(version)
 }
 
-#[cfg(target_os = "macos")]
-fn orbit_support_dir() -> Result<PathBuf, String> {
-    Ok(home_dir()?.join("Library/Application Support/ai.pi.gui"))
+fn bundled_node_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let name = if cfg!(windows) { "node.exe" } else { "node" };
+    app.path()
+        .resolve(format!("resources/node-runtime/{name}"), BaseDirectory::Resource)
+        .map_err(|error| format!("无法定位 Orbit 内置 Node：{error}"))
+        .and_then(|path| path.is_file().then_some(path).ok_or_else(|| "Orbit 内置 Node 缺失，请重新安装应用".into()))
 }
 
-fn orbit_process_node(node: PathBuf) -> Result<PathBuf, String> {
+fn require_file(path: &Path, label: &str) -> Result<(), String> {
+    path.is_file()
+        .then_some(())
+        .ok_or_else(|| format!("Orbit 运行资源缺失：{label}（{}）", path.display()))
+}
+
+fn require_dir(path: &Path, label: &str) -> Result<(), String> {
+    path.is_dir()
+        .then_some(())
+        .ok_or_else(|| format!("Orbit 运行资源缺失：{label}（{}）", path.display()))
+}
+
+#[derive(Clone)]
+struct RuntimePaths {
+    home: PathBuf,
+    agent_dir: PathBuf,
+    sessions_dir: PathBuf,
+    resources_dir: PathBuf,
+    node: PathBuf,
+    host_node: PathBuf,
+    node_version: String,
+    pi: PathBuf,
+    pi_source: &'static str,
+    pi_version: String,
+    node_modules: PathBuf,
+    extension: PathBuf,
+}
+
+impl RuntimePaths {
+    fn resolve(app: &AppHandle, cwd: &Path) -> Result<Self, String> {
+        let home = home_dir()?;
+        let agent_dir = home.join(".pi/agent");
+        let sessions_dir = agent_dir.join("sessions");
+        let resources_dir = app
+            .path()
+            .resource_dir()
+            .map_err(|error| format!("无法定位 Orbit resources：{error}"))?
+            .join("resources");
+        let host_node = bundled_node_path(app)?;
+        let node_version = node_version(&host_node)?;
+        let node = orbit_process_node(host_node.clone(), app, &node_version)?;
+        let (pi, pi_source) = pi_path_for_project(Some(app), cwd)?;
+        if pi_source != "bundled" {
+            return Err("Orbit 内置 Pi runtime 缺失，请重新安装应用".into());
+        }
+        let node_modules = resources_dir.join("node_modules");
+        let extension = resources_dir.join("gui-extension.ts");
+        for (path, label) in [
+            (&pi, "Pi CLI"),
+            (&resources_dir.join("pi-runtime/index.js"), "Pi SDK"),
+            (&extension, "GUI extension"),
+            (&resources_dir.join("context-payload.ts"), "Context payload helper"),
+            (&resources_dir.join("workspace.ts"), "Workspace extension"),
+            (&resources_dir.join("subagents/index.ts"), "Subagent extension"),
+            (&resources_dir.join("computer-use/mode.ts"), "Computer use extension"),
+            (&node_modules.join("@typesafe-ai/sdk/package.json"), "TypeSafe SDK"),
+            (&node_modules.join("agent-desktop/package.json"), "Desktop agent runtime"),
+            (&node_modules.join("@mariozechner/clipboard/package.json"), "Clipboard runtime"),
+        ] {
+            require_file(path, label)?;
+        }
+        require_dir(&node_modules, "Node modules")?;
+        let pi_version = pi_version(&node, &pi).ok_or_else(|| "Orbit 内置 Pi runtime 无法启动，请重新安装应用".to_string())?;
+        Ok(Self {
+            home,
+            agent_dir,
+            sessions_dir,
+            resources_dir: resources_dir.clone(),
+            node,
+            host_node,
+            node_version,
+            pi,
+            pi_source,
+            pi_version,
+            node_modules,
+            extension,
+        })
+    }
+
+    fn diagnostics(&self, cwd: &Path) -> Value {
+        json!({
+            "home": &self.home,
+            "agentDir": &self.agent_dir,
+            "sessionsDir": &self.sessions_dir,
+            "resourcesDir": &self.resources_dir,
+            "node": &self.node,
+            "hostNode": &self.host_node,
+            "nodeVersion": &self.node_version,
+            "pi": &self.pi,
+            "piVersion": &self.pi_version,
+            "piSource": self.pi_source,
+            "nodeModules": &self.node_modules,
+            "extension": &self.extension,
+            "cwd": cwd,
+        })
+    }
+}
+
+fn orbit_process_node(node: PathBuf, app: &AppHandle, version: &str) -> Result<PathBuf, String> {
     #[cfg(target_os = "macos")]
     {
-        return macos_orbit_agent(&node);
+        return macos_orbit_agent(&node, app, version);
     }
     #[cfg(not(target_os = "macos"))]
-    Ok(node)
+    {
+        let _ = app;
+        Ok(node)
+    }
 }
 
 #[cfg(target_os = "macos")]
-fn macos_orbit_agent(node: &Path) -> Result<PathBuf, String> {
+fn macos_orbit_agent(node: &Path, app: &AppHandle, version: &str) -> Result<PathBuf, String> {
+    static SETUP: Mutex<()> = Mutex::new(());
     if node.file_name().is_some_and(|name| name == "Orbit Agent") {
         return Ok(node.to_path_buf());
     }
-    let app = orbit_support_dir()?.join("runtime/Orbit Agent.app");
-    let macos_dir = app.join("Contents/MacOS");
-    let executable = macos_dir.join("Orbit Agent");
-    let plist = app.join("Contents/Info.plist");
-    fs::create_dir_all(&macos_dir).map_err(|error| format!("无法创建 Orbit Agent 运行时: {error}"))?;
-    let source = fs::canonicalize(node).unwrap_or_else(|_| node.to_path_buf());
-    let stale = match (fs::metadata(&source), fs::metadata(&executable)) {
-        (Ok(src), Ok(dst)) => src.len() != dst.len(),
-        _ => true,
+    let _guard = SETUP.lock().map_err(|_| "Orbit Agent 初始化锁已损坏".to_string())?;
+    let bundle_name = if cfg!(debug_assertions) {
+        "Orbit Agent Dev.app"
+    } else {
+        "Orbit Agent.app"
     };
-    if stale {
-        fs::copy(&source, &executable).map_err(|error| format!("无法安装 Orbit Agent 运行时: {error}"))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).ok();
-        }
+    let app = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法定位 Orbit 应用目录：{error}"))?
+        .join(format!("runtime/{bundle_name}"));
+    let executable = app.join("Contents/MacOS/Orbit Agent");
+    let plist = app.join("Contents/Info.plist");
+    let marker = app.join("Contents/Resources/orbit-node-version");
+    let source = fs::canonicalize(node).unwrap_or_else(|_| node.to_path_buf());
+    let fingerprint = format!("{version}\n{}\n", fs::metadata(&source).map_err(|error| error.to_string())?.len());
+    if executable.is_file() && plist.is_file() && fs::read_to_string(&marker).ok().as_deref() == Some(&fingerprint) {
+        return Ok(executable);
     }
-    fs::write(&plist, r#"<?xml version="1.0" encoding="UTF-8"?>
+    let parent = app.parent().ok_or("Orbit Agent runtime 路径无效")?;
+    fs::create_dir_all(parent).map_err(|error| format!("无法创建 Orbit Agent 目录：{error}"))?;
+    let temporary = parent.join(format!(".orbit-agent-{}-{}", std::process::id(), thread::current().name().unwrap_or("runtime")));
+    if temporary.exists() {
+        fs::remove_dir_all(&temporary).map_err(|error| format!("无法清理 Orbit Agent 临时目录：{error}"))?;
+    }
+    let temporary_macos = temporary.join("Contents/MacOS");
+    let temporary_resources = temporary.join("Contents/Resources");
+    fs::create_dir_all(&temporary_macos).map_err(|error| format!("无法创建 Orbit Agent 运行时：{error}"))?;
+    fs::create_dir_all(&temporary_resources).map_err(|error| format!("无法创建 Orbit Agent 资源目录：{error}"))?;
+    let temporary_executable = temporary_macos.join("Orbit Agent");
+    fs::copy(&source, &temporary_executable).map_err(|error| format!("无法安装 Orbit Agent 运行时：{error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&temporary_executable, fs::Permissions::from_mode(0o755)).map_err(|error| format!("无法设置 Orbit Agent 权限：{error}"))?;
+    }
+    fs::write(temporary.join("Contents/Info.plist"), r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -329,36 +472,41 @@ fn macos_orbit_agent(node: &Path) -> Result<PathBuf, String> {
   <true/>
 </dict>
 </plist>
-"#).map_err(|error| format!("无法写入 Orbit Agent 信息: {error}"))?;
-    let _ = Command::new("/usr/bin/codesign")
+"#).map_err(|error| format!("无法写入 Orbit Agent 信息：{error}"))?;
+    fs::write(temporary_resources.join("orbit-node-version"), &fingerprint).map_err(|error| format!("无法写入 Orbit Agent 版本：{error}"))?;
+    let status = Command::new("/usr/bin/codesign")
         .args(["--force", "--sign", "-", "--identifier", "ai.pi.gui.agent"])
-        .arg(&app)
-        .status();
+        .arg(&temporary)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|error| format!("无法签名 Orbit Agent：{error}"))?;
+    if !status.success() {
+        let _ = fs::remove_dir_all(&temporary);
+        return Err("无法签名 Orbit Agent".into());
+    }
+    if app.exists() {
+        fs::remove_dir_all(&app).map_err(|error| format!("无法更新 Orbit Agent：{error}"))?;
+    }
+    fs::rename(&temporary, &app).map_err(|error| format!("无法启用 Orbit Agent：{error}"))?;
     Ok(executable)
 }
 
-fn apply_orbit_runtime_env(command: &mut Command, app: &AppHandle, node: &Path, pi: &Path, pi_source: &str, pi_version: &Option<String>) {
+fn apply_orbit_runtime_env(command: &mut Command, node: &Path, pi: &Path, pi_source: &str, pi_version: &str, node_modules: &Path) {
     command
         .env("ORBIT_HOST_BUNDLE_ID", "ai.pi.gui")
         .env("ORBIT_AGENT_BUNDLE_ID", "ai.pi.gui.agent")
         .env("ORBIT_PI_CLI_PATH", pi)
         .env("ORBIT_PI_NODE_PATH", node)
-        .env("ORBIT_PI_SOURCE", pi_source);
-    if let Some(version) = pi_version {
-        command.env("ORBIT_PI_VERSION", version);
-    }
+        .env("ORBIT_PI_SOURCE", pi_source)
+        .env("JITI_FS_CACHE", "false");
+    command.env("ORBIT_PI_VERSION", pi_version);
     if let Ok(key_path) = typesafe_key_path() {
         command.env("ORBIT_TYPESAFE_KEY_PATH", key_path);
     }
-    if let Ok(modules) = app.path().resolve("resources/node_modules", BaseDirectory::Resource) {
-        let current = std::env::var("NODE_PATH").unwrap_or_default();
-        let merged = if current.is_empty() {
-            modules.display().to_string()
-        } else {
-            format!("{modules}{sep}{current}", modules = modules.display(), sep = if cfg!(windows) { ";" } else { ":" }, current = current)
-        };
-        command.env("NODE_PATH", merged);
-    }
+    // Extension imports are resolved only from Orbit's pinned resources.
+    // User NODE_PATH entries can contain incompatible copies of these packages.
+    command.env("NODE_PATH", node_modules);
 }
 fn home_dir() -> Result<PathBuf, String> {
     std::env::var_os("HOME")
@@ -1154,8 +1302,12 @@ fn pi_model_from_meta(entry: &Value) -> Option<Value> {
     Some(model)
 }
 
-fn agent_dir() -> Result<PathBuf, String> {
+pub(crate) fn agent_dir() -> Result<PathBuf, String> {
     Ok(home_dir()?.join(".pi/agent"))
+}
+
+pub(crate) fn sessions_dir() -> Result<PathBuf, String> {
+    Ok(agent_dir()?.join("sessions"))
 }
 
 fn provider_store_path(dir: &std::path::Path) -> PathBuf {
@@ -1258,10 +1410,8 @@ fn supported_api(api: &str) -> bool {
 pub async fn discover(app: AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let home = home_dir()?;
-        let (pi, pi_source) = pi_path_for_project(Some(&app), &home)?;
-        let (node, node_version) = node_runtime()?;
-        let output = Command::new(&node).arg(&pi).arg("--version").output().map_err(|e| e.to_string())?;
-        Ok(json!({"pi":pi,"node":node,"nodeVersion":node_version,"piSource":pi_source,"version":String::from_utf8_lossy(&output.stdout).trim(),"cwd":home.join("Desktop/pi-gui"),"home":home}))
+        let runtime = RuntimePaths::resolve(&app, &home)?;
+        Ok(runtime.diagnostics(&home))
     }).await.map_err(|e|e.to_string())?
 }
 /// Query the OpenAI-compatible provider catalog configured in Pi's own files.
@@ -1843,28 +1993,23 @@ pub async fn pi_connect(
     #[cfg(desktop)]
     {
         let path = project(&cwd)?;
-        repair_custom_model_costs(&agent_dir()?)?;
-        let (pi, pi_source) = pi_path_for_project(Some(&app), &path)?;
-        let (detected_node, _) = node_runtime()?;
-        let node = orbit_process_node(detected_node)?;
-        let pi_version = pi_version(&node, &pi);
+        let runtime = RuntimePaths::resolve(&app, &path)?;
+        repair_custom_model_costs(&runtime.agent_dir)?;
+        let pi = runtime.pi.clone();
+        let node = runtime.node.clone();
         // Explicit executable paths also work when Finder's PATH lacks the Node version manager.
         // Connection id lets one project keep multiple live Pi processes (one session each).
         let id = connection_id
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| cwd.clone());
         state.stop_project(&id);
-        let extension = app
-            .path()
-            .resolve("resources/gui-extension.ts", BaseDirectory::Resource)
-            .map_err(|e| e.to_string())?;
         let mut command = Command::new(&node);
         command.arg(&pi).args(["--mode", "rpc", "--offline"]);
         command
             .arg("--extension")
-            .arg(extension)
+            .arg(&runtime.extension)
             .current_dir(&path);
-        apply_orbit_runtime_env(&mut command, &app, &node, &pi, pi_source, &pi_version);
+        apply_orbit_runtime_env(&mut command, &node, &pi, runtime.pi_source, &runtime.pi_version, &runtime.node_modules);
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -1916,11 +2061,19 @@ pub async fn pi_connect(
                 }
             }
         });
-        // Drain stderr to avoid blocking the child. Never forward credentials or raw diagnostic dumps.
-        thread::spawn(move || {
+        // Keep a small bounded buffer. Only a filtered, redacted summary may
+        // leave the native process when Pi exits.
+        let diagnostic_lines = Arc::new(Mutex::new(Vec::<String>::new()));
+        let stderr_lines = diagnostic_lines.clone();
+        let stderr_thread = thread::spawn(move || {
             for record in BufReader::new(stderr).split(b'\n') {
-                if record.is_err() {
-                    break;
+                let Ok(record) = record else { break };
+                let line = String::from_utf8_lossy(&record).trim().to_string();
+                if line.is_empty() { continue; }
+                if let Ok(mut lines) = stderr_lines.lock() {
+                    lines.push(line);
+                    let overflow = lines.len().saturating_sub(32);
+                    if overflow > 0 { lines.drain(..overflow); }
                 }
             }
         });
@@ -1928,23 +2081,29 @@ pub async fn pi_connect(
         let watched_child = child.clone();
         let watched_id = id.clone();
         let exit_app = app.clone();
+        let diagnostic_home = runtime.home.clone();
         thread::spawn(move || loop {
             let status = watched_child
                 .lock()
                 .ok()
                 .and_then(|mut c| c.try_wait().ok().flatten());
             if let Some(status) = status {
+                let _ = stderr_thread.join();
+                let diagnostic = diagnostic_lines
+                    .lock()
+                    .ok()
+                    .and_then(|lines| safe_pi_diagnostic(&lines, &diagnostic_home));
                 let removed = remove_worker_if_current(&workers, &watched_id, &watched_child);
                 if removed {
                     crate::remote::publish_connection_closed(&exit_app, &watched_id);
-                    let _ = on_event.send(json!({"kind":"exit","code":status.code()}));
+                    let _ = on_event.send(json!({"kind":"exit","code":status.code(),"message":diagnostic}));
                 }
                 break;
             }
             thread::sleep(Duration::from_millis(150));
         });
         Ok(
-            json!({"pid":pid,"cwd":path,"pi":pi,"node":node,"piSource":pi_source,"piVersion":pi_version,"connectionId":id}),
+            json!({"pid":pid,"cwd":path,"pi":pi,"node":node,"piSource":runtime.pi_source,"piVersion":runtime.pi_version,"connectionId":id}),
         )
     }
 }
@@ -1961,12 +2120,11 @@ pub fn pi_disconnect(app: AppHandle, project: String, state: State<'_, Bridge>) 
 pub async fn list_sessions(app: AppHandle, cwd: String) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let path = project(&cwd)?;
-        let (pi, _) = pi_path_for_project(Some(&app), &path)?;
-        let sdk = pi.parent().ok_or("Invalid Pi path")?.join("index.js");
+        let runtime = RuntimePaths::resolve(&app, &path)?;
+        let sdk = runtime.pi.parent().ok_or("Invalid Pi path")?.join("index.js");
         // SDK SessionManager.list is the documented session index, not a guessed JSONL parser.
         let code = "const {pathToFileURL}=require('node:url'); (async()=>{const {SessionManager}=await import(pathToFileURL(process.argv[1]).href);const sessions=await SessionManager.list(process.argv[2]);const result=sessions.map(({allMessagesText,...session})=>{let icon;try{const entries=SessionManager.open(session.path).getEntries();const meta=[...entries].reverse().find(entry=>entry.type==='custom'&&entry.customType==='pi-gui-session-meta');if(meta?.data&&typeof meta.data.icon==='string')icon=meta.data.icon}catch{}return {...session,...(icon?{icon}:{})}});console.log(JSON.stringify(result));})().catch(()=>process.exit(1));";
-        let (node, _) = node_runtime()?;
-        let output = Command::new(node).args(["-e",code]).arg(sdk).arg(path).output().map_err(|e|e.to_string())?;
+        let output = Command::new(runtime.node).args(["-e",code]).arg(sdk).arg(path).output().map_err(|e|e.to_string())?;
         if !output.status.success() { return Err("Pi SDK 无法读取会话列表".into()); }
         serde_json::from_slice(&output.stdout).map_err(|e|e.to_string())
     }).await.map_err(|e|e.to_string())?
@@ -1987,8 +2145,7 @@ pub async fn list_project_files(cwd: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn delete_session(session_path: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = home_dir()?
-            .join(".pi/agent/sessions")
+        let root = sessions_dir()?
             .canonicalize()
             .map_err(|_| "Pi 会话目录不可用".to_string())?;
         let target = PathBuf::from(&session_path)
@@ -2005,14 +2162,14 @@ pub async fn delete_session(session_path: String) -> Result<(), String> {
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
-pub async fn session_turn_durations(session_path: String) -> Result<Value, String> {
+pub async fn session_turn_durations(app: AppHandle, session_path: String) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = home_dir()?.join(".pi/agent/sessions").canonicalize().map_err(|_| "Pi 会话目录不可用".to_string())?;
+        let root = sessions_dir()?.canonicalize().map_err(|_| "Pi 会话目录不可用".to_string())?;
         let target = PathBuf::from(&session_path).canonicalize().map_err(|_| "会话文件不存在".to_string())?;
         if target.extension().and_then(|value| value.to_str()) != Some("jsonl") || !target.starts_with(&root) { return Err("只能读取 Pi 会话目录中的 JSONL 文件".into()); }
         let code = r#"const fs=require('node:fs');const out={};let turn=null;const flush=()=>{if(turn?.id&&Number.isFinite(turn.start)&&Number.isFinite(turn.end)&&turn.end>=turn.start)out[turn.id]=turn.end-turn.start;turn=null};for(const line of fs.readFileSync(process.argv[1],'utf8').split('\n')){if(!line.trim())continue;let entry;try{entry=JSON.parse(line)}catch{continue}if(entry.type!=='message'||!entry.message)continue;const role=entry.message.role;const at=Date.parse(entry.timestamp);if(role==='user'){flush();turn={start:at,end:null,id:null};continue}if(role!=='assistant'||!turn)continue;if(!turn.id){const stamp=entry.message.timestamp;if(Number.isFinite(stamp))turn.id=`timestamp:${stamp}`;else{const call=Array.isArray(entry.message.content)&&entry.message.content.find(part=>part?.type==='toolCall'&&part.id);if(call)turn.id=`tool:${call.id}`}}if(Number.isFinite(at))turn.end=at}flush();process.stdout.write(JSON.stringify(out));"#;
-        let (node, _) = node_runtime()?;
-        let output = Command::new(node).args(["-e", code]).arg(&target).output().map_err(|error| error.to_string())?;
+        let runtime = RuntimePaths::resolve(&app, &home_dir()?)?;
+        let output = Command::new(runtime.node).args(["-e", code]).arg(&target).output().map_err(|error| error.to_string())?;
         if !output.status.success() { return Err("Pi 会话耗时读取失败".into()); }
         serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())
     }).await.map_err(|error| error.to_string())?
@@ -2032,8 +2189,9 @@ pub async fn open_pi_terminal(
     #[cfg(desktop)]
     {
         let path = project(&cwd)?;
-        let (pi, _) = pi_path_for_project(Some(&app), &path)?;
-        let (node, _) = node_runtime()?;
+        let runtime = RuntimePaths::resolve(&app, &path)?;
+        let pi = runtime.pi;
+        let node = runtime.node;
         let mut arguments = Vec::new();
         if let Some(session) = session {
             arguments.extend(["--session".to_string(), session]);
@@ -2184,6 +2342,20 @@ mod tests {
             bundle.canonicalize().unwrap()
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pi_diagnostics_are_bounded_redacted_and_ignore_secrets() {
+        let home = PathBuf::from("/Users/example");
+        let lines = vec![
+            "Authorization: Bearer private-value".to_string(),
+            "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/Users/example/runtime/helper.ts'".to_string(),
+        ];
+        let message = safe_pi_diagnostic(&lines, &home).unwrap();
+        assert!(message.contains("ERR_MODULE_NOT_FOUND"));
+        assert!(message.contains("~/runtime/helper.ts"));
+        assert!(!message.contains("private-value"));
+        assert!(message.len() <= 500);
     }
 
     fn worker() -> Worker {

@@ -234,7 +234,7 @@ async function startConnection(cwd:string,id:string,options?:{restoreLast?:boole
  onEvent.onmessage=event=>{
   if(connections.get(id)?.token!==token)return
   if(event.kind==='rpc'&&event.payload)dispatch(event.payload,id)
-  if(event.kind==='exit'){const cwd=connections.get(id)?.cwd,s=current(id);flushEvents(id);clearEvents(id);connections.delete(id);if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd);for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file);patch(id,{connection:'offline',error:`Pi 进程已退出（${event.code??'signal'}）`,transcript:{...s.transcript,running:false,compacting:false}});failPending(id,'Pi 进程已退出')}
+  if(event.kind==='exit'){const cwd=connections.get(id)?.cwd,s=current(id),detail=event.message?`：${event.message}`:'';flushEvents(id);clearEvents(id);connections.delete(id);if(cwd&&projectActive.get(cwd)===id)projectActive.delete(cwd);for(const [file,owner] of [...sessionOwners]) if(owner===id) sessionOwners.delete(file);patch(id,{connection:'offline',error:`Pi 进程已退出（${event.code??'signal'}）${detail}`,transcript:{...s.transcript,running:false,compacting:false}});failPending(id,'Pi 进程已退出')}
   if(event.kind==='protocol_error')patch(id,{error:event.message})
  }
  try{
@@ -248,7 +248,10 @@ async function startConnection(cwd:string,id:string,options?:{restoreLast?:boole
   await loadMessages(id)
   if(connections.get(id)?.token!==token)return
   patch(id,{connection:'online'})
- }catch(error){connections.delete(id);if(projectActive.get(cwd)===id)projectActive.delete(cwd);failPending(id,'连接失败');await invoke('pi_disconnect',{project:id}).catch(()=>{});patch(id,{connection:'offline'});throw error}
+ }catch(error){
+  if(connections.get(id)?.token!==token)return
+  connections.delete(id);if(projectActive.get(cwd)===id)projectActive.delete(cwd);failPending(id,'连接失败');await invoke('pi_disconnect',{project:id}).catch(()=>{});patch(id,{connection:'offline'});throw error
+ }
 }
 export async function connectRemoteConnection(connection:{id:string;cwd:string},workspaceMode:WorkspaceMode='project'){
  if(!mobileRuntime())throw new Error('远程 connection 只能在移动端使用')

@@ -66,7 +66,7 @@ function UsagePanel({
     <ul>
       {segments.map(segment => <li key={segment.id}>
         <span><i style={{ background: segment.color }} />{segment.label}</span>
-        <span>{waiting && segment.id === "conversation" ? "—" : formatTokens(segment.tokens)}</span>
+        <span>{waiting && segment.id === "messages" ? "—" : `~${formatTokens(segment.tokens)}`}</span>
       </li>)}
     </ul>
   </div>;
