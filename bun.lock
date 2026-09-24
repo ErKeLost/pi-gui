@@ -82,9 +82,6 @@
   "trustedDependencies": [
     "agent-desktop",
   ],
-  "patchedDependencies": {
-    "@lobehub/streamdown@1.3.1": "patches/@lobehub%2Fstreamdown@1.3.1.patch",
-  },
   "overrides": {
     "motion": "13.2.0",
     "react": "19.2.8",
