@@ -3,7 +3,7 @@
 // binary exists and bundling has not started yet.
 // - Cross-compilation (--target triple) puts output under target/<triple>/<profile>.
 // - Mobile platforms have no desktop worker and skip cleanly.
-import { copyFileSync, existsSync, statSync } from "node:fs"
+import { copyFileSync, existsSync, readdirSync, statSync } from "node:fs"
 import { resolve } from "node:path"
 
 const root = resolve(import.meta.dirname, "..")
@@ -18,13 +18,21 @@ if (mobilePlatform) {
   process.exit(0)
 }
 
-const triple = process.env.TAURI_ENV_TARGET || ""
 const profile = process.env.TAURI_ENV_DEBUG ? "debug" : "release"
-const source = resolve(root, "src-tauri/target", triple, profile, "ax_control").replace("/target//", "/target/")
+const targetRoot = resolve(root, "src-tauri/target")
+const requestedTriple = process.env.TAURI_ENV_TARGET || process.env.TARGET || ""
+const candidates = [
+  requestedTriple && resolve(targetRoot, requestedTriple, profile, "ax_control"),
+  resolve(targetRoot, profile, "ax_control"),
+  ...readdirSync(targetRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && entry.name !== "debug" && entry.name !== "release")
+    .map(entry => resolve(targetRoot, entry.name, profile, "ax_control")),
+].filter(Boolean)
+const source = candidates.find(path => existsSync(path))
 const target = resolve(root, "src-tauri/resources/computer-use/ax_control")
 
-if (!existsSync(source)) {
-  console.error(`[sync-worker] 缺少 ${source}；请先完成 cargo build（tauri build 会自动执行）`)
+if (!source) {
+  console.error(`[sync-worker] 未找到 ${profile}/ax_control；已检查 ${candidates.join(", ")}`)
   process.exit(1)
 }
 copyFileSync(source, target)
