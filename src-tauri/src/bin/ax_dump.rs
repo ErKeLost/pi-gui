@@ -1,7 +1,7 @@
 //! Read-only xa11y diagnostics. Never performs an accessibility action.
 //! Usage: cargo run --bin ax_dump -- <exact app name> [max nodes]
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(target_os = "macos")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use serde_json::json;
     use std::time::Duration;
@@ -77,8 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(not(target_os = "macos"))]
 fn main() {
-    eprintln!("ax_dump is desktop-only");
+    eprintln!("ax_dump is only available on macOS");
     std::process::exit(1);
 }
