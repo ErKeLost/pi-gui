@@ -37,4 +37,4 @@ if (!source) {
 }
 copyFileSync(source, target)
 const { size } = statSync(target)
-console.log(`[sync-worker] ax_control (${triple || "host"} ${profile}) ${(size / 1024 / 1024).toFixed(1)} MB → resources/computer-use/`)
+console.log(`[sync-worker] ax_control (${source} ${profile}) ${(size / 1024 / 1024).toFixed(1)} MB → resources/computer-use/`)
