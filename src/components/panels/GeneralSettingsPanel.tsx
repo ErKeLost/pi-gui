@@ -81,11 +81,13 @@ function QueueSettings({ status, state }: { status: string; state: RpcSessionSta
 }
 
 function ComputerUseSettings({ desktop, online, running }: { desktop: boolean; online: boolean; running: boolean }) {
+  const platform = useWorkspace(state => state.runtimePlatform);
+  const macos = platform === "macos";
   const enabled = useWorkspace(state => state.computerUseEnabled);
   const [apiKey, setApiKey] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (desktop) void computerUseKeyStatus().then(status => setHasKey(status.hasKey)).catch(report); }, [desktop]);
+  useEffect(() => { if (desktop && macos) void computerUseKeyStatus().then(status => setHasKey(status.hasKey)).catch(report); }, [desktop, macos]);
   async function saveKey() {
     setBusy(true);
     try {
@@ -97,11 +99,11 @@ function ComputerUseSettings({ desktop, online, running }: { desktop: boolean; o
     finally { setBusy(false); }
   }
   return <>
-    <SettingRow title="电脑操作" description={desktop ? "由你手动打开。macOS 请在辅助功能和屏幕录制中同时允许「Orbit」与「Orbit Agent」；「Orbit Agent Dev」只属于 tauri dev。授权后完全退出 Orbit 再打开。" : "电脑操作只能在运行 Pi 的电脑上使用。"}>
-      {desktop ? <Switch aria-label="电脑操作" checked={enabled} disabled={!online || running} onChange={checked => void setComputerUseMode(checked).catch(report)} /> : <span className="remote-settings-note">电脑端设置</span>}
+    <SettingRow title="电脑操作" description={!desktop ? "电脑操作只能在运行 Pi 的电脑上使用。" : !macos ? "Computer Use 目前只支持 macOS；此平台功能已关闭。" : "由你手动打开。macOS 请在辅助功能和屏幕录制中同时允许「Orbit」与「Orbit Agent」；「Orbit Agent Dev」只属于 tauri dev。授权后完全退出 Orbit 再打开。"}>
+      {desktop && macos ? <Switch aria-label="电脑操作" checked={enabled} disabled={!online || running} onChange={checked => void setComputerUseMode(checked).catch(report)} /> : <span className="remote-settings-note">{desktop ? "macOS 专用" : "电脑端设置"}</span>}
     </SettingRow>
-    <SettingRow title="Jev API Key" description={desktop ? "从 TypeSafe 控制台粘贴，只存在这台电脑。保存不等于打开电脑操作，开关仍由你控制。" : "Jev Key 由电脑端保管。"}>
-      {desktop ? <div className="settings-directory-control"><Input type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} placeholder={hasKey ? "已保存，留空再保存可覆盖" : "粘贴 TypeSafe API Key"} autoComplete="off" aria-label="Jev API Key" /><div className="settings-directory-actions"><Button variant="default" disabled={busy || !apiKey.trim()} onClick={() => void saveKey()}>{busy ? "保存中…" : "保存"}</Button><Button variant="outline" disabled={busy || !hasKey} onClick={() => { setApiKey(""); void saveComputerUseKey("").then(status => { setHasKey(status.hasKey); gooeyToast.success(status.hasKey ? "已清除 Orbit 保存的 Key，当前仍检测到环境 Key" : "Jev Key 已清除", { showTimestamp: false }); }).catch(report); }}>清除</Button></div></div> : <span className="remote-settings-note">{hasKey ? "电脑端已保存" : "电脑端设置"}</span>}
+    <SettingRow title="Jev API Key" description={desktop && macos ? "从 TypeSafe 控制台粘贴，只存在这台电脑。保存不等于打开电脑操作，开关仍由你控制。" : "Jev Key 由电脑端保管。"}>
+      {desktop && macos ? <div className="settings-directory-control"><Input type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} placeholder={hasKey ? "已保存，留空再保存可覆盖" : "粘贴 TypeSafe API Key"} autoComplete="off" aria-label="Jev API Key" /><div className="settings-directory-actions"><Button variant="default" disabled={busy || !apiKey.trim()} onClick={() => void saveKey()}>{busy ? "保存中…" : "保存"}</Button><Button variant="outline" disabled={busy || !hasKey} onClick={() => { setApiKey(""); void saveComputerUseKey("").then(status => { setHasKey(status.hasKey); gooeyToast.success(status.hasKey ? "已清除 Orbit 保存的 Key，当前仍检测到环境 Key" : "Jev Key 已清除", { showTimestamp: false }); }).catch(report); }}>清除</Button></div></div> : <span className="remote-settings-note">{hasKey ? "电脑端已保存" : "电脑端设置"}</span>}
     </SettingRow>
   </>;
 }

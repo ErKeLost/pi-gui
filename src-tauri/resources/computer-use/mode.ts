@@ -27,14 +27,16 @@ export function applyComputerUseMode(active: string[], available: string[], enab
 }
 
 export function registerComputerUseMode(pi: ExtensionAPI, publishTools: (ctx: { ui: { setStatus(key: string, text: string | undefined): void } }) => void): void {
-  registerGuiTask(pi)
+  const supported = process.platform === "darwin"
+  if (supported) registerGuiTask(pi)
   pi.registerCommand("gui-computer-use-mode", {
     description: "GUI: enable or disable Computer Use tools",
     handler: async (args, ctx) => {
       const value = JSON.parse(args || "{}") as { enabled?: unknown }
       if (typeof value.enabled !== "boolean") throw new Error("Expected enabled boolean")
+      if (!supported && value.enabled) throw new Error("Computer Use is currently supported only on macOS")
       pi.setActiveTools(applyComputerUseMode(pi.getActiveTools(), pi.getAllTools().map(tool => tool.name), value.enabled))
-      ctx.ui.setStatus("gui-computer-use-mode", value.enabled ? "enabled" : "disabled")
+      ctx.ui.setStatus("gui-computer-use-mode", value.enabled && supported ? "enabled" : "disabled")
       publishTools(ctx)
     },
   })

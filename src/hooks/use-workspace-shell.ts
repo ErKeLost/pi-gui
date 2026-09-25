@@ -91,7 +91,7 @@ export function useWorkspaceBootstrap() {
     if (runtimeStarted) return;
     runtimeStarted = true;
     void detectRuntimeEnvironment().then(environment => {
-      useWorkspace.getState().set({ runtimeTarget: environment.target });
+      useWorkspace.getState().set({ runtimeTarget: environment.target, runtimePlatform: environment.platform, ...(environment.platform !== "macos" ? { computerUseEnabled: false } : {}) });
       if (environment.target === "mobile") {
         const uri = storedPairingUri();
         const preview = environment.platform === "preview";
