@@ -6,12 +6,21 @@ export type PiMessage = { role: string; content?: string | Part[]; command?: str
 export type DisplayMessage = { id: string; message: PiMessage; startedAt?: number; elapsedMs?: number }
 export type DisplayMessageGroup = { id: string; items: DisplayMessage[]; indexes: number[] }
 export type ToolUsage = { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost?: { total?: number } }
-export type Tool = { name: string; args?: Record<string, Json>; result?: unknown; running: boolean; isError?: boolean; usage?: ToolUsage }
+export type Tool = { name: string; args?: Record<string, Json>; result?: unknown; details?: { patch: string }; running: boolean; isError?: boolean; usage?: ToolUsage }
 export type Event = { type: string; message?: PiMessage; toolCallId?: string; toolName?: string; args?: Record<string, Json>; result?: unknown; partialResult?: unknown; isError?: boolean; details?: unknown; errorMessage?: string; assistantMessageEvent?: { type: string; contentIndex: number; delta?: string; content?: string; id?: string; toolName?: string; toolCall?: Part }; steering?: string[]; followUp?: string[]; [key: string]: unknown }
 export type Transcript = { messages: DisplayMessage[]; active: number; running: boolean; compacting: boolean; phase: string; tools: Record<string, Tool>; error: string | null; queue: { steering: string[]; followUp: string[] }; bash: { id?: string; command?: string; output: string; running: boolean } | null; turnStartedAt: number | null }
 export const emptyTranscript = (): Transcript => ({ messages: [], active: -1, running: false, compacting: false, phase: '就绪', tools: {}, error: null, queue: { steering: [], followUp: [] }, bash: null, turnStartedAt: null })
 const MAX_TOOL_RESULT_CHARS = 20_000
+const MAX_TOOL_PATCH_CHARS = 100_000
 const boundedToolText = (text:string) => text.length <= MAX_TOOL_RESULT_CHARS ? text : `${text.slice(0,MAX_TOOL_RESULT_CHARS)}\n\n[输出过长，已省略]`
+function toolCodeDetails(toolName:string,value:unknown):Tool['details']|undefined {
+  if(!/(^|[_-])(edit|patch|apply)([_-]|$)|^(edit|patch|apply)/i.test(toolName))return undefined
+  if(!value||typeof value!=='object'||Array.isArray(value))return undefined
+  const record=value as Record<string,unknown>
+  const details=record.details&&typeof record.details==='object'&&!Array.isArray(record.details)?record.details as Record<string,unknown>:record
+  const patch=details.patch
+  return typeof patch==='string'&&patch.length<=MAX_TOOL_PATCH_CHARS?{patch}:undefined
+}
 export function toolResultText(value:unknown):string {
   if(value == null)return ''
   if(typeof value==='string')return boundedToolText(value)
@@ -87,7 +96,7 @@ export function hydrate(messages: PiMessage[]): Transcript {
   for (const raw of messages) {
     if(raw.role==='custom' && raw.display===false)continue
     const message=normalizeMessage(raw)
-    if (message.role === 'toolResult' && message.toolCallId) state.tools[message.toolCallId] = {name: message.toolName ?? 'tool', result: toolResultText(message.content), running: false, isError: message.isError, usage: message.usage as ToolUsage|undefined}
+    if (message.role === 'toolResult' && message.toolCallId) state.tools[message.toolCallId] = {name: message.toolName ?? 'tool', result: toolResultText(message.content), details:toolCodeDetails(message.toolName??'tool',message.details), running: false, isError: message.isError, usage: message.usage as ToolUsage|undefined}
     else state.messages.push({ id: `history-${state.messages.length}-${message.timestamp ?? 0}`, message })
   }
   return state
@@ -180,7 +189,7 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
       if (message.role === 'assistant' && Array.isArray(message.content)) {
         message.content = message.content.map(part => part.type === 'thinking' ? {...part,thinkingComplete:true} : part)
       }
-      if (message.role === 'toolResult' && message.toolCallId) return { ...state, tools: {...state.tools,[message.toolCallId]:{...state.tools[message.toolCallId],name:message.toolName ?? 'tool',running:false,result:toolResultText(message.content),isError:message.isError,usage:message.usage as ToolUsage|undefined}} }
+      if (message.role === 'toolResult' && message.toolCallId) return { ...state, tools: {...state.tools,[message.toolCallId]:{...state.tools[message.toolCallId],name:message.toolName ?? 'tool',running:false,result:toolResultText(message.content),details:toolCodeDetails(message.toolName??'tool',message.details)??state.tools[message.toolCallId]?.details,isError:message.isError,usage:message.usage as ToolUsage|undefined}} }
       const index = message.role === 'assistant' ? state.active : state.messages.length - 1
       if(index >= 0) {
         state.messages = [...state.messages]; state.messages[index] = {...state.messages[index],message}
@@ -193,8 +202,10 @@ export function reduceEvent(previous: Transcript, event: Event): Transcript {
     case 'tool_execution_end': {
       if (!event.toolCallId) return state
       const tool = state.tools[event.toolCallId]
+      const name=event.toolName ?? tool?.name ?? 'tool'
       const result = event.result !== undefined ? toolResultText(event.result) : event.partialResult !== undefined ? toolResultText(event.partialResult) : tool?.result
-      return { ...state, phase: event.type === 'tool_execution_end' ? '正在运行' : `执行 ${event.toolName}`, tools: {...state.tools,[event.toolCallId]:{...tool,name:event.toolName ?? tool?.name ?? 'tool',args:event.args ?? tool?.args,result,running:event.type !== 'tool_execution_end',isError:event.isError}} }
+      const details=event.result!==undefined?toolCodeDetails(name,event.result)??tool?.details:tool?.details
+      return { ...state, phase: event.type === 'tool_execution_end' ? '正在运行' : `执行 ${event.toolName}`, tools: {...state.tools,[event.toolCallId]:{...tool,name,args:event.args ?? tool?.args,result,details,running:event.type !== 'tool_execution_end',isError:event.isError}} }
     }
     default: return state
   }

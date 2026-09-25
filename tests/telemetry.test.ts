@@ -1,6 +1,6 @@
 import {test,expect} from 'bun:test'
 import {observe,emptyTelemetry} from '../src/lib/telemetry'
-import {getChange} from '../src/lib/changes'
+import {getChange,getToolCodePresentation,MAX_CODE_PREVIEW_CHARS} from '../src/lib/changes'
 import {mergeProjects,projectExtraRoots,projectRoots,removeProject,replaceProject} from '../src/lib/projects'
 import {mergeProjectSessions} from '../src/hooks/use-project-sessions'
 test('compaction keeps actual status and estimates, never invents progress percentages',()=>{
@@ -19,7 +19,15 @@ test('failed or cancelled compaction never displays a successful token reduction
 test('Pi full patch is preferred over its display diff; write is not falsely marked as a new file',()=>{
  expect(getChange('edit',{path:'x.ts'},{details:{patch:'--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@\n-a\n+b',diff:'not a patch'}})?.kind).toBe('patch')
  expect(getChange('edit',{path:'x.ts'},{details:{diff:'+changed'}})).toBeNull()
- expect(getChange('write',{path:'x.ts',content:'new'},{})).toEqual({kind:'file',name:'x.ts',contents:'new'})
+ expect(getChange('write',{path:'x.ts',content:'new'},{})).toEqual({kind:'file',name:'x.ts',contents:'new',label:'写入内容'})
+})
+test('tool code presentations use diffs for read, bash, and edit without rendering oversized payloads',()=>{
+ expect(getToolCodePresentation('read',{path:'src/app.ts'},'const value = 1')).toMatchObject({result:{kind:'file',name:'src/app.ts',label:false}})
+ expect(getToolCodePresentation('bash',{command:'cargo test'},'ok')).toEqual({request:{kind:'file',contents:'cargo test',name:'command.sh',label:'命令'},result:{kind:'file',contents:'ok',name:'terminal-output.log',label:'结果'}})
+ const patch='--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new'
+ expect(getToolCodePresentation('bash',{command:'git diff'},patch).result?.kind).toBe('patch')
+ expect(getToolCodePresentation('edit',{path:'src/app.ts',edits:[{oldText:'old',newText:'new'}]},'done',{patch}).result?.kind).toBe('patch')
+ expect(getToolCodePresentation('read',{path:'huge.ts'},'x'.repeat(MAX_CODE_PREVIEW_CHARS+1))).toEqual({})
 })
 test('multiple project directories deduplicate by path, not by display name',()=>{
  const projects=mergeProjects([] ,['/a/app/','/b/app','/a/app'])

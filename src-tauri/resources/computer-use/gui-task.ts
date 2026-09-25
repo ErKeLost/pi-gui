@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import { createAgentDesktopClient, type AgentDesktopClient } from "./agent-desktop-client.ts"
+import { createXa11yClient } from "./xa11y-client.ts"
+import type { AgentDesktopClient } from "./agent-desktop-client.ts"
 import type { GuiTaskEvent, GuiTaskInput, GuiTaskResult } from "./gui-task-contract.ts"
 import { runGuiTaskEngine } from "./gui-task-engine.ts"
 
@@ -13,6 +14,7 @@ const taskSchema = {
       required: ["app"],
       additionalProperties: false,
     },
+    readOnly: { type: "boolean", description: "Inspect the already-open app view without clicking, typing or submitting; only observation and scrolling are allowed." },
     textSlots: {
       type: "array",
       items: {
@@ -46,19 +48,25 @@ export function registerGuiTask(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "gui_task",
     label: "GUI task",
-    description: "Open or attach to one desktop app and complete one natural-language goal through AX-first agent-desktop observations, bounded Jev choices, ref actions, auto-wait, and local text slots.",
+    description: "Attach to one desktop app and complete one natural-language goal through native Rust xa11y observations, bounded Jev choices, verified AX actions, and local text slots.",
     promptGuidelines: ["Provide one complete desktop goal and the user's natural-language application name. Do not plan UI steps, guess labels, provide selectors, describe coordinates, or invent completion predicates. The local loop observes the live accessibility tree and Jev chooses each operation and target. Put every exact non-sensitive string that may need to be typed in textSlots with a short purpose; Jev sees only the purpose and slot ID, never the value. Use a budget proportionate to the task. The runtime opens or attaches to the target app, uses accessibility without screenshots, and stops on done, blocked, uncertain delivery, cancellation, or budget exhaustion."],
     parameters: taskSchema,
-    async execute(_toolCallId, params, signal, onUpdate) {
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const input = params as GuiTaskInput
       let client: AgentDesktopClient | undefined
       try {
-        client = await createAgentDesktopClient(signal)
+        client = await createXa11yClient(signal)
         const result = await runGuiTaskEngine({
           input,
           client,
           signal,
           emit: event => publishProgress(onUpdate, event),
+          // Irreversible steps (send, delete, purchase) pause for an in-app
+          // user confirmation and then continue in the same run. Without an
+          // interactive client the engine stops with needs_review instead.
+          confirm: ctx?.hasUI
+            ? (summary: string) => ctx.ui.confirm("确认桌面操作", summary, { signal })
+            : undefined,
         })
         return { content: [{ type: "text", text: formatResult(input, result) }], details: result }
       } catch (error) {
@@ -66,6 +74,8 @@ export function registerGuiTask(pi: ExtensionAPI): void {
         const status = signal?.aborted ? "aborted" : "error"
         const result: GuiTaskResult = {
           status,
+          appLaunched: false,
+          goalVerified: false,
           actions: 0,
           decisions: 0,
           evidence: "",
@@ -94,6 +104,8 @@ function progressText(event: GuiTaskEvent): string {
 
 function operationLabel(value: unknown): string {
   const labels: Record<string, string> = {
+    ACTIVATE: "激活",
+    FOCUS: "聚焦",
     CLICK: "点击", DOUBLE_CLICK: "双击", SET_VALUE: "写入", TYPE_TEXT: "输入", CHECK: "勾选", UNCHECK: "取消勾选", EXPAND: "展开", COLLAPSE: "收起",
     SCROLL_DOWN: "向下滚动", SCROLL_UP: "向上滚动", SCROLL_TO: "滚动到目标", PRESS_ENTER: "回车", DRILL: "读取局部", WIDEN: "返回全窗",
     WAIT: "等待", DONE: "完成", BLOCKED: "停止",
@@ -105,5 +117,8 @@ export function formatResult(input: GuiTaskInput, result: GuiTaskResult): string
   const last = [...result.trace].reverse().find(entry => entry.operation)
   const reason = [...result.trace].reverse().find(entry => entry.note)?.note
   const timing = `elapsed=${result.metrics.elapsedMs}ms launch=${Math.round(result.metrics.launchMs)}ms observation=${Math.round(result.metrics.observationMs)}ms decision=${Math.round(result.metrics.decisionMs)}ms action=${Math.round(result.metrics.actionMs)}ms`
-  return `[${result.status}] ${input.goal}\nactions=${result.actions} decisions=${result.decisions} ${timing}\njev=${last?.operation ?? "not_called"}${last?.confidence === undefined ? "" : ` confidence=${last.confidence.toFixed(2)}`}${reason ? `\nreason=${reason}` : ""}\n${result.evidence}`
+  const launch = result.appLaunched ? "已打开并读取应用界面" : "未确认应用已打开"
+  const action = result.lastAction ? `最近动作=${result.lastAction.operation} 交付=${result.lastAction.delivery ?? "未知"}` : "尚无桌面动作"
+  const goal = result.goalVerified ? "Jev 根据当前界面判断目标已完成" : "目标未获 Jev 验证"
+  return `[${result.status}] ${input.goal}\n应用=${launch}；${action}；${goal}\nactions=${result.actions} decisions=${result.decisions} ${timing}\njev=${last?.operation ?? "not_called"}${last?.confidence === undefined ? "" : ` confidence=${last.confidence.toFixed(2)}`}${reason ? `\nreason=${reason}` : ""}\n${result.evidence}`
 }

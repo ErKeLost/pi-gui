@@ -23,7 +23,7 @@ export function ProjectActions({ project, homeDir, taskCount, onEdit }: ProjectA
 
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger render={<Button className="sidebar-project-actions" aria-label={`${project.name} 项目菜单`} />}>
-      <Icon name="dots-three" />
+      <Icon name="dots-three-bold" />
     </PopoverTrigger>
     <PopoverContent className="project-actions-menu" align="end" side="bottom" sideOffset={5}>
       <div className="project-actions-summary">

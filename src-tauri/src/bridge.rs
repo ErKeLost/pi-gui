@@ -20,18 +20,42 @@ struct Worker {
 }
 
 fn safe_pi_diagnostic(lines: &[String], home: &Path) -> Option<String> {
-    let sensitive = ["authorization", "bearer ", "api_key", "apikey", "token=", "secret", "password"];
-    let useful = ["error", "cannot find", "not found", "failed", "missing", "syntax", "module", "enoent", "unsupported"];
+    let sensitive = [
+        "authorization",
+        "bearer ",
+        "api_key",
+        "apikey",
+        "token=",
+        "secret",
+        "password",
+    ];
+    let useful = [
+        "error",
+        "cannot find",
+        "not found",
+        "failed",
+        "missing",
+        "syntax",
+        "module",
+        "enoent",
+        "unsupported",
+    ];
     let home = home.to_string_lossy();
     let mut selected = lines
         .iter()
         .rev()
         .filter_map(|line| {
             let lower = line.to_ascii_lowercase();
-            if sensitive.iter().any(|needle| lower.contains(needle)) || !useful.iter().any(|needle| lower.contains(needle)) {
+            if sensitive.iter().any(|needle| lower.contains(needle))
+                || !useful.iter().any(|needle| lower.contains(needle))
+            {
                 return None;
             }
-            let compact = line.replace(home.as_ref(), "~").split_whitespace().collect::<Vec<_>>().join(" ");
+            let compact = line
+                .replace(home.as_ref(), "~")
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
             (!compact.is_empty()).then(|| compact.chars().take(500).collect::<String>())
         })
         .take(2)
@@ -297,9 +321,16 @@ fn node_version(node: &Path) -> Result<String, String> {
 fn bundled_node_path(app: &AppHandle) -> Result<PathBuf, String> {
     let name = if cfg!(windows) { "node.exe" } else { "node" };
     app.path()
-        .resolve(format!("resources/node-runtime/{name}"), BaseDirectory::Resource)
+        .resolve(
+            format!("resources/node-runtime/{name}"),
+            BaseDirectory::Resource,
+        )
         .map_err(|error| format!("无法定位 Orbit 内置 Node：{error}"))
-        .and_then(|path| path.is_file().then_some(path).ok_or_else(|| "Orbit 内置 Node 缺失，请重新安装应用".into()))
+        .and_then(|path| {
+            path.is_file()
+                .then_some(path)
+                .ok_or_else(|| "Orbit 内置 Node 缺失，请重新安装应用".into())
+        })
 }
 
 fn require_file(path: &Path, label: &str) -> Result<(), String> {
@@ -353,18 +384,37 @@ impl RuntimePaths {
             (&pi, "Pi CLI"),
             (&resources_dir.join("pi-runtime/index.js"), "Pi SDK"),
             (&extension, "GUI extension"),
-            (&resources_dir.join("context-payload.ts"), "Context payload helper"),
+            (
+                &resources_dir.join("context-payload.ts"),
+                "Context payload helper",
+            ),
             (&resources_dir.join("workspace.ts"), "Workspace extension"),
-            (&resources_dir.join("subagents/index.ts"), "Subagent extension"),
-            (&resources_dir.join("computer-use/mode.ts"), "Computer use extension"),
-            (&node_modules.join("@typesafe-ai/sdk/package.json"), "TypeSafe SDK"),
-            (&node_modules.join("agent-desktop/package.json"), "Desktop agent runtime"),
-            (&node_modules.join("@mariozechner/clipboard/package.json"), "Clipboard runtime"),
+            (
+                &resources_dir.join("subagents/index.ts"),
+                "Subagent extension",
+            ),
+            (
+                &resources_dir.join("computer-use/mode.ts"),
+                "Computer use extension",
+            ),
+            (
+                &node_modules.join("@typesafe-ai/sdk/package.json"),
+                "TypeSafe SDK",
+            ),
+            (
+                &node_modules.join("agent-desktop/package.json"),
+                "Desktop agent runtime",
+            ),
+            (
+                &node_modules.join("@mariozechner/clipboard/package.json"),
+                "Clipboard runtime",
+            ),
         ] {
             require_file(path, label)?;
         }
         require_dir(&node_modules, "Node modules")?;
-        let pi_version = pi_version(&node, &pi).ok_or_else(|| "Orbit 内置 Pi runtime 无法启动，请重新安装应用".to_string())?;
+        let pi_version = pi_version(&node, &pi)
+            .ok_or_else(|| "Orbit 内置 Pi runtime 无法启动，请重新安装应用".to_string())?;
         Ok(Self {
             home,
             agent_dir,
@@ -418,7 +468,9 @@ fn macos_orbit_agent(node: &Path, app: &AppHandle, version: &str) -> Result<Path
     if node.file_name().is_some_and(|name| name == "Orbit Agent") {
         return Ok(node.to_path_buf());
     }
-    let _guard = SETUP.lock().map_err(|_| "Orbit Agent 初始化锁已损坏".to_string())?;
+    let _guard = SETUP
+        .lock()
+        .map_err(|_| "Orbit Agent 初始化锁已损坏".to_string())?;
     let bundle_name = if cfg!(debug_assertions) {
         "Orbit Agent Dev.app"
     } else {
@@ -433,26 +485,43 @@ fn macos_orbit_agent(node: &Path, app: &AppHandle, version: &str) -> Result<Path
     let plist = app.join("Contents/Info.plist");
     let marker = app.join("Contents/Resources/orbit-node-version");
     let source = fs::canonicalize(node).unwrap_or_else(|_| node.to_path_buf());
-    let fingerprint = format!("{version}\n{}\n", fs::metadata(&source).map_err(|error| error.to_string())?.len());
-    if executable.is_file() && plist.is_file() && fs::read_to_string(&marker).ok().as_deref() == Some(&fingerprint) {
+    let fingerprint = format!(
+        "{version}\n{}\n",
+        fs::metadata(&source)
+            .map_err(|error| error.to_string())?
+            .len()
+    );
+    if executable.is_file()
+        && plist.is_file()
+        && fs::read_to_string(&marker).ok().as_deref() == Some(&fingerprint)
+    {
         return Ok(executable);
     }
     let parent = app.parent().ok_or("Orbit Agent runtime 路径无效")?;
     fs::create_dir_all(parent).map_err(|error| format!("无法创建 Orbit Agent 目录：{error}"))?;
-    let temporary = parent.join(format!(".orbit-agent-{}-{}", std::process::id(), thread::current().name().unwrap_or("runtime")));
+    let temporary = parent.join(format!(
+        ".orbit-agent-{}-{}",
+        std::process::id(),
+        thread::current().name().unwrap_or("runtime")
+    ));
     if temporary.exists() {
-        fs::remove_dir_all(&temporary).map_err(|error| format!("无法清理 Orbit Agent 临时目录：{error}"))?;
+        fs::remove_dir_all(&temporary)
+            .map_err(|error| format!("无法清理 Orbit Agent 临时目录：{error}"))?;
     }
     let temporary_macos = temporary.join("Contents/MacOS");
     let temporary_resources = temporary.join("Contents/Resources");
-    fs::create_dir_all(&temporary_macos).map_err(|error| format!("无法创建 Orbit Agent 运行时：{error}"))?;
-    fs::create_dir_all(&temporary_resources).map_err(|error| format!("无法创建 Orbit Agent 资源目录：{error}"))?;
+    fs::create_dir_all(&temporary_macos)
+        .map_err(|error| format!("无法创建 Orbit Agent 运行时：{error}"))?;
+    fs::create_dir_all(&temporary_resources)
+        .map_err(|error| format!("无法创建 Orbit Agent 资源目录：{error}"))?;
     let temporary_executable = temporary_macos.join("Orbit Agent");
-    fs::copy(&source, &temporary_executable).map_err(|error| format!("无法安装 Orbit Agent 运行时：{error}"))?;
+    fs::copy(&source, &temporary_executable)
+        .map_err(|error| format!("无法安装 Orbit Agent 运行时：{error}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&temporary_executable, fs::Permissions::from_mode(0o755)).map_err(|error| format!("无法设置 Orbit Agent 权限：{error}"))?;
+        fs::set_permissions(&temporary_executable, fs::Permissions::from_mode(0o755))
+            .map_err(|error| format!("无法设置 Orbit Agent 权限：{error}"))?;
     }
     fs::write(temporary.join("Contents/Info.plist"), r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -473,7 +542,8 @@ fn macos_orbit_agent(node: &Path, app: &AppHandle, version: &str) -> Result<Path
 </dict>
 </plist>
 "#).map_err(|error| format!("无法写入 Orbit Agent 信息：{error}"))?;
-    fs::write(temporary_resources.join("orbit-node-version"), &fingerprint).map_err(|error| format!("无法写入 Orbit Agent 版本：{error}"))?;
+    fs::write(temporary_resources.join("orbit-node-version"), &fingerprint)
+        .map_err(|error| format!("无法写入 Orbit Agent 版本：{error}"))?;
     let status = Command::new("/usr/bin/codesign")
         .args(["--force", "--sign", "-", "--identifier", "ai.pi.gui.agent"])
         .arg(&temporary)
@@ -492,7 +562,14 @@ fn macos_orbit_agent(node: &Path, app: &AppHandle, version: &str) -> Result<Path
     Ok(executable)
 }
 
-fn apply_orbit_runtime_env(command: &mut Command, node: &Path, pi: &Path, pi_source: &str, pi_version: &str, node_modules: &Path) {
+fn apply_orbit_runtime_env(
+    command: &mut Command,
+    node: &Path,
+    pi: &Path,
+    pi_source: &str,
+    pi_version: &str,
+    node_modules: &Path,
+) {
     command
         .env("ORBIT_HOST_BUNDLE_ID", "ai.pi.gui")
         .env("ORBIT_AGENT_BUNDLE_ID", "ai.pi.gui.agent")
@@ -1412,7 +1489,9 @@ pub async fn discover(app: AppHandle) -> Result<Value, String> {
         let home = home_dir()?;
         let runtime = RuntimePaths::resolve(&app, &home)?;
         Ok(runtime.diagnostics(&home))
-    }).await.map_err(|e|e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 /// Query the OpenAI-compatible provider catalog configured in Pi's own files.
 /// The API key is read and used only inside this process and is never returned.
@@ -2009,7 +2088,14 @@ pub async fn pi_connect(
             .arg("--extension")
             .arg(&runtime.extension)
             .current_dir(&path);
-        apply_orbit_runtime_env(&mut command, &node, &pi, runtime.pi_source, &runtime.pi_version, &runtime.node_modules);
+        apply_orbit_runtime_env(
+            &mut command,
+            &node,
+            &pi,
+            runtime.pi_source,
+            &runtime.pi_version,
+            &runtime.node_modules,
+        );
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -2069,11 +2155,15 @@ pub async fn pi_connect(
             for record in BufReader::new(stderr).split(b'\n') {
                 let Ok(record) = record else { break };
                 let line = String::from_utf8_lossy(&record).trim().to_string();
-                if line.is_empty() { continue; }
+                if line.is_empty() {
+                    continue;
+                }
                 if let Ok(mut lines) = stderr_lines.lock() {
                     lines.push(line);
                     let overflow = lines.len().saturating_sub(32);
-                    if overflow > 0 { lines.drain(..overflow); }
+                    if overflow > 0 {
+                        lines.drain(..overflow);
+                    }
                 }
             }
         });
@@ -2096,7 +2186,8 @@ pub async fn pi_connect(
                 let removed = remove_worker_if_current(&workers, &watched_id, &watched_child);
                 if removed {
                     crate::remote::publish_connection_closed(&exit_app, &watched_id);
-                    let _ = on_event.send(json!({"kind":"exit","code":status.code(),"message":diagnostic}));
+                    let _ = on_event
+                        .send(json!({"kind":"exit","code":status.code(),"message":diagnostic}));
                 }
                 break;
             }
@@ -2349,7 +2440,8 @@ mod tests {
         let home = PathBuf::from("/Users/example");
         let lines = vec![
             "Authorization: Bearer private-value".to_string(),
-            "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/Users/example/runtime/helper.ts'".to_string(),
+            "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/Users/example/runtime/helper.ts'"
+                .to_string(),
         ];
         let message = safe_pi_diagnostic(&lines, &home).unwrap();
         assert!(message.contains("ERR_MODULE_NOT_FOUND"));

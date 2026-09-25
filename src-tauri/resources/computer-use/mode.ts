@@ -5,6 +5,7 @@ export const COMPUTER_USE_TOOL_NAMES = ["gui_task"] as const
 export const COMPUTER_USE_INSTRUCTIONS = `
 <computer_use_mode>
 Computer Use is for visible desktop applications. Use normal code, file, API, and CLI tools for non-GUI work.
+- All interface changes to a visible app (clicks, typing, scrolling, drag, window management) must go through gui_task. Never drive the accessibility tree with shell scripting (osascript, System Events, AppleScript, cliclick, synthetic key events); shell access to UI state is read-only diagnostics at most. Falling back to raw scripting after a failed gui_task hides delivery and risk from the user and is not allowed.
 - Call gui_task with one complete natural-language goal, one target app name, local textSlots when exact text may need to be entered, and an explicit budget.
 - Do not plan UI phases, guess control labels, provide selectors, coordinates, action sequences, or completion predicates. The runtime observes the live accessibility tree and Jev chooses one compatible operation and target per turn.
 - Exact text values belong only in local textSlots. Give each value a short purpose. Jev receives the slot ID and purpose but never the value.

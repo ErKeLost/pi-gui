@@ -1,6 +1,7 @@
 [package]
 name = "orbit"
 version = "0.2.78"
+default-run = "orbit"
 description = "A local desktop workspace for Orbit"
 authors = ["you"]
 license = ""
@@ -18,12 +19,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
+computer-use-core = { path = "../crates/computer-use-core" }
 base64 = "=0.22.1"
 serde_json = "=1.0.151"
 serde = { version = "=1.0.229", features = ["derive"] }
 log = "=0.4.34"
 rustls = { version = "=0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
-tauri = { version = "=2.11.5", features = [] }
+tauri = { version = "=2.11.5", features = ["macos-private-api"] }
 tauri-plugin-log = "=2.9.1"
 tauri-plugin-dialog = "=2.7.3"
 tauri-plugin-clipboard-manager = "=2.3.3"
@@ -40,6 +42,14 @@ tauri-plugin-updater = "2.11.0"
 tauri-plugin-process = "2.3.1"
 tungstenite = { version = "=0.26.2", default-features = false, features = ["handshake", "native-tls"] }
 uuid = { version = "=1.26.0", features = ["v4"] }
+# Native macOS accessibility backend for the desktop AX collector (worker,
+# input synthesis, AppKit activation). Other desktop platforms ship without
+# the engine in this release.
+[target.'cfg(target_os = "macos")'.dependencies]
+xa11y = "=0.15.0"
+objc2-app-kit = { version = "=0.3.2", features = ["NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "=0.3.2", features = ["NSURL", "NSString", "NSArray"] }
+block2 = "=0.6.2"
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = "2.4.6"

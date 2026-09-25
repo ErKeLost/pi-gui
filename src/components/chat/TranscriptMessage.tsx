@@ -43,6 +43,7 @@ function ToolPart({ part, tools }: PartViewProps) {
     toolName={part.name ?? tool?.name ?? "工具"}
     request={part.argsText ?? JSON.stringify(part.arguments ?? {})}
     result={toolResultText(result)}
+    details={tool?.details}
     usage={tool?.usage}
     running={tool?.running ?? false}
   />;

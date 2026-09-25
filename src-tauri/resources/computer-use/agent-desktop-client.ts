@@ -72,6 +72,7 @@ export class AgentDesktopCommandError extends Error {
 }
 
 export interface AgentDesktopClient {
+  readonly backend?: "xa11y" | "agent-desktop"
   run<T>(args: string[], options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<DesktopEnvelope<T>>
   dispose(): Promise<void>
 }

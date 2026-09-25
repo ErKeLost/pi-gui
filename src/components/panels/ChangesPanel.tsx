@@ -9,7 +9,7 @@ export function ChangesPanel() {
   const changes = useMemo(() => transcript.messages.flatMap(item => Array.isArray(item.message.content) ? item.message.content.flatMap(part => {
     if (part.type !== "toolCall") return [];
     const tool = transcript.tools[part.id ?? ""];
-    const change = getChange(part.name ?? "", part.arguments, tool?.result);
+    const change = getChange(part.name ?? "", part.arguments, tool?.details);
     return change ? [{ id: part.id, change }] : [];
   }) : []), [transcript.messages, transcript.tools]);
   return <>

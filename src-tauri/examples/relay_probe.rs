@@ -37,7 +37,10 @@ fn probe(attempt: usize) {
     };
     if let Some(cert_file) = openssl_probe::probe().cert_file {
         if let Ok(pem) = std::fs::read(cert_file) {
-            for cert in openssl::x509::X509::stack_from_pem(&pem).into_iter().flatten() {
+            for cert in openssl::x509::X509::stack_from_pem(&pem)
+                .into_iter()
+                .flatten()
+            {
                 let _ = builder.cert_store_mut().add_cert(cert);
             }
         }
@@ -79,11 +82,15 @@ fn probe(attempt: usize) {
         }
     }
     let head = String::from_utf8_lossy(&buffer);
-    println!("[try {attempt}] relay responded: {}", head.lines().next().unwrap_or(""));
+    println!(
+        "[try {attempt}] relay responded: {}",
+        head.lines().next().unwrap_or("")
+    );
     if !head.starts_with("HTTP/1.1 101") {
         return;
     }
-    let mut socket = tungstenite::WebSocket::from_raw_socket(tls, tungstenite::protocol::Role::Client, None);
+    let mut socket =
+        tungstenite::WebSocket::from_raw_socket(tls, tungstenite::protocol::Role::Client, None);
     let register = serde_json::json!({
         "relay": "register",
         "hostKey": "probe-invalid-key-on-purpose-0000000000000000000000",
@@ -94,7 +101,11 @@ fn probe(attempt: usize) {
         println!("[try {attempt}] register send FAILED");
         return;
     }
-    socket.get_mut().get_mut().set_read_timeout(Some(Duration::from_secs(5))).ok();
+    socket
+        .get_mut()
+        .get_mut()
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .ok();
     match socket.read() {
         Ok(Message::Text(text)) => println!("[try {attempt}] relay replied: {text}"),
         Ok(other) => println!("[try {attempt}] unexpected frame: {other:?}"),

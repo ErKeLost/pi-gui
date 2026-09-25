@@ -4,6 +4,7 @@ import {
   isRemoteEvent,
   isRemoteHostSnapshot,
   remoteWebSocketUrl,
+  REMOTE_PROTOCOL,
   type RemoteEndpoint,
   type RemoteEvent,
   type RemoteConnection,
@@ -15,16 +16,22 @@ import {
 import { decryptRemoteFrame, encryptRemoteFrame } from "./remote-crypto"
 
 export type RemoteClientState = "offline" | "connecting" | "online"
+export type RemoteForegroundReason = "app-resume" | "network-change" | "focus"
 
 export type RemoteClientOptions = {
   reconnectBaseMs?: number
   reconnectMaxMs?: number
   heartbeatMs?: number
   heartbeatTimeoutMs?: number
+  heartbeatMissedLimit?: number
+  connectTimeoutMs?: number
+  handshakeTimeoutMs?: number
 }
 
 export type RemoteClientHandlers = {
   onState?: (state: RemoteClientState) => void
+  /** A replacement physical channel became authoritative while logical state stayed alive. */
+  onReconnected?: () => void
   onEvent?: (event: RemoteEvent) => void
   onPiEvent?: (project: string, payload: RemoteJson) => void
   onError?: (error: Error) => void
@@ -40,9 +47,24 @@ type PendingRequest = {
   timeout: ReturnType<typeof setTimeout>
 }
 
-/** Browser/Tauri-mobile WebSocket adapter for an Orbit desktop Host. */
+type SocketMode = "initial" | "replacement"
+
+type PhysicalConnection = {
+  socket: WebSocket
+  mode: SocketMode
+  authenticated: boolean
+  settled: boolean
+  resolve: () => void
+  reject: (error: Error) => void
+  connectTimer: ReturnType<typeof setTimeout> | null
+  handshakeTimer: ReturnType<typeof setTimeout> | null
+  inboundTail: Promise<void>
+}
+
+/** A stable logical client backed by replaceable authenticated WebSockets. */
 export class OrbitRemoteClient {
-  private socket: WebSocket | null = null
+  private active: PhysicalConnection | null = null
+  private replacement: PhysicalConnection | null = null
   private state: RemoteClientState = "offline"
   private handlers: RemoteClientHandlers
   private readonly options: Required<RemoteClientOptions>
@@ -50,11 +72,15 @@ export class OrbitRemoteClient {
   private pending = new Map<string, PendingRequest>()
   private endpoint: RemoteEndpoint | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private replacementTimer: ReturnType<typeof setTimeout> | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private reconnectAttempt = 0
   private reconnectEnabled = false
   private manuallyClosed = true
   private heartbeatPending = false
+  private heartbeatMisses = 0
+  private lastInboundAt = 0
+  private outboundTail: Promise<void> = Promise.resolve()
 
   constructor(handlers: RemoteClientHandlers = {}, options: RemoteClientOptions = {}) {
     this.handlers = handlers
@@ -63,6 +89,9 @@ export class OrbitRemoteClient {
       reconnectMaxMs: options.reconnectMaxMs ?? 5_000,
       heartbeatMs: options.heartbeatMs ?? 15_000,
       heartbeatTimeoutMs: options.heartbeatTimeoutMs ?? 5_000,
+      heartbeatMissedLimit: options.heartbeatMissedLimit ?? 3,
+      connectTimeoutMs: options.connectTimeoutMs ?? 10_000,
+      handshakeTimeoutMs: options.handshakeTimeoutMs ?? 8_000,
     }
   }
 
@@ -73,82 +102,208 @@ export class OrbitRemoteClient {
   connect(endpoint: RemoteEndpoint): Promise<void> {
     this.manuallyClosed = true
     this.clearReconnect()
+    this.clearReplacementRetry()
     this.stopHeartbeat()
-    const previous = this.socket
-    this.socket = null
-    if (previous) previous.close()
+    this.closePhysical(this.active)
+    this.closePhysical(this.replacement)
+    this.active = null
+    this.replacement = null
     this.rejectPending(new Error("Orbit Host 连接已替换"))
     this.endpoint = endpoint
     this.manuallyClosed = false
     this.reconnectEnabled = false
     this.reconnectAttempt = 0
-    return this.openSocket().then(() => {
+    this.setState("connecting")
+    return this.openSocket("initial").then(() => {
       this.reconnectEnabled = true
-      // A very fast close can happen between `onopen` and this promise
-      // continuation. Make sure that race still enters the reconnect loop.
-      if (!this.socket && !this.manuallyClosed) this.scheduleReconnect()
+      if (!this.active && !this.manuallyClosed) this.scheduleReconnect()
     })
   }
 
-  private openSocket(): Promise<void> {
+  private openSocket(mode: SocketMode): Promise<void> {
     const endpoint = this.endpoint
     if (!endpoint) return Promise.reject(new Error("Orbit Host 地址不可用"))
-    this.setState("connecting")
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(remoteWebSocketUrl(endpoint))
-      this.socket = socket
-      let settled = false
-      const resolveOnce = () => { if (!settled) { settled = true; resolve() } }
-      const rejectOnce = (error: Error) => { if (!settled) { settled = true; reject(error) } }
+      let socket: WebSocket
+      try {
+        socket = new WebSocket(remoteWebSocketUrl(endpoint))
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+      let connection!: PhysicalConnection
+      const resolveOnce = () => {
+        if (connection.settled) return
+        connection.settled = true
+        resolve()
+      }
+      const rejectOnce = (error: Error) => {
+        if (connection.settled) return
+        connection.settled = true
+        reject(error)
+      }
+      connection = {
+        socket,
+        mode,
+        authenticated: false,
+        settled: false,
+        resolve: resolveOnce,
+        reject: rejectOnce,
+        connectTimer: null,
+        handshakeTimer: null,
+        inboundTail: Promise.resolve(),
+      }
+      if (mode === "replacement") this.replacement = connection
+      else this.active = connection
+      this.armConnectionTimers(connection)
+
       socket.onopen = () => {
-        if (this.socket !== socket) return
-        this.reconnectAttempt = 0
-        this.setState("online")
-        this.startHeartbeat()
-        resolveOnce()
+        if (!this.isCurrent(connection)) return
+        this.clearConnectTimer(connection)
+        connection.handshakeTimer = setTimeout(() => {
+          if (this.isCurrent(connection) && !connection.authenticated) {
+            this.failSocket(connection, new Error("Orbit Host 认证握手超时"))
+          }
+        }, this.options.handshakeTimeoutMs)
       }
       socket.onmessage = event => {
-        if (typeof event.data !== "string") return
-        void this.decodeFrame(event.data).then(message => {
-          if (isRemoteEvent(message)) this.receive(message)
-        }).catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))))
+        connection.inboundTail = connection.inboundTail
+          .then(() => this.handleIncoming(connection, event.data))
+          .catch(error => this.failSocket(connection, error instanceof Error ? error : new Error(String(error))))
       }
       socket.onerror = () => {
-        if (this.socket !== socket) return
+        if (!this.isCurrent(connection)) return
         const error = new Error("无法连接 Orbit Host")
         this.handlers.onError?.(error)
-        if (this.state === "connecting") rejectOnce(error)
+        if (!connection.authenticated) connection.reject(error)
         socket.close()
       }
-      socket.onclose = () => {
-        if (this.socket !== socket) return
-        this.socket = null
-        this.stopHeartbeat()
-        this.rejectPending(new Error("Orbit Host 连接已关闭"))
-        this.setState("offline")
-        rejectOnce(new Error("Orbit Host 连接已关闭"))
-        if (!this.manuallyClosed && this.reconnectEnabled) this.scheduleReconnect()
-      }
+      socket.onclose = () => this.handleClose(connection)
     })
+  }
+
+  private async handleIncoming(connection: PhysicalConnection, raw: unknown): Promise<void> {
+    if (!this.isCurrent(connection) || typeof raw !== "string") return
+    const message = await this.decodeFrame(raw)
+    this.lastInboundAt = Date.now()
+    if (!isRemoteEvent(message)) throw new Error("Orbit Host 返回了无效的远程消息")
+    if (!connection.authenticated) {
+      if (message.type !== "host.hello" || message.protocol !== REMOTE_PROTOCOL) {
+        throw new Error("Orbit Host 认证握手无效")
+      }
+      if (this.endpoint?.mode === "relay" && message.hostId !== this.endpoint.hostId) {
+        throw new Error("Orbit Relay Host 身份不匹配")
+      }
+      if (this.endpoint?.mode === "direct" && this.endpoint.hostId && message.hostId !== this.endpoint.hostId) {
+        throw new Error("Orbit LAN Host 身份不匹配")
+      }
+      connection.authenticated = true
+      this.clearConnectionTimers(connection)
+      if (connection.mode === "replacement") this.promote(connection)
+      else this.activateInitial(connection)
+    }
+    this.receive(message)
+  }
+
+  private activateInitial(connection: PhysicalConnection): void {
+    if (this.active !== connection) return
+    this.reconnectAttempt = 0
+    this.setState("online")
+    this.startHeartbeat()
+    connection.resolve()
+  }
+
+  private promote(connection: PhysicalConnection): void {
+    if (this.replacement !== connection) return
+    const previous = this.active
+    this.replacement = null
+    this.active = connection
+    this.reconnectAttempt = 0
+    this.clearReplacementRetry()
+    this.rejectPending(new Error("网络路径已切换，原请求需要重新确认"))
+    this.stopHeartbeat()
+    this.setState("online")
+    this.startHeartbeat()
+    this.handlers.onReconnected?.()
+    this.closePhysical(previous)
+    connection.resolve()
+  }
+
+  private handleClose(connection: PhysicalConnection): void {
+    this.clearConnectionTimers(connection)
+    if (this.active === connection) {
+      this.active = null
+      this.stopHeartbeat()
+      this.rejectPending(new Error("Orbit Host 连接已关闭"))
+      this.setState("offline")
+      connection.reject(new Error("Orbit Host 连接已关闭"))
+      if (!this.manuallyClosed && this.reconnectEnabled) this.scheduleReconnect()
+      return
+    }
+    if (this.replacement === connection) {
+      this.replacement = null
+      connection.reject(new Error("Orbit Host 替换连接已关闭"))
+      if (!this.manuallyClosed && this.active) this.scheduleReplacementRetry()
+    }
+  }
+
+  private armConnectionTimers(connection: PhysicalConnection): void {
+    connection.connectTimer = setTimeout(() => {
+      if (this.isCurrent(connection) && connection.socket.readyState === WebSocket.CONNECTING) {
+        this.failSocket(connection, new Error("Orbit Host WebSocket 连接超时"))
+      }
+    }, this.options.connectTimeoutMs)
+  }
+
+  private clearConnectionTimers(connection: PhysicalConnection): void {
+    this.clearConnectTimer(connection)
+    if (connection.handshakeTimer) clearTimeout(connection.handshakeTimer)
+    connection.handshakeTimer = null
+  }
+
+  private clearConnectTimer(connection: PhysicalConnection): void {
+    if (connection.connectTimer) clearTimeout(connection.connectTimer)
+    connection.connectTimer = null
+  }
+
+  private failSocket(connection: PhysicalConnection, error: Error): void {
+    if (!this.isCurrent(connection)) return
+    this.handlers.onError?.(error)
+    connection.socket.close()
+  }
+
+  private isCurrent(connection: PhysicalConnection): boolean {
+    return this.active === connection || this.replacement === connection
   }
 
   send(request: RemoteRequest): void {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) throw new Error("Orbit Host 未连接")
-    const socket = this.socket
+    const connection = this.active
+    if (!connection || !connection.authenticated || connection.socket.readyState !== WebSocket.OPEN) {
+      throw new Error("Orbit Host 未连接")
+    }
     const raw = encodeRemoteMessage(request)
     const endpoint = this.endpoint
-    if (endpoint?.mode !== "relay") {
-      socket.send(raw)
+    if (!endpoint || !("encryptionKey" in endpoint) || !endpoint.encryptionKey) {
+      connection.socket.send(raw)
       return
     }
-    void encryptRemoteFrame(raw, endpoint.encryptionKey).then(frame => {
-      if (this.socket === socket && socket.readyState === WebSocket.OPEN) socket.send(frame)
-    }).catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))))
+    const encryptionKey = endpoint.encryptionKey
+    this.outboundTail = this.outboundTail
+      .catch(() => undefined)
+      .then(async () => {
+        const frame = await encryptRemoteFrame(raw, encryptionKey)
+        if (this.active === connection && connection.socket.readyState === WebSocket.OPEN) {
+          connection.socket.send(frame)
+        }
+      })
+      .catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))))
   }
 
-  private async decodeFrame(raw: string) {
+  private async decodeFrame(raw: string): Promise<RemoteEvent | RemoteRequest | null> {
     const endpoint = this.endpoint
-    const value = endpoint?.mode === "relay" ? await decryptRemoteFrame(raw, endpoint.encryptionKey) : raw
+    const value = endpoint && "encryptionKey" in endpoint && endpoint.encryptionKey
+      ? await decryptRemoteFrame(raw, endpoint.encryptionKey)
+      : raw
     return decodeRemoteMessage(value)
   }
 
@@ -194,12 +349,75 @@ export class OrbitRemoteClient {
     this.reconnectEnabled = false
     this.endpoint = null
     this.clearReconnect()
+    this.clearReplacementRetry()
     this.stopHeartbeat()
-    const socket = this.socket
-    this.socket = null
-    if (socket) socket.close()
+    this.closePhysical(this.active)
+    this.closePhysical(this.replacement)
+    this.active = null
+    this.replacement = null
     this.rejectPending(new Error("Orbit Host 连接已关闭"))
     this.setState("offline")
+  }
+
+  /** Notify the transport that the mobile app or network became usable again. */
+  notifyForeground(reason: RemoteForegroundReason = "app-resume"): void {
+    if (this.manuallyClosed || !this.endpoint) return
+    if (reason === "network-change") {
+      if (this.active?.authenticated) this.startReplacement()
+      else this.restartActive()
+      return
+    }
+    if (!this.active) {
+      this.clearReconnect()
+      this.reconnectAttempt = 0
+      void this.openSocket("initial").catch(() => {
+        if (!this.active && !this.manuallyClosed) this.scheduleReconnect()
+      })
+      return
+    }
+    if (!this.active.authenticated) {
+      this.restartActive()
+      return
+    }
+    this.sendHeartbeatNow()
+  }
+
+  private restartActive(): void {
+    if (this.manuallyClosed || !this.endpoint) return
+    this.clearReconnect()
+    this.clearReplacementRetry()
+    this.closePhysical(this.active)
+    this.closePhysical(this.replacement)
+    this.active = null
+    this.replacement = null
+    this.stopHeartbeat()
+    this.rejectPending(new Error("网络路径已变化，正在切换连接"))
+    this.setState("connecting")
+    void this.openSocket("initial").catch(() => {
+      if (!this.active && !this.manuallyClosed) this.scheduleReconnect()
+    })
+  }
+
+  private startReplacement(): void {
+    if (this.replacement || this.manuallyClosed || !this.active || !this.endpoint) return
+    this.clearReplacementRetry()
+    void this.openSocket("replacement").catch(() => {
+      if (this.active && !this.manuallyClosed) this.scheduleReplacementRetry()
+    })
+  }
+
+  private scheduleReplacementRetry(): void {
+    if (this.replacementTimer || this.manuallyClosed || !this.active) return
+    const delay = remoteReconnectDelay(this.reconnectAttempt++, this.options.reconnectBaseMs, this.options.reconnectMaxMs)
+    this.replacementTimer = setTimeout(() => {
+      this.replacementTimer = null
+      this.startReplacement()
+    }, delay)
+  }
+
+  private clearReplacementRetry(): void {
+    if (this.replacementTimer) clearTimeout(this.replacementTimer)
+    this.replacementTimer = null
   }
 
   private scheduleReconnect(): void {
@@ -208,10 +426,8 @@ export class OrbitRemoteClient {
     this.setState("connecting")
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
-      void this.openSocket().catch(() => {
-        // onclose schedules the next attempt. Some WebSocket implementations
-        // only emit error for a failed handshake, so ensure another attempt.
-        if (!this.socket) this.scheduleReconnect()
+      void this.openSocket("initial").catch(() => {
+        if (!this.active && !this.manuallyClosed) this.scheduleReconnect()
       })
     }, delay)
   }
@@ -221,17 +437,31 @@ export class OrbitRemoteClient {
     this.reconnectTimer = null
   }
 
+  private closePhysical(connection: PhysicalConnection | null): void {
+    if (!connection) return
+    this.clearConnectionTimers(connection)
+    connection.socket.close()
+  }
+
   private startHeartbeat(): void {
     this.stopHeartbeat()
     if (this.options.heartbeatMs <= 0) return
-    this.heartbeatTimer = setInterval(() => {
-      if (this.heartbeatPending || this.state !== "online") return
-      this.heartbeatPending = true
-      this.request({ type: "host.ping" }, this.options.heartbeatTimeoutMs).catch(() => {
-        const socket = this.socket
-        if (socket) socket.close()
-      }).finally(() => { this.heartbeatPending = false })
-    }, this.options.heartbeatMs)
+    this.heartbeatTimer = setInterval(() => this.sendHeartbeatNow(), this.options.heartbeatMs)
+    this.sendHeartbeatNow()
+  }
+
+  private sendHeartbeatNow(): void {
+    const connection = this.active
+    if (this.heartbeatPending || !connection?.authenticated || this.state !== "online") return
+    if (Date.now() - this.lastInboundAt < this.options.heartbeatMs) return
+    this.heartbeatPending = true
+    this.request({ type: "host.ping" }, this.options.heartbeatTimeoutMs)
+      .then(() => { this.heartbeatMisses = 0 })
+      .catch(() => {
+        this.heartbeatMisses += 1
+        if (this.heartbeatMisses >= this.options.heartbeatMissedLimit) connection.socket.close()
+      })
+      .finally(() => { this.heartbeatPending = false })
   }
 
   private stopHeartbeat(): void {

@@ -3,7 +3,9 @@ import { AgentDesktopCommandError, type AgentDesktopClient, type DesktopEnvelope
 import { observeDesktop } from "../src-tauri/resources/computer-use/desktop-observation"
 import { selectInstalledDesktopApp, type InstalledDesktopApp } from "../src-tauri/resources/computer-use/desktop-app-resolver"
 import { runGuiTaskEngine } from "../src-tauri/resources/computer-use/gui-task-engine"
+import { formatResult } from "../src-tauri/resources/computer-use/gui-task"
 import { validateTaskInput, type DesktopDecision, type DesktopObservation, type GuiTaskInput } from "../src-tauri/resources/computer-use/gui-task-contract"
+import { isRetryableJevError, redactLocalSlots } from "../src-tauri/resources/computer-use/jev"
 import { applyComputerUseMode, COMPUTER_USE_INSTRUCTIONS } from "../src-tauri/resources/computer-use/mode"
 
 const task = (overrides: Partial<GuiTaskInput> = {}): GuiTaskInput => ({
@@ -57,6 +59,11 @@ describe("computer use tool surface", () => {
     expect(() => validateTaskInput(task())).not.toThrow()
     expect(() => validateTaskInput(task({ target: { app: "" } }))).toThrow("Invalid GUI task contract")
   })
+
+  test("does not retry deterministic Jev request errors", () => {
+    expect(isRetryableJevError(new Error("Jev target request rejected: 400 max_tokens_exceeded"))).toBe(false)
+    expect(isRetryableJevError(new Error("Jev operation request rejected: fetch failed"))).toBe(true)
+  })
 })
 
 describe("installed app resolver", () => {
@@ -102,7 +109,7 @@ describe("AX-first desktop observation", () => {
         name: "Music",
         children: [{
           role: "textfield",
-          name: "Search",
+          name: "Song input",
           ref_id: "@s1:e1",
           available_actions: ["SetValue", "TypeText"],
         }, {
@@ -139,12 +146,327 @@ describe("AX-first desktop observation", () => {
     expect(command).toContain("--skeleton")
     expect(command).not.toContain("screenshot")
     expect(result.candidates).toEqual(expect.arrayContaining([
-      expect.objectContaining({ operation: "SET_VALUE", ref: "@s1:e1", slotId: "query" }),
       expect.objectContaining({ operation: "TYPE_TEXT", ref: "@s1:e1", slotId: "query" }),
     ]))
-    expect(result.candidates.some(candidate => candidate.ref === "@s1:e2")).toBe(false)
+    expect(result.candidates.some(candidate => candidate.ref === "@s1:e2")).toBe(true)
     expect(JSON.stringify(result)).not.toContain("private song")
-    expect(result.candidates.some(candidate => candidate.ref === "@s1:e4" && ["SET_VALUE", "TYPE_TEXT"].includes(candidate.operation))).toBe(false)
+    expect(result.candidates.some(candidate => candidate.ref === "@s1:e4" && candidate.operation === "TYPE_TEXT")).toBe(false)
+  })
+
+  test("keeps SetValue for native text areas that do not expose TypeText", async () => {
+    const snapshot: SnapshotData = {
+      app: "WeChat",
+      complete: true,
+      ref_count: 1,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "WeChat" },
+      tree: {
+        role: "window",
+        name: "WeChat",
+        children: [{
+          role: "text_area",
+          name: "大儿子",
+          ref_id: "@s1:e1",
+          states: ["editable"],
+          available_actions: ["SetFocus", "SetValue"],
+        }],
+      },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "WeChat",
+      textSlots: [{ id: "message", value: "我是奥特曼", description: "message body" }],
+      usedSlotIds: new Set(),
+      allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+
+    expect(result.candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation: "SET_VALUE", ref: "@s1:e1", slotId: "message" }),
+    ]))
+  })
+
+  test("offers physical typing for web fields that expose only SetValue", async () => {
+    const snapshot: SnapshotData = {
+      app: "SodaMusic",
+      complete: true,
+      ref_count: 1,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "SodaMusic" },
+      tree: {
+        role: "window",
+        name: "SodaMusic",
+        children: [{
+          role: "webarea",
+          name: "SodaMusic",
+          children: [{
+            role: "text_field",
+            ref_id: "@s1:e1",
+            states: ["editable"],
+            available_actions: ["SetFocus", "SetValue"],
+          }],
+        }],
+      },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "SodaMusic",
+      textSlots: [{ id: "query", value: "蓝", description: "song query" }],
+      usedSlotIds: new Set(),
+      allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+
+    expect(result.candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation: "TYPE_TEXT", ref: "@s1:e1", slotId: "query", headed: true }),
+    ]))
+  })
+
+  test("treats xa11y web_area content as web and keeps a prefilled field typeable", async () => {
+    const snapshot: SnapshotData = {
+      app: "SodaMusic",
+      complete: true,
+      ref_count: 3,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "SodaMusic" },
+      tree: {
+        role: "window",
+        name: "SodaMusic",
+        children: [{
+          role: "web_area",
+          children: [
+            { role: "text_field", ref_id: "@s1:e1", value: "蓝", states: ["editable"], available_actions: ["SetFocus", "SetValue"] },
+            {
+              role: "group",
+              ref_id: "@s1:e2",
+              bounds: { x: 0, y: 0, width: 800, height: 48 },
+              available_actions: ["SetFocus"],
+              children_count: 2,
+              children: [
+                { role: "static_text", value: "蓝", ref_id: "@s1:e3" },
+                { role: "image", description: "/tos/cover.jpg", ref_id: "@s1:e4" },
+              ],
+            },
+          ],
+        }],
+      },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "SodaMusic",
+      textSlots: [{ id: "query", value: "蓝", description: "song query" }],
+      usedSlotIds: new Set(),
+      allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+
+    expect(result.candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation: "TYPE_TEXT", ref: "@s1:e1", headed: true }),
+      expect.objectContaining({ operation: "DOUBLE_CLICK", ref: "@s1:e2", headed: true }),
+    ]))
+    expect(result.candidates.some(candidate => candidate.operation === "SET_VALUE" && candidate.ref === "@s1:e1")).toBe(false)
+    const row = result.candidates.find(candidate => candidate.ref === "@s1:e2")!
+    expect(row.description).not.toContain("cover.jpg")
+  })
+
+  test("keeps quoted goal evidence visible beyond the first 32 text nodes", async () => {
+    const snapshot: SnapshotData = {
+      app: "Chat", complete: true, ref_count: 41, snapshot_id: "s1",
+      window: { id: "w-1", title: "Chat" },
+      tree: { role: "window", name: "Chat", children: [
+        { role: "group", ref_id: "@s1:e1", available_actions: ["SetFocus"], children: [
+          ...Array.from({ length: 36 }, (_, i) => ({ role: "static_text", name: `irrelevant-${i}` })),
+          { role: "table_cell", name: "我说:我是蜘蛛侠", ref_id: "@s1:e2", available_actions: ["SetFocus"] },
+        ] },
+      ] },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "Chat", goal: "只读确认“我是蜘蛛侠”", textSlots: [], usedSlotIds: new Set(), allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+    expect(result.context).toContain("observed_goal_matches:")
+    expect(result.context).toContain("table_cell 我说:我是蜘蛛侠")
+  })
+
+  test("keeps the observation bounded and marks locally matched targets", async () => {
+    const snapshot: SnapshotData = {
+      app: "WeChat",
+      complete: true,
+      ref_count: 100,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "WeChat" },
+      tree: {
+        role: "window",
+        name: "WeChat",
+        children: Array.from({ length: 100 }, (_, index) => ({
+          role: "button",
+          name: index === 90 ? "赵东升" : `联系人 ${index}`,
+          ref_id: `@s1:e${index}`,
+          available_actions: ["Click"],
+        })),
+      },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "WeChat",
+      textSlots: [{ id: "recipient", value: "赵东升", description: "单人聊天联系人" }],
+      usedSlotIds: new Set(),
+      allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+
+    expect(result.context).toContain("candidate_space_truncated=true")
+    expect(result.candidates.length).toBeLessThan(100)
+    expect(result.candidates.find(candidate => candidate.criteria?.local_match)).toEqual(expect.objectContaining({
+      criteria: expect.objectContaining({ local_match: expect.stringContaining("单人聊天联系人") }),
+    }))
+  })
+
+  test("attaches structured identity criteria to node candidates", async () => {
+    const snapshot: SnapshotData = {
+      app: "Music",
+      complete: true,
+      ref_count: 2,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "Music" },
+      tree: {
+        role: "window",
+        name: "Music",
+        children: [{
+          role: "button",
+          name: "开启读屏标签",
+          ref_id: "@s1:e1",
+          states: ["offscreen"],
+          available_actions: ["Click"],
+        }, {
+          role: "group",
+          ref_id: "@s1:e2",
+          children_count: 5,
+          available_actions: ["Click"],
+          bounds: { x: 10, y: 20, width: 100, height: 50 },
+        }],
+      },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "Music",
+      textSlots: [],
+      usedSlotIds: new Set(),
+      allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+    const button = result.candidates.find(candidate => candidate.ref === "@s1:e1")
+    expect(button?.criteria?.what).toContain("开启读屏标签")
+    expect(button?.criteria?.state).toBe("offscreen")
+    expect(button?.criteria?.supports).toBe("Click")
+    expect(button?.criteria?.at).toBeUndefined()
+    const group = result.candidates.find(candidate => candidate.ref === "@s1:e2")
+    expect(group?.criteria?.contains).toBe("5 items not shown")
+    expect(group?.criteria?.at).toBeDefined()
+    expect(result.candidates.find(candidate => candidate.operation === "WAIT")?.criteria).toBeUndefined()
+  })
+
+  test("keeps large structural regions drillable in complete skeletons", async () => {
+    const snapshot: SnapshotData = {
+      app: "WeChat",
+      complete: true,
+      ref_count: 2,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "WeChat" },
+      tree: {
+        role: "window",
+        name: "WeChat",
+        children: [{
+          role: "split_group",
+          ref_id: "@s1:e1",
+          children_count: 6,
+          available_actions: ["SetFocus"],
+        }],
+      },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "WeChat",
+      textSlots: [{ id: "message", value: "hello", description: "message body" }],
+      usedSlotIds: new Set(),
+      allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+
+    expect(result.candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation: "DRILL", ref: "@s1:e1" }),
+    ]))
+  })
+
+  test("withholds inert wrapper clicks when a named control inside shares the label", async () => {
+    const snapshot: SnapshotData = {
+      app: "抖音",
+      complete: true,
+      ref_count: 3,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "抖音" },
+      tree: {
+        role: "window",
+        name: "抖音",
+        children: [{
+          role: "group",
+          ref_id: "@s1:e1",
+          available_actions: ["Click"],
+          children: [{
+            role: "button",
+            name: "开启读屏标签",
+            ref_id: "@s1:e2",
+            available_actions: ["Click"],
+          }],
+        }],
+      },
+    }
+    const client = mockClient(args => {
+      void args
+      return { version: "2.4", ok: true, command: "snapshot", data: snapshot }
+    })
+    const result = await observeDesktop(client, {
+      app: "抖音", textSlots: [], usedSlotIds: new Set(), allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+    const groupClicks = result.candidates.filter(candidate => candidate.ref === "@s1:e1" && candidate.operation === "CLICK")
+    expect(groupClicks).toHaveLength(0)
+    const buttonClicks = result.candidates.filter(candidate => candidate.ref === "@s1:e2" && candidate.operation === "CLICK")
+    expect(buttonClicks.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test("redacts local text from candidate criteria before Jev sees it", async () => {
+    const commands: string[][] = []
+    let seenCriteria: unknown
+    const client = mockClient(args => {
+      commands.push(args)
+      return { version: "2.4", ok: true, command: "launch", data: { app: "Music", pid: 1, window: { id: "w-1", title: "Music" } } }
+    })
+    const current = observation("field", [{ id: "type", operation: "TYPE_TEXT", ref: "@s1:e1", slotId: "query", description: "Search", criteria: { what: "textfield \"Search\"", holds: "private song" } }, { id: "done", operation: "DONE", description: "done" }])
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [{ id: "query", value: "private song", description: "song search query" }] }), client,
+      observe: async () => current,
+      decide: async (_goal, candidates) => {
+        seenCriteria = candidates.find(candidate => candidate.id === "type")?.criteria
+        return choice("DONE", "done")
+      },
+      resolveApp,
+    })
+    expect(result.status).toBe("done")
+    expect(JSON.stringify(seenCriteria)).not.toContain("private song")
+    expect(JSON.stringify(seenCriteria)).toContain("[slot:query]")
+  })
+})
+
+describe("local text evidence", () => {
+  test("identifies matching slots without revealing values or rewriting generated markers", () => {
+    const slots = [
+      { id: "contact", value: "赵东升", description: "recipient" },
+      { id: "message", value: "我是蜘蛛侠", description: "body" },
+    ]
+    const evidence = redactLocalSlots('text_area "赵东升"; table_cell "我说:我是蜘蛛侠"; value "赵东升"', slots)
+    expect(evidence).toBe('text_area "[slot:contact]"; table_cell "我说:[slot:message]"; value "[slot:contact]"')
+    expect(evidence).not.toContain("我是蜘蛛侠")
+  })
+
+  test("treats regex punctuation and overlapping slot values as literal text", () => {
+    expect(redactLocalSlots("hello+world hello [slot:long]", [
+      { id: "short", value: "hello", description: "short" },
+      { id: "long", value: "hello+world", description: "long" },
+    ])).toBe("[slot:long] [slot:short] [slot:long]")
   })
 })
 
@@ -164,9 +486,95 @@ describe("desktop goal loop", () => {
       resolveApp,
     })
     expect(result.status).toBe("done")
+    expect(result.appLaunched).toBe(true)
+    expect(result.goalVerified).toBe(true)
     expect(result.actions).toBe(0)
     expect(commands).toHaveLength(1)
     expect(commands[0]).toContain("--activate")
+  })
+
+  test("does not accept DONE based only on a drilled message leaf", async () => {
+    const client = mockClient(args => ({ version: "2.4", ok: true, command: args[0], data: { app: "Music", pid: 1 } }))
+    const states = [
+      observation("whole", [{ id: "drill", operation: "DRILL", ref: "@s1:e1", description: "message history" }]),
+      observation("leaf", [{ id: "done", operation: "DONE", description: "done" }]),
+      observation("whole-again", [{ id: "done", operation: "DONE", description: "done" }]),
+    ]
+    const roots: (string | undefined)[] = []
+    const decisions = [choice("DRILL", "drill"), choice("DONE", "done"), choice("DONE", "done")]
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [] }), client, resolveApp,
+      observe: async (_client, input) => { roots.push(input.root); return states.shift()! },
+      decide: async () => decisions.shift()!,
+    })
+    expect(result.status).toBe("done")
+    expect(result.decisions).toBe(3)
+    expect(result.actions).toBe(0)
+    expect(roots).toEqual([undefined, "@s1:e1", undefined])
+    expect(result.trace.some(entry => entry.outcome === "completion_requires_full_window")).toBe(true)
+  })
+
+  test("read-only tasks never see or deliver mutating candidates", async () => {
+    const commands: string[][] = []
+    const client = mockClient(args => {
+      commands.push(args)
+      return { version: "2.4", ok: true, command: "launch", data: { app: "WeChat", pid: 1, window: { id: "w-1", title: "WeChat" } } }
+    })
+    let offered: string[] = []
+    const current = observation("view", [
+      { id: "row", operation: "CLICK", ref: "@s1:e1", description: "chat row" },
+      { id: "enter", operation: "PRESS_ENTER", description: "submit" },
+      { id: "up", operation: "SCROLL_UP", ref: "@s1:e2", description: "history" },
+      { id: "done", operation: "DONE", description: "done" },
+    ])
+    const result = await runGuiTaskEngine({
+      input: { ...task({ textSlots: [] }), readOnly: true }, client, resolveApp,
+      observe: async () => current,
+      decide: async (_goal, candidates) => {
+        offered = candidates.map(candidate => candidate.operation)
+        return choice("DONE", "done")
+      },
+    })
+    expect(offered).not.toContain("CLICK")
+    expect(offered).not.toContain("PRESS_ENTER")
+    expect(offered).toContain("SCROLL_UP")
+    expect(result.status).toBe("done")
+    expect(commands).toHaveLength(1)
+  })
+
+  test("read-only execution refuses a delivered mutation as defense in depth", async () => {
+    const client = mockClient(args => ({ version: "2.4", ok: true, command: "launch", data: { app: "WeChat", pid: 1 } }))
+    const current = observation("view", [{ id: "row", operation: "CLICK", ref: "@s1:e1", description: "chat row" }])
+    const result = await runGuiTaskEngine({
+      input: { ...task({ textSlots: [], budget: { maxActions: 3, maxDecisions: 5, maxDurationMs: 10_000 } }), readOnly: true }, client, resolveApp,
+      observe: async () => current,
+      decide: async () => choice("CLICK", "row"),
+    })
+    expect(result.status).toBe("error")
+    expect(result.trace.at(-1)?.note).toContain("read-only task refused CLICK")
+  })
+
+  test("accepts Jev DONE even with low numeric confidence", async () => {
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "launch", data: { app: "Music", pid: 1 } }))
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [] }), client,
+      observe: async () => observation("ready", [{ id: "done", operation: "DONE", description: "done" }]),
+      decide: async () => ({ ...choice("DONE", "done"), confidence: 0.45 }), resolveApp,
+    })
+    expect(result.status).toBe("done")
+    expect(result.goalVerified).toBe(true)
+  })
+
+  test("accepts Jev BLOCKED without a confidence gate", async () => {
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "launch", data: { app: "Music", pid: 1 } }))
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [] }), client,
+      observe: async () => observation("stuck", [{ id: "blocked", operation: "BLOCKED", description: "blocked" }]),
+      decide: async () => ({ ...choice("BLOCKED", "blocked"), confidence: 0.2 }), resolveApp,
+    })
+    expect(result.status).toBe("blocked")
+    expect(result.appLaunched).toBe(true)
+    expect(result.goalVerified).toBe(false)
   })
 
   test("continues when NSWorkspace attaches to an already-running helper process", async () => {
@@ -206,6 +614,7 @@ describe("desktop goal loop", () => {
       observation("filled", [{ id: "enter", operation: "PRESS_ENTER", description: "submit" }]),
       observation("results", [{ id: "done", operation: "DONE", description: "done" }]),
     ]
+    // Jev chooses every step, including which field receives the text.
     const decisions = [choice("SET_VALUE", "type"), choice("PRESS_ENTER", "enter"), choice("DONE", "done")]
     const result = await runGuiTaskEngine({
       input: task(),
@@ -236,7 +645,44 @@ describe("desktop goal loop", () => {
       resolveApp,
     })
     expect(result.status).toBe("needs_review")
+    expect(result.appLaunched).toBe(true)
+    expect(result.goalVerified).toBe(false)
+    expect(result.lastAction?.delivery).toBe("delivered_unverified")
+    expect(formatResult(task(), result)).toContain("目标未获 Jev 验证")
     expect(clicks).toBe(1)
+  })
+
+  test("lets Jev choose an ordinary action at low confidence while assessing risk", async () => {
+    const commands: string[] = []
+    const client = mockClient(args => {
+      commands.push(args[0])
+      return { version: "2.4", ok: true, command: args[0], data: { app: "Music", pid: 1, disposition: { delivery: "delivered_verified", retry: "unsafe" } } }
+    })
+    let riskCalls = 0
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [], budget: { maxActions: 1, maxDecisions: 3, maxDurationMs: 30_000 } }), client,
+      observe: async () => observation("play", [{ id: "play", operation: "CLICK", ref: "@s1:e2", description: "Play" }]),
+      decide: async () => ({ ...choice("CLICK", "play"), confidence: 0.4 }), resolveApp,
+      assessRisk: async () => { riskCalls++; return { probability: 0.1, model: "jev-test", latencyMs: 1, usage: { inputTokens: 1, outputTokens: 1 } } },
+    })
+    expect(result.status).toBe("max_actions")
+    expect(commands).toEqual(["launch", "click"])
+    expect(riskCalls).toBe(1)
+    expect(result.lastAction?.delivery).toBe("delivered_verified")
+    expect(result.goalVerified).toBe(false)
+  })
+
+  test("requires review for an irreversible action even at high confidence", async () => {
+    const commands: string[] = []
+    const client = mockClient(args => { commands.push(args[0]); return { version: "2.4", ok: true, command: "launch", data: { app: "Music", pid: 1 } } })
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [] }), client,
+      observe: async () => observation("delete", [{ id: "delete", operation: "CLICK", ref: "@s1:e2", description: "Delete" }]),
+      decide: async () => choice("CLICK", "delete"), resolveApp,
+      assessRisk: async () => ({ probability: 0.9, model: "jev-test", latencyMs: 1, usage: { inputTokens: 1, outputTokens: 1 } }),
+    })
+    expect(result.status).toBe("needs_review")
+    expect(commands).toEqual(["launch"])
   })
 
   test("does not switch text delivery routes after a failed Jev-selected operation", async () => {
@@ -255,6 +701,116 @@ describe("desktop goal loop", () => {
       resolveApp,
     })
     expect(result.status).toBe("blocked")
-    expect(commands.map(args => args[0])).toEqual(["launch", "set-value"])
+    expect(commands.map(args => args[0])).toEqual(["launch", "set-value", "set-value", "set-value"])
+    expect(result.trace.filter(item => item.note).length).toBeGreaterThanOrEqual(3)
+  })
+
+  test("lets Jev pick a different candidate after a proven non-delivered failure", async () => {
+    const commands: string[][] = []
+    const client = mockClient(args => {
+      commands.push(args)
+      if (args[0] === "launch") return { version: "2.4", ok: true, command: "launch", data: { app: "Music", pid: 1 } }
+      if (args[0] === "scroll-to") throw new AgentDesktopCommandError("scroll-to", { code: "ACTION_FAILED", message: "Target remains clipped or its visible bounds are unknown", disposition: { delivery: "not_delivered", retry: "safe" } })
+      return { version: "2.4", ok: true, command: args[0], data: { app: "Music", pid: 1 } }
+    })
+    const offscreen = observation("feed", [
+      { id: "offscreen", operation: "SCROLL_TO", ref: "@s1:e9", description: "offscreen item; bring this observed target into the visible viewport" },
+      { id: "labels", operation: "CLICK", ref: "@s1:e2", description: "button labels toggle; delivery=exact-window physical pointer" },
+      { id: "done", operation: "DONE", description: "done" },
+    ])
+    let turn = 0
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [] }),
+      client,
+      observe: async () => offscreen,
+      decide: async (_goal, _candidates, _context, history) => {
+        turn++
+        if (turn === 1) return choice("SCROLL_TO", "offscreen")
+        if (turn === 2 && history.some(item => item.includes("failed before delivery"))) return choice("CLICK", "labels")
+        return choice("DONE", "done")
+      },
+      resolveApp,
+      assessRisk: async () => ({ probability: 0.1, model: "jev-test", latencyMs: 1, usage: { inputTokens: 1, outputTokens: 1 } }),
+    })
+    expect(turn).toBe(3)
+    expect(commands.map(args => args[0])).toEqual(["launch", "scroll-to", "click"])
+    expect(result.status).toBe("done")
+    expect(result.goalVerified).toBe(true)
+    expect(result.lastAction?.operation).toBe("CLICK")
+  })
+
+  test("offers semantic before pointer delivery for web content", async () => {
+    const snapshot: SnapshotData = {
+      app: "抖音",
+      complete: true,
+      ref_count: 1,
+      snapshot_id: "s1",
+      window: { id: "w-1", title: "抖音" },
+      tree: {
+        role: "window",
+        name: "抖音",
+        children: [{
+          role: "webarea",
+          name: "抖音-记录美好生活",
+          children: [{
+            role: "button",
+            name: "开启读屏标签",
+            ref_id: "@s1:e2",
+            available_actions: ["Click"],
+          }],
+        }],
+      },
+    }
+    const client = mockClient(() => ({ version: "2.4", ok: true, command: "snapshot", data: snapshot }))
+    const result = await observeDesktop(client, {
+      app: "抖音", textSlots: [], usedSlotIds: new Set(), allowPressEnter: false,
+    }, { timeoutMs: 5_000 })
+    const clicks = result.candidates.filter(candidate => candidate.ref === "@s1:e2" && candidate.operation === "CLICK")
+    expect(clicks).toHaveLength(2)
+    expect(clicks[0].headed).toBe(false)
+    expect(clicks[0].description).toContain("semantic accessibility press")
+    expect(clicks[1].headed).toBe(true)
+    expect(clicks[1].description).toContain("physical pointer")
+  })
+
+  test("refreshes a stale window id instead of failing the task", async () => {
+    const commands: string[][] = []
+    const client = mockClient(args => {
+      commands.push(args)
+      if (args[0] === "launch") return { version: "2.4", ok: true, command: "launch", data: { app: "Music", pid: 1, window: { id: "w-1", title: "Music" } } }
+      if (args.includes("--window-id")) throw new AgentDesktopCommandError("snapshot", { code: "WINDOW_NOT_FOUND", message: "No window with id w-1" })
+      return {
+        version: "2.4", ok: true, command: "snapshot",
+        data: {
+          app: "Music", complete: true, ref_count: 1, snapshot_id: "s2", window: { id: "w-2", title: "Music" },
+          tree: { role: "window", name: "Music", children: [] },
+        },
+      }
+    })
+    const current = observation("empty", [{ id: "done", operation: "DONE", description: "done" }])
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [] }), client,
+      observe: async (_client, options) => (options.windowId ? client.run(["snapshot", "--window-id", options.windowId]).then(() => current) : current),
+      resolveApp,
+    })
+    expect(result.status).toBe("done")
+  })
+
+  test("retries once when the Jev decision call fails transiently", async () => {
+    const client = mockClient(args => ({ version: "2.4", ok: true, command: args[0], data: { app: "Music", pid: 1 } }))
+    const current = observation("ready", [{ id: "done", operation: "DONE", description: "done" }])
+    let attempts = 0
+    const result = await runGuiTaskEngine({
+      input: task({ textSlots: [] }), client,
+      observe: async () => current,
+      decide: async () => {
+        attempts++
+        if (attempts === 1) throw new Error("Connection error: fetch failed")
+        return choice("DONE", "done")
+      },
+      resolveApp,
+    })
+    expect(result.status).toBe("done")
+    expect(attempts).toBe(2)
   })
 })

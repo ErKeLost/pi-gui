@@ -3,7 +3,7 @@ import { useProjects } from "../lib/projects";
 import { changeSession, connect, connectRemoteConnection, dispatchRemoteEvent, loadMessages, report, suspendRemoteConnection } from "../lib/rpc";
 import { detectRuntimeEnvironment } from "../lib/runtime-environment";
 import { useRuntimeDiscovery } from "../lib/runtime-diagnostics";
-import { openRemoteRuntime, remoteHostSnapshot, storedPairingUri } from "../lib/remote-runtime";
+import { notifyRemoteForeground, openRemoteRuntime, remoteHostSnapshot, storedPairingUri } from "../lib/remote-runtime";
 import type { RemoteConnection, RemoteHostSnapshot } from "../lib/remote-protocol";
 import { useWorkspace } from "../lib/store";
 
@@ -63,6 +63,7 @@ export function useWorkspaceBootstrap() {
             void recoverRemote();
           }
         },
+        onReconnected: () => { void recoverRemote() },
         onState: state => {
           if (useWorkspace.getState().runtimeTarget !== "mobile" || !remoteReady.current) return;
           if (state === "online") { void recoverRemote(); return; }
@@ -99,6 +100,26 @@ export function useWorkspaceBootstrap() {
       }
     }).catch(report);
   }, [attachRemote]);
+
+  useEffect(() => {
+    if (runtimeTarget !== "mobile") return;
+    const resume = () => {
+      if (document.visibilityState === "hidden") return;
+      notifyRemoteForeground("app-resume");
+    };
+    const networkChanged = () => notifyRemoteForeground("network-change");
+    const focus = () => notifyRemoteForeground("focus");
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("online", networkChanged);
+    window.addEventListener("offline", networkChanged);
+    window.addEventListener("focus", focus);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("online", networkChanged);
+      window.removeEventListener("offline", networkChanged);
+      window.removeEventListener("focus", focus);
+    };
+  }, [runtimeTarget]);
 
   useEffect(() => {
     if (!discovery.data) return;

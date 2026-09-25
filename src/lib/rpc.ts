@@ -126,6 +126,7 @@ function applyEvent(event:Event,project:string){
  }
 }
 const burstEvents=new Set(['message_update','tool_execution_update'])
+const BURST_EVENT_WINDOW_MS=32
 function flushEvents(project:string){
  const timer=flushTimers.get(project);if(timer)clearTimeout(timer);flushTimers.delete(project)
  const queue=eventQueues.get(project);if(!queue?.length)return;eventQueues.delete(project);for(const event of queue)applyEvent(event,project)
@@ -134,7 +135,7 @@ function clearEvents(project:string){const timer=flushTimers.get(project);if(tim
 function dispatch(event:Event,project:string){
  if(!burstEvents.has(event.type)){flushEvents(project);applyEvent(event,project);return}
  const queue=eventQueues.get(project)??[];queue.push(event);eventQueues.set(project,queue)
- if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),100))}
+ if(!flushTimers.has(project))flushTimers.set(project,setTimeout(()=>flushEvents(project),BURST_EVENT_WINDOW_MS))}
 export function dispatchRemoteEvent(project:string,payload:unknown){
  if(!project||typeof payload!=='object'||payload===null||typeof (payload as {type?:unknown}).type!=='string')return
  dispatch(payload as Event,project)

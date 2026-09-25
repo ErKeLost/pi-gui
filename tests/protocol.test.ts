@@ -2,7 +2,7 @@ import {describe,test,expect} from 'bun:test'
 import {emptyTranscript,groupDisplayMessages,reduceEvent,hydrate,toolResultText} from '../src/lib/protocol'
 import { summarizeToolCalls } from '../src/lib/tool-activity'
 import { turnDurationId } from '../src/lib/turn-duration'
-describe('Pi 0.85.1 JSONL event projection',()=>{
+describe('Pi 0.87.1 JSONL event projection',()=>{
  test('assembling indexed text and thinking deltas, ending with the authoritative snapshot',()=>{
   let state=reduceEvent(emptyTranscript(),{type:'message_start',message:{role:'assistant',content:[],timestamp:1}})
   for(const event of [{type:'text_start',contentIndex:0},{type:'text_delta',contentIndex:0,delta:'Hello\u2028'},{type:'thinking_start',contentIndex:1},{type:'thinking_delta',contentIndex:1,delta:'思考'},{type:'text_delta',contentIndex:0,delta:'world'}])state=reduceEvent(state,{type:'message_update',assistantMessageEvent:event})
@@ -91,8 +91,19 @@ describe('Pi 0.85.1 JSONL event projection',()=>{
   expect(toolResultText(result)).toBe('observe_ui completed')
   let state=reduceEvent(emptyTranscript(),{type:'tool_execution_end',toolCallId:'ui',toolName:'observe_ui',result})
   expect(state.tools.ui.result).toBe('observe_ui completed')
+  expect(state.tools.ui.details).toBeUndefined()
   state=hydrate([{role:'assistant',content:[{type:'toolCall',id:'ui',name:'observe_ui'}]},{role:'toolResult',toolCallId:'ui',toolName:'observe_ui',content:[{type:'text',text:'done'}],details:hugeDetails}])
   expect(state.tools.ui.result).toBe('done')
+  expect(state.tools.ui.details).toBeUndefined()
+ })
+ test('retains only bounded edit patches for code diff rendering',()=>{
+  const patch='--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@\n-a\n+b'
+  let state=reduceEvent(emptyTranscript(),{type:'tool_execution_end',toolCallId:'edit',toolName:'edit',result:{content:[{type:'text',text:'done'}],details:{patch,diff:'display only'}}})
+  expect(state.tools.edit).toMatchObject({result:'done',details:{patch}})
+  state=reduceEvent(state,{type:'message_end',message:{role:'toolResult',toolCallId:'edit',toolName:'edit',content:[{type:'text',text:'done'}]}})
+  expect(state.tools.edit.details).toEqual({patch})
+  state=hydrate([{role:'assistant',content:[{type:'toolCall',id:'edit',name:'edit'}]},{role:'toolResult',toolCallId:'edit',toolName:'edit',content:[{type:'text',text:'done'}],details:{patch}}])
+  expect(state.tools.edit.details).toEqual({patch})
  })
 })
 test('bash and compaction records normalize without exposing hidden custom messages',()=>{

@@ -10,5 +10,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   clearScreen: false,
+  // Second entry for the native Tauri splashscreen window.
+  build: { rollupOptions: { input: { main: path.resolve(import.meta.dirname, 'index.html'), splashscreen: path.resolve(import.meta.dirname, 'splashscreen.html') } } },
   server: { port: 5173, strictPort: true, host: '127.0.0.1', watch: { ignored: ['**/src-tauri/**', path.join(import.meta.dirname, 'work', '**')] } },
 })

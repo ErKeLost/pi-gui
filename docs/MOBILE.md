@@ -26,14 +26,18 @@ not screenshots or video frames.
 
 ## Connection scope
 
-The first implementation is intended for a trusted LAN or a Tailscale network.
-The pairing token authenticates a client, but plain `ws://` does not encrypt LAN
-traffic by itself. Do not expose the Host port directly to the public Internet.
-Tailscale supplies encrypted transport between enrolled devices; a future public
-relay must use TLS or an equivalent authenticated encrypted channel.
+The desktop Host keeps a stable local identity in a permissions-restricted file,
+so restarting Orbit does not invalidate an already paired phone. The LAN path
+uses an authenticated `ws://` connection and is intended for a trusted LAN or
+Tailscale network; plain `ws://` does not encrypt LAN traffic by itself. Do not
+expose the Host port directly to the public Internet. The Relay path uses `wss://`
+and encrypts application frames before they leave the desktop. Automatic mode
+advertises both paths in one pairing URI; the phone races them and keeps the
+first authenticated path as the active connection.
 
-The Host is disabled until the user starts mobile access. Restarting it revokes
-the current in-memory pairing token. Treat the pairing URI as a secret.
+The Host is disabled until the user starts mobile access. Stopping the Host drops
+active sessions, while the stored identity lets the next start reuse the same
+pairing credentials. Treat the pairing URI and the identity file as secrets.
 
 ## Install and use the Android build
 

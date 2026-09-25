@@ -116,7 +116,7 @@ afterAll(async () => {
   await Promise.all(fixtures.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
-describe("Pi RPC 0.85.1 process contract", () => {
+describe("Pi RPC 0.87.1 process contract", () => {
   test("uses the project-local CLI and correlates concurrent requests", async () => {
     const paths = await fixture("concurrent")
     await mkdir(paths.cwd, { recursive: true })

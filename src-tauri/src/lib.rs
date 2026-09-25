@@ -1,7 +1,17 @@
+// The native AX engine (observation ledger, worker protocol, now-playing)
+// ships for macOS in this release; other desktop platforms reject gui_task at
+// the client layer instead of compiling platform-specific code.
+#[cfg(target_os = "macos")]
+pub mod ax;
+#[cfg(target_os = "macos")]
+pub mod now_playing;
+#[cfg(target_os = "macos")]
+pub mod fast_ax;
 mod bridge;
 mod mobile_update;
 mod remote;
 mod runtime;
+mod splash;
 use tauri::Manager;
 
 /// Finder/Dock-launched apps inherit launchd's minimal PATH, so every shell
@@ -107,16 +117,39 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
+                // Transparent, undecorated splash that floats the mascot on the desktop.
+                tauri::WebviewWindowBuilder::new(app, "splashscreen", tauri::WebviewUrl::App("splashscreen.html".into()))
+                    .title("Orbit")
+                    .inner_size(340.0, 340.0)
+                    .center()
+                    .resizable(false)
+                    .decorations(false)
+                    .transparent(true)
+                    .shadow(false)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .focused(true)
+                    .build()?;
+                splash::arm_failsafe(app.handle());
                 app.handle().plugin(tauri_plugin_process::init())?;
                 app.handle()
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
             }
+            #[cfg(mobile)]
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.show();
+            }
+            splash::mark(app.handle(), &app.state::<splash::SplashState>(), "backend");
             Ok(())
         })
+        .manage(splash::SplashState::default())
         .manage(bridge::Bridge::default())
         .manage(remote::RemoteHost::default())
         .invoke_handler(tauri::generate_handler![
+            #[cfg(target_os = "macos")]
+            ax::ax_observe,
             runtime::runtime_environment,
+            splash::splash_ready,
             bridge::discover,
             bridge::list_provider_models,
             bridge::list_provider_profiles,

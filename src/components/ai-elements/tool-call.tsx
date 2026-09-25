@@ -1,11 +1,14 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { FileIcon, Icon } from "../Icon";
 import { Button } from "@/components/ui/button";
+import { CodeChange } from "../CodeChange";
+import { getToolCodePresentation } from "../../lib/changes";
 import { summarizeToolCalls, toolKind, type ToolKind } from "../../lib/tool-activity";
 import { StableShimmer } from "./stable-shimmer";
 import "./tool-call.css";
 
 type JsonRecord = Record<string, unknown>;
+const MAX_PLAIN_DETAIL_CHARS = 20_000;
 
 const toolKinds: Record<ToolKind, { label: string; icon: string }> = {
   read: { label: "读取", icon: "book-open" },
@@ -53,15 +56,17 @@ function patchCounts(value: string) {
   return additions || deletions ? { additions, deletions } : null;
 }
 
-function editCounts(request: string, result: string) {
+function editCounts(request: string, result: string, details?: unknown) {
   const args = parseArguments(request);
   const patch = firstText(args, ["patch", "diff", "unifiedDiff"]);
-  return patchCounts(patch) ?? patchCounts(request) ?? patchCounts(result);
+  const detailPatch = details && typeof details === "object" && !Array.isArray(details) ? firstText(details as JsonRecord, ["patch"]) : "";
+  return patchCounts(detailPatch) ?? patchCounts(patch) ?? patchCounts(request) ?? patchCounts(result);
 }
 
 function renderedRequest(request: string) {
   const args = parseArguments(request);
-  return args ? JSON.stringify(args, null, 2) : request;
+  const value = args ? JSON.stringify(args, null, 2) : request;
+  return value.length <= MAX_PLAIN_DETAIL_CHARS ? value : `${value.slice(0, MAX_PLAIN_DETAIL_CHARS)}\n\n[请求过长，已省略]`;
 }
 
 export function ToolActivityGroup({ toolNames, running, hasError = false, children }: { toolNames: string[]; running: boolean; hasError?: boolean; children: ReactNode }) {
@@ -77,14 +82,17 @@ export function ToolActivityGroup({ toolNames, running, hasError = false, childr
   </section>;
 }
 
-export function ToolCall({ toolName, request, result, usage, running, open: controlledOpen, onOpenChange, className = '' }: { toolName: string; request: string; result: string; usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost?: { total?: number } }; running: boolean; open?: boolean; onOpenChange?: (open: boolean) => void; className?: string }) {
+export function ToolCall({ toolName, request, result, details, usage, running, open: controlledOpen, onOpenChange, className = '' }: { toolName: string; request: string; result: string; details?: unknown; usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost?: { total?: number } }; running: boolean; open?: boolean; onOpenChange?: (open: boolean) => void; className?: string }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
   const detailsId = useId();
   const kind = toolKind(toolName);
   const presentation = toolKinds[kind];
   const target = displayTarget(kind, request);
-  const changes = kind === "edit" ? editCounts(request, result) : null;
+  const changes = kind === "edit" ? editCounts(request, result, details) : null;
+  const code = useMemo(() => getToolCodePresentation(toolName, parseArguments(request), result, details), [details, request, result, toolName]);
+  const codeResult = running ? undefined : code.result;
+  const showPlainRequest = !code.request && !((kind === "read" || kind === "edit") && codeResult);
   const setOpen = (value: boolean) => { setLocalOpen(value); onOpenChange?.(value); };
 
   return <div className={`ai-tool-call tool-activity-item ${className}`} data-running={running} data-open={open}>
@@ -92,8 +100,11 @@ export function ToolCall({ toolName, request, result, usage, running, open: cont
       <Icon name={presentation.icon} className="tool-activity-icon" aria-hidden="true" /><span className="tool-activity-action">{presentation.label}</span>{target && (kind === "read" || kind === "edit") && <FileIcon path={target} className="tool-activity-file-icon" />}{target && <code className="tool-activity-target" title={target}>{target}</code>}{changes && <span className="tool-activity-changes"><b>+{changes.additions}</b><i>-{changes.deletions}</i></span>}{running && <span className="tool-activity-running" aria-live="polite">运行中</span>}<Icon name="caret-right" className="tool-activity-chevron" aria-hidden="true" />
     </Button>
     <div id={detailsId} className="tool-activity-details" aria-hidden={!open} inert={!open}><div className="tool-activity-details-inner">
-      <section><small>请求</small><pre>{renderedRequest(request)}</pre></section>
-      {(result || !running) && <section><small>结果</small><pre>{result || "未返回输出"}</pre></section>}
+      {open && code.request && <CodeChange change={code.request} compact />}
+      {open && showPlainRequest && <section className="tool-detail-plain"><small>请求</small><pre>{renderedRequest(request)}</pre></section>}
+      {open && codeResult && <CodeChange change={codeResult} compact />}
+      {open && codeResult && kind === "edit" && result && <p className="tool-code-status">{result}</p>}
+      {open && !codeResult && (result || !running) && <section className="tool-detail-plain"><small>结果</small><pre>{result || "未返回输出"}</pre></section>}
       {usage && <div className="tool-usage"><small>工具关联用量</small><span>{usage.totalTokens.toLocaleString()} tokens</span>{usage.cost?.total != null && <span>${usage.cost.total.toFixed(4)}</span>}</div>}
     </div></div>
   </div>;

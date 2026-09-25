@@ -106,17 +106,19 @@
 .tool-activity-item[data-open="true"] .tool-activity-chevron { transform: rotate(90deg); }
 
 .tool-activity-details {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease-out;
+  display: none;
 }
-.tool-activity-item[data-open="true"] .tool-activity-details { grid-template-rows: 1fr; opacity: 1; }
+.tool-activity-item[data-open="true"] .tool-activity-details { display: block; }
 .tool-activity-details-inner { min-height: 0; overflow: hidden; padding: 1px 6px 8px 29px; }
 .tool-activity-details section { margin-top: 6px; }
 .tool-activity-details small,
 .tool-usage small { display: block; margin-bottom: 3px; color: var(--tool-faint); font-size: 10px; }
-.tool-activity-details pre { max-height: 220px; margin: 0; overflow: auto; padding: 7px 8px; border: 1px solid var(--tool-line); border-radius: var(--radius-sm); background: var(--background); color: var(--tool-muted); font: 11px/1.6 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-activity-details .tool-detail-plain pre { max-height: 220px; margin: 0; overflow: auto; padding: 7px 8px; border: 1px solid var(--tool-line); border-radius: var(--radius-sm); background: var(--background); color: var(--tool-muted); font: 11px/1.6 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-activity-details .diff-loading-fallback { max-height: 360px; margin: 7px 0 0; overflow: auto; padding: 8px; border: 1px solid var(--tool-line); border-radius: var(--radius-sm); background: var(--background); color: var(--tool-muted); font: 11px/1.6 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-activity-details .code-change.is-compact { margin: 7px 0 0; border-color: var(--tool-line); border-radius: var(--radius-sm); }
+.tool-activity-details .code-change.is-compact .diff-toolbar { min-height: 31px; padding: 5px 8px; color: var(--tool-muted); }
+.tool-activity-details .code-change.is-compact diffs-container { max-height: 360px; --diffs-font-size: 11px; }
+.tool-code-status { margin: 5px 1px 0; color: var(--tool-faint); font-size: 10px; line-height: 1.5; }
 .tool-usage { display: flex; align-items: center; gap: 10px; padding-top: 8px; color: var(--tool-muted); font: 10px "SFMono-Regular", Consolas, monospace; }
 .tool-usage small { margin: 0 auto 0 0; }
 

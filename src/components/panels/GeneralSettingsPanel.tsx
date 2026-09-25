@@ -183,7 +183,7 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
   const [revealed, setRevealed] = useState(false);
   const [showQr, setShowQr] = useState(true);
   const [connectionFeedback, setConnectionFeedback] = useState("");
-  const [transport, setTransport] = useState<"lan" | "relay">(() => typeof window === "undefined" ? "lan" : localStorage.getItem("orbit.remote.transport") === "relay" ? "relay" : "lan");
+  const [transport, setTransport] = useState<"lan" | "relay" | "auto">(() => typeof window === "undefined" ? "lan" : localStorage.getItem("orbit.remote.transport") === "relay" ? "relay" : localStorage.getItem("orbit.remote.transport") === "auto" ? "auto" : "lan");
   const [relay, setRelay] = useState<RelaySettingsStatus | null>(null);
   const [relayUrl, setRelayUrl] = useState("");
   const [hostKey, setHostKey] = useState("");
@@ -216,7 +216,7 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
   async function start() {
     setBusy("start");
     try {
-      if (transport === "relay" && relay && !relay.hasHostKey) throw new Error("请先保存 Relay 地址和 Host Key");
+      if ((transport === "relay" || transport === "auto") && relay && !relay.hasHostKey) throw new Error("请先保存 Relay 地址和 Host Key");
       localStorage.setItem("orbit.remote.transport", transport);
       const info = await startRemoteHost({ mode: transport });
       previousClients.current = info.connectedClients;
@@ -276,10 +276,11 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
 
   const statusLabel = loading ? "正在读取" : host ? "已开启" : "未开启";
   const connectedLabel = host ? (host.connectedClients > 0 ? `手机已连接 · ${host.connectedClients}` : host.mode === "relay" ? (host.relayConnected ? "中转已连接 · 等待手机" : "正在连接中转服务器…") : "等待手机连接") : "";
-  const transportSetting = <SettingRow title="连接方式" description={transport === "lan" ? "同一 Wi-Fi 下手机直连电脑，不经过服务器。" : "手机在任何网络（含 5G）通过你自己的阿里云中转服务器连接电脑，电脑无需开放端口。"} className="remote-address-setting">
-    <Select aria-label="移动端连接方式" value={transport} disabled={Boolean(host) || Boolean(busy) || Boolean(relay && !relay.hasHostKey && transport === "relay")} onChange={event => setTransport(event.target.value as "lan" | "relay")}>
+  const transportSetting = <SettingRow title="连接方式" description={transport === "lan" ? "同一 Wi-Fi 下手机直连电脑，不经过服务器。" : transport === "auto" ? "同时准备局域网和 Relay，手机自动选择更快、更稳定的路径。" : "手机在任何网络（含 5G）通过你自己的阿里云中转服务器连接电脑，电脑无需开放端口。"} className="remote-address-setting">
+    <Select aria-label="移动端连接方式" value={transport} disabled={Boolean(host) || Boolean(busy) || Boolean(relay && !relay.hasHostKey && (transport === "relay" || transport === "auto"))} onChange={event => setTransport(event.target.value as "lan" | "relay" | "auto")}>
       <option value="lan">局域网直连</option>
       <option value="relay" disabled={Boolean(relay && !relay.hasHostKey)}>公网中转 · 阿里云</option>
+      <option value="auto" disabled={Boolean(relay && !relay.hasHostKey)}>自动选择 · 局域网 + Relay</option>
     </Select>
   </SettingRow>;
   const relaySetting = <div className="remote-relay-config">
@@ -295,35 +296,67 @@ export function DesktopHostSettings({ pageMode = false }: { pageMode?: boolean }
     <div className="remote-relay-actions"><Button disabled={Boolean(host) || relaySaving || !relayUrl.trim()} onClick={() => void saveRelay()}>{relaySaving ? "保存中…" : "保存 Relay 配置"}</Button></div>
   </div>;
   if (pageMode) {
-    return <>
-      <section className="mobile-access-host-card" aria-label="电脑 Host">
-        <SettingRow title="电脑 Host" description="手机通过局域网直连，或经你自己的阿里云中转服务器从外网连接这台电脑。">
-          <div className="remote-host-control">
-            <span className="remote-host-status" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}{host && <small>{connectedLabel}</small>}</span>
-            <Switch aria-label="电脑 Host" checked={Boolean(host)} disabled={loading || Boolean(busy)} onChange={checked => void (checked ? start() : stop())} />
-          </div>
-        </SettingRow>
-        {transportSetting}
-        {relaySetting}
-        <div className="mobile-access-host-body">
-          {host ? <>
-            <div className="mobile-access-qr-copy">{host.mode === "relay" ? "用手机扫描二维码，任何网络都能连接这台电脑" : "用手机扫描二维码，连接同一 Wi-Fi 下的这台电脑"}</div>
-            <div className="mobile-access-qr"><QRCode type="svg" errorLevel="M" value={host.pairingUri} size={280} bordered={false} color="#111111" bgColor="#ffffff" /></div>
-            <div className="mobile-access-uri-row">
-              <code title={host.pairingUri}>{host.pairingUri}</code>
-              <Button variant="ghost" size="icon" title="复制配对链接" aria-label="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>
+    const clients = host?.connectedClients ?? 0;
+    const relayReady = Boolean(relay?.hasHostKey);
+    return <div className="mobile-access-layout">
+      <div className="mobile-access-main">
+        <Card className="mobile-access-hero" data-online={Boolean(host)}>
+          <CardContent className="mobile-access-hero-content">
+            <span className="mobile-access-hero-icon"><Icon name="desktop" /></span>
+            <div className="mobile-access-hero-copy">
+              <div className="mobile-access-hero-title">
+                <strong>电脑 Host</strong>
+                <span className="mobile-access-pill" aria-live="polite"><span className="remote-host-status-dot" data-online={Boolean(host)} />{statusLabel}</span>
+              </div>
+              <p>{host ? connectedLabel : "开启后，手机可通过局域网直连，或经你自己的中转服务器从外网连接这台电脑。"}</p>
             </div>
-            {host.mode === "relay" && <div className="mobile-access-address">中转服务器 <code>{host.relayUrl ?? ""}</code></div>}
-            {host.mode === "lan" && <div className="mobile-access-address">局域网地址 <code>{remoteAddress(host)}</code></div>}
-            {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
-          </> : <div className="mobile-access-qr-empty"><ScanLine /><strong>开启电脑 Host 后显示二维码</strong><span>手机扫描二维码即可连接当前电脑</span></div>}
-        </div>
-      </section>
-      <section className="mobile-access-devices-card" aria-label="已连接的设备">
-        <header><h2>已连接的设备</h2><span>{host?.connectedClients ?? 0} 台</span></header>
-        {host?.connectedClients ? Array.from({ length: host.connectedClients }, (_, index) => <div className="remote-host-device" key={index}><Icon name="device-mobile" /><span>移动端设备 {index + 1}</span><small><i />在线</small></div>) : <p>暂无设备连接</p>}
-      </section>
-    </>;
+            <Switch aria-label="电脑 Host" checked={Boolean(host)} disabled={loading || Boolean(busy)} onChange={checked => void (checked ? start() : stop())} />
+          </CardContent>
+        </Card>
+
+        <section className="mobile-access-section" aria-label="连接方式">
+          <Card className="mobile-access-card"><CardContent>{transportSetting}</CardContent></Card>
+        </section>
+
+        <section className="mobile-access-section" aria-label="公网中转">
+          <header className="mobile-access-section-heading">
+            <h2>公网中转</h2>
+            <span className="mobile-access-pill" data-tone={relayReady ? "ok" : undefined}><span className="remote-host-status-dot" data-online={relayReady} />{relayReady ? "已配置" : "未配置"}</span>
+          </header>
+          <Card className="mobile-access-card"><CardContent>{relaySetting}</CardContent></Card>
+        </section>
+      </div>
+
+      <aside className="mobile-access-side">
+        <Card className="mobile-access-card mobile-access-pairing">
+          <CardContent>
+            <header className="mobile-access-card-header">
+              <h2><Icon name="device-mobile" />扫码连接</h2>
+              {host && <Button variant="ghost" size="icon" title="复制配对链接" aria-label="复制配对链接" onClick={() => void copyPairingUri()}><Icon name="copy" /></Button>}
+            </header>
+            <div className="mobile-access-host-body">
+              {host ? <>
+                <div className="mobile-access-qr"><QRCode type="svg" errorLevel="M" value={host.pairingUri} size={208} bordered={false} color="#111111" bgColor="#ffffff" /></div>
+                <p className="mobile-access-qr-copy">{host.mode === "relay" ? "用手机扫描二维码，任何网络都能连接" : "用手机扫描二维码，需与电脑在同一 Wi-Fi"}</p>
+                <dl className="mobile-access-meta">
+                  <div><dt>电脑</dt><dd>{host.machineName}</dd></div>
+                  <div><dt>{host.mode === "relay" ? "中转服务器" : "局域网地址"}</dt><dd><code>{host.mode === "relay" ? host.relayUrl ?? "" : remoteAddress(host)}</code></dd></div>
+                </dl>
+                {connectionFeedback && <p className="remote-host-feedback" role="status">{connectionFeedback}</p>}
+              </> : <div className="mobile-access-qr-empty"><ScanLine /><strong>开启电脑 Host 后显示二维码</strong><span>手机扫描二维码即可连接当前电脑</span></div>}
+            </div>
+            <p className="mobile-access-security"><Icon name="shield-check" />配对二维码包含访问凭据，请只用自己的设备扫描。</p>
+          </CardContent>
+        </Card>
+
+        <Card className="mobile-access-card mobile-access-devices">
+          <CardContent>
+            <header className="mobile-access-card-header"><h2>已连接的设备</h2><span>{clients} 台</span></header>
+            {clients ? Array.from({ length: clients }, (_, index) => <div className="remote-host-device" key={index}><Icon name="device-mobile" /><span>移动端设备 {index + 1}</span><small><i />在线</small></div>) : <p className="mobile-access-devices-empty">暂无设备连接</p>}
+          </CardContent>
+        </Card>
+      </aside>
+    </div>;
   }
   return <>
     <SettingRow title="电脑 Host" description="手机通过局域网直连，或经你自己的阿里云中转服务器从外网连接这台电脑。">

@@ -8,7 +8,7 @@ export type RelaySettingsStatus = {
 
 export type RemoteHostInfo = {
   running: true
-  mode: "lan" | "relay"
+  mode: "lan" | "relay" | "auto"
   protocol: typeof REMOTE_PROTOCOL
   hostId: string
   advertisedAddress: string
@@ -29,7 +29,7 @@ export function saveRelaySettings(settings: { relayUrl: string; hostKey: string 
   return invoke<RelaySettingsStatus>("save_relay_settings", { settings })
 }
 
-export function startRemoteHost(options: { mode?: "lan" | "relay"; port?: number } = {}): Promise<RemoteHostInfo> {
+export function startRemoteHost(options: { mode?: "lan" | "relay" | "auto"; port?: number } = {}): Promise<RemoteHostInfo> {
   return invoke<RemoteHostInfo>("remote_host_start", {
     bindAddress: null,
     mode: options.mode ?? null,

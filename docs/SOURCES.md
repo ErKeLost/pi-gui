@@ -17,7 +17,7 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 | P2 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md | SessionManager.list(cwd)、SessionInfo、会话树 | 原生会话索引 |
 | P3 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md | registerCommand、getAllTools、getActiveTools、setActiveTools、setLabel、ctx.navigateTree、waitForIdle | `gui-extension.ts` |
 | P4 | https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md 和 settings.md | 模型定义、reasoning 开关、动态可用 thinking levels、默认模型与 thinking | 复用已有 Pi 配置；GUI 不硬编码支持的 effort |
-| P5 | Pi 0.85.1 安装包 `examples/extensions/subagent/` | 独立 Pi 进程、JSON 事件、并行调度、取消与用量聚合的官方扩展示例 | `resources/subagents/` 的执行基础；Orbit 另加持久 RPC、父子通信和状态树 |
+| P5 | Pi 0.87.1 安装包 `examples/extensions/subagent/` | 独立 Pi 进程、JSON 事件、并行调度、取消与用量聚合的官方扩展示例 | `resources/subagents/` 的执行基础；Orbit 另加持久 RPC、父子通信和状态树 |
 | J1 | https://docs.typesafe.ai/concepts/how-to-build-with-system-one 和 https://docs.typesafe.ai/model-jaggedness/jev-1.13 | 代码掌控流程和副作用；Jev 只在本地提供的有界候选中选择；输入值、执行和重试权留在本地 | `resources/computer-use/jev.ts`, `gui-task-engine.ts` |
 | J2 | https://github.com/lahfir/agent-desktop/releases/tag/v0.9.4、安装包和本地 `work/reference/agent-desktop` 源码 | macOS AX skeleton/drill、snapshot-qualified refs、retained live re-identification、Chromium AX activation、actionability、auto-wait、post-state、delivery/retry、App 生命周期、官方 `jev-desktop` loop 和预编译 CLI | 固定 `agent-desktop` 0.9.4；`agent-desktop-client.ts`, `desktop-observation.ts`, `gui-task-engine.ts` |
 | J3 | macOS Spotlight `kMDItemDisplayName`、`kMDItemCFBundleIdentifier`、`kMDItemContentType` | 已安装 App 的本地化显示名与稳定 bundle identity；精确事实优先于模型解析 | `desktop-app-resolver.ts` |
@@ -36,9 +36,9 @@ Thinking 与 Loading State 的当前样式来自 [Beautiful UI](https://www.beau
 | RS1 | https://rust-lang.github.io/rustup/ | 独立工具链、版本固定、安装配置 | Rust 1.98.1，`rust-toolchain.toml` |
 | RS2 | https://static.rust-lang.org/dist/channel-rust-stable.toml | 2026-09-03 stable 为 1.98.1 | 工具链版本依据 |
 
-Pi 的远端 main 分支会继续变化，因此实现同时核对了 **0.85.1 安装包**里的 docs/rpc.md、docs/sdk.md、docs/extensions.md、dist/modes/rpc/rpc-types.d.ts 和 dist/core/messages.d.ts；`src/lib/protocol.ts` 的回归测试覆盖这些实际结构。
+Pi 的远端 main 分支会继续变化，因此实现同时核对了 **0.87.1 安装包**里的 docs/rpc.md、docs/sdk.md、docs/extensions.md、dist/modes/rpc/rpc-types.d.ts 和 dist/core/messages.d.ts；`src/lib/protocol.ts` 的回归测试覆盖这些实际结构。
 
-2026-09-18 再次核对 npm registry、GitHub 标签和上游 `main`：最新正式版仍为 **0.85.1**（标签提交 `d981de1229ef899957bbe968bc8dcda02a21f477`），正式 RPC 仍为 33 个且类型结构未变。`main` 的未发布 API 与 GUI 影响记录在 [CAPABILITIES.md](CAPABILITIES.md#上游未发布-api2026-09-18)；项目不把不可复现的分支提交冒充正式 SDK 更新。
+2026-09-25 核对 npm registry、GitHub 标签和上游 `main`：最新正式版为 **0.87.1**（标签提交 `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`），正式 RPC 仍为 33 个且类型结构未变。项目使用可复现的正式 npm 版本，不把分支提交冒充 SDK 更新。
 
 依赖精确版本与注册表 URL 保存在 `versions.json`。Bun 与 Cargo 的锁文件用于复现，不能用“包名相同”推断它们版本号应相同。Tauri CLI、JS API、Rust crate 各自发布。
 
@@ -51,7 +51,7 @@ Rust 工具链下载使用 USTC 镜像解决官方 CDN 低速问题。执行前�
 - AI Elements 的 Conversation、Message、PromptInput、Shimmer 与 assistant-ui ToolCall 使用当前 registry/docs 的 props 形状，已经接入真实 Pi transcript、流式状态、工具请求和结果；不是静态示例数据。这里保留的是针对 Pi RPC 数据结构的本地轻量渲染适配，没有引入未使用的 assistant-ui runtime。
 - 同包 `Button / Select / Input / TextArea / Modal / Tooltip / Collapse / Skeleton` 与 `@lobehub/ui/base-ui` 的 Switch 用于交互控件。ConfigProvider 注入 `motion/react`，ThemeProvider 负责主题。
 - Lobe UI 的包声明仍引用 Motion 12；为遵守本项目使用最新 Motion 13.2.0 的要求，Bun overrides 将 Motion 去重到 13.2.0。已验证类型构建、组件运行与交互，不能据此宣称所有未使用的 Lobe UI API 都经过兼容验证。
-- https://diffs.com/ 及安装包 `@pierre/diffs` 1.4.1 的 React 类型：完整 patch 用 `PatchDiff`，替换片段用 `MultiFileDiff` 并明确标注片段，写入内容用 `File`。依据 Pi 0.85.1 `dist/core/tools/edit.js` 中返回的 `details.patch`；不把其用于终端显示的 `details.diff` 冒充完整 unified patch。
+- https://diffs.com/ 及安装包 `@pierre/diffs` 1.4.1 的 React 类型：完整 patch 用 `PatchDiff`，替换片段用 `MultiFileDiff` 并明确标注片段，写入内容用 `File`。依据 Pi 0.87.1 `dist/core/tools/edit.js` 中返回的 `details.patch`；不把其用于终端显示的 `details.diff` 冒充完整 unified patch。
 - https://v2.tauri.app/plugin/dialog/ ：`open({ directory:true, multiple:true })` 选择多个文件夹；使用官方 Tauri CLI 添加插件，再通过 Bun 固定最新版本。
 - Pi `get_session_stats` / `get_state` 每 2 秒读取；`message_update.usage`、`compaction_start/end`、重试与队列事件直接订阅。扩展 `gui-observe` 使用公共 `SettingsManager` 和 ExtensionContext API 读取配置及系统提示词，每 5 秒刷新。
 - 压缩结束时 `estimatedTokensAfter` 是估计值；`contextUsage.tokens/percent` 可能为 null，显示待更新。Pi 没有压缩完成百分比，因此 UI 没有捏造进度数值。

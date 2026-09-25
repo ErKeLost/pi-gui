@@ -41,47 +41,7 @@
 @media(prefers-reduced-motion:reduce){::view-transition-old(root),::view-transition-new(root){animation:none!important}}
 
 .orb-status{display:inline-flex;align-items:center;gap:7px;min-width:0}.orb-status canvas{display:block;flex:none}
-.markdown-static .streamdown-animated .stream-char,.markdown-static .streamdown-animated .stream-block{opacity:1!important;animation:none!important}
 
-/* The active Streamdown tail moves from a cool, dim leading edge through
-   violet and rose before settling into the normal message color. */
-.is-streaming .streamdown-animated .stream-char:not(.stream-char-revealed) {
-  animation-name: stream-color-trail;
-  animation-duration: 900ms;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
-}
-
-@keyframes stream-color-trail {
-  0% {
-    color: light-dark(#8094c5, #35466f);
-    opacity: 0;
-  }
-  20% {
-    color: light-dark(#687fba, #6077ae);
-    opacity: .5;
-  }
-  46% {
-    color: light-dark(#8267b0, #8d70b7);
-    opacity: .78;
-  }
-  70% {
-    color: light-dark(#b36591, #d08aae);
-    opacity: 1;
-  }
-  100% {
-    color: var(--foreground);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .is-streaming .streamdown-animated .stream-char {
-    color: inherit;
-    opacity: 1;
-    animation: none !important;
-  }
-}
 .chat-root .tessera-conversation > .ai-conversation-content{gap:14px!important;padding-top:24px!important;padding-bottom:16px!important}.chat-root .transcript-message{gap:6px!important;padding-bottom:2px!important}.chat-root .chat-loading-state{margin:0!important}
 .ai-message.is-assistant .ai-message-content{margin-left:0;padding-left:0}.ai-message.is-assistant .reasoning,.ai-message.is-assistant .chain-of-thought{margin-left:0;padding-left:0;width:100%;max-width:100%}.ai-message.is-assistant .chain-of-thought-header{padding-left:0}
 .tool-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tool-action-grid [data-slot="button"]{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:36px;border:1px solid var(--border);background:var(--background);color:var(--foreground)}.tool-action-grid [data-slot="button"] svg{width:15px;height:15px;flex:none}.project-file-picker{width:300px;padding:8px}.project-file-options{max-height:260px;overflow:auto;margin-top:8px}.project-file-options [data-slot="button"]{display:flex;width:100%;justify-content:flex-start;gap:8px;padding:7px 6px;color:var(--foreground);font:11px ui-monospace,monospace;text-align:left}.project-file-options [data-slot="button"] span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -5311,8 +5271,24 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   background: color-mix(in oklch, var(--sidebar-accent) 88%, var(--sidebar-foreground) 4%);
   color: var(--sidebar-foreground);
 }
+.sidebar-flower-row .sidebar-project-new,
+.sidebar-flower-row .sidebar-project-actions {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+.sidebar-flower-row .sidebar-project-new:hover:not(:disabled),
+.sidebar-flower-row .sidebar-project-actions:hover:not(:disabled),
+.sidebar-flower-row .sidebar-project-actions[aria-expanded="true"] {
+  background: color-mix(in oklch, var(--sidebar-accent) 88%, var(--sidebar-foreground) 6%);
+  color: var(--sidebar-foreground);
+}
 .sidebar-project-row .sidebar-project-new svg,
-.sidebar-project-row .sidebar-project-actions svg {
+.sidebar-project-row .sidebar-project-actions svg,
+.sidebar-flower-row .sidebar-project-new svg,
+.sidebar-flower-row .sidebar-project-actions svg {
   width: 16px;
   height: 16px;
 }

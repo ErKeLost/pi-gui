@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { decodeRemoteMessage, encodeRemoteMessage, isRemoteEvent, isRemoteHostSnapshot, isRemoteRequest, parsePairingUri, remoteWebSocketUrl, REMOTE_PROTOCOL } from "../src/lib/remote-protocol"
+import { decodeRemoteMessage, encodeRemoteMessage, isRemoteEvent, isRemoteHostSnapshot, isRemoteRequest, parsePairingEndpoints, parsePairingUri, remoteWebSocketUrl, REMOTE_PROTOCOL } from "../src/lib/remote-protocol"
 
 describe("remote protocol", () => {
   test("round trips a Pi command without interpreting its payload", () => {
@@ -12,6 +12,7 @@ describe("remote protocol", () => {
     expect(remoteWebSocketUrl({ mode: "direct", host: "192.168.1.8", port: 17890, token: "a b" })).toBe("ws://192.168.1.8:17890/ws?token=a%20b")
     expect(remoteWebSocketUrl({ mode: "direct", host: "2001:db8::8", port: 17890, token: "abc" })).toBe("ws://[2001:db8::8]:17890/ws?token=abc")
     expect(remoteWebSocketUrl({ mode: "relay", relayUrl: "wss://101.201.45.25/", hostId: "host-12345678", token: "1234567890abcdef", encryptionKey: "key".repeat(43) })).toBe("wss://101.201.45.25/relay/client/host-12345678?token=1234567890abcdef")
+    expect(remoteWebSocketUrl({ mode: "direct", host: "192.168.1.8", port: 17890, token: "abc", encryptionKey: "k".repeat(43) })).toBe("ws://192.168.1.8:17890/ws?token=abc&e2ee=1")
   })
 
   test("rejects malformed requests", () => {
@@ -48,6 +49,8 @@ describe("remote protocol", () => {
   test("parses IPv4 and IPv6 pairing URIs", () => {
     expect(parsePairingUri("orbit://pair?host=192.168.1.8&port=17890&token=1234567890abcdef&protocol=orbit.remote.v1")).toEqual({ mode: "direct", host: "192.168.1.8", port: 17890, token: "1234567890abcdef" })
     expect(parsePairingUri("orbit://pair?host=2001%3Adb8%3A%3A8&port=443&token=1234567890abcdef&protocol=orbit.remote.v1")).toEqual({ mode: "direct", host: "2001:db8::8", port: 443, token: "1234567890abcdef" })
+    expect(parsePairingUri(`orbit://pair?host=192.168.1.8&port=17890&token=1234567890abcdef&key=${"k".repeat(43)}&hostId=desktop-id&protocol=orbit.remote.v1`)).toEqual({ mode: "direct", host: "192.168.1.8", port: 17890, token: "1234567890abcdef", hostId: "desktop-id", encryptionKey: "k".repeat(43) })
+    expect(parsePairingEndpoints(`orbit://pair?host=192.168.1.8&port=17890&relay=wss%3A%2F%2F101.201.45.25&hostId=desktop-id&token=1234567890abcdef&key=${"k".repeat(43)}&protocol=orbit.remote.v1`)).toHaveLength(2)
     expect(parsePairingUri(`orbit://pair?relay=wss%3A%2F%2F101.201.45.25&hostId=host-12345678&token=1234567890abcdef&key=${"k".repeat(43)}&protocol=orbit.remote.v1`)).toEqual({ mode: "relay", relayUrl: "wss://101.201.45.25/", hostId: "host-12345678", token: "1234567890abcdef", encryptionKey: "k".repeat(43) })
     expect(() => parsePairingUri("orbit://pair?relay=wss%3A%2F%2F101.201.45.25&hostId=host-12345678&token=1234567890abcdef&protocol=orbit.remote.v1")).toThrow(/加密密钥/)
     expect(() => parsePairingUri("orbit://pair?host=127.0.0.1&port=0&token=short&protocol=old")).toThrow()

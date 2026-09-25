@@ -39,3 +39,6 @@ src-tauri/target/
 src-tauri/resources/node-runtime/
 src-tauri/resources/pi-runtime/
 src-tauri/resources/pi-computer-use/
+src-tauri/resources/computer-use/ax_control
+crates/target/
+crates/*/target/

@@ -4,10 +4,14 @@ export type GuiTaskInput = {
   goal: string
   target: { app: string }
   textSlots?: TextSlot[]
+  /** Only inspect the already-open view; forbid clicks, text entry and sends. */
+  readOnly?: boolean
   budget: ExecutionBudget
 }
 
 export type DesktopOperation =
+  | "FOCUS"
+  | "ACTIVATE"
   | "CLICK"
   | "DOUBLE_CLICK"
   | "SET_VALUE"
@@ -30,6 +34,10 @@ export type DesktopCandidate = {
   id: string
   operation: DesktopOperation
   description: string
+  /** Structured identity fields sent to Jev as Choice criteria; operation
+   * semantics stay in description. Structured criteria disambiguate better
+   * than a flat sentence. */
+  criteria?: Record<string, string>
   ref?: string
   slotId?: string
   headed?: boolean
@@ -57,6 +65,8 @@ export type DesktopDecision = {
   latencyMs: number
   probabilities: Record<string, number>
   usage: { inputTokens: number; outputTokens: number }
+  /** Undo-risk probability answered in the same Jev request, when asked. */
+  risk?: number
 }
 
 export type GuiTaskMetrics = {
@@ -83,6 +93,9 @@ export type GuiTaskTrace = {
 }
 export type GuiTaskResult = {
   status: GuiTaskStatus
+  appLaunched: boolean
+  goalVerified: boolean
+  lastAction?: { operation: DesktopOperation; delivery?: string }
   actions: number
   decisions: number
   evidence: string
@@ -97,7 +110,7 @@ export type GuiTaskEvent = {
 }
 
 export function validateTaskInput(input: GuiTaskInput): void {
-  if (!input.goal?.trim() || !input.target?.app?.trim() || !input.budget) throw new Error("Invalid GUI task contract")
+  if (!input.goal?.trim() || !input.target?.app?.trim() || !input.budget || (input.readOnly !== undefined && typeof input.readOnly !== "boolean")) throw new Error("Invalid GUI task contract")
   const { maxActions, maxDecisions, maxDurationMs } = input.budget
   if (!Number.isInteger(maxActions) || maxActions < 1 || maxActions > 100) throw new Error("Invalid GUI action budget")
   if (!Number.isInteger(maxDecisions) || maxDecisions < 1 || maxDecisions > 200) throw new Error("Invalid GUI decision budget")

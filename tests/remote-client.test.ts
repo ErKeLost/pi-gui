@@ -9,6 +9,7 @@ class FakeWebSocket {
   static readonly CLOSING = 2
   static readonly CLOSED = 3
   static instances: FakeWebSocket[] = []
+  static autoHello = true
 
   readonly url: string
   readyState = FakeWebSocket.CONNECTING
@@ -27,6 +28,14 @@ class FakeWebSocket {
     if (this.readyState !== FakeWebSocket.CONNECTING) return
     this.readyState = FakeWebSocket.OPEN
     this.onopen?.({})
+    if (FakeWebSocket.autoHello) {
+      queueMicrotask(() => this.onmessage?.({ data: JSON.stringify({
+        type: "host.hello",
+        protocol: "orbit.remote.v1",
+        hostId: "desktop",
+        serverTime: Date.now(),
+      }) }))
+    }
   }
 
   send(raw: string) {
@@ -61,6 +70,7 @@ const clients: OrbitRemoteClient[] = []
 afterEach(() => {
   for (const client of clients.splice(0)) client.close()
   FakeWebSocket.instances = []
+  FakeWebSocket.autoHello = true
   globalThis.WebSocket = originalWebSocket
 })
 
@@ -115,5 +125,59 @@ describe("remote client reconnect", () => {
     FakeWebSocket.instances[0].serverSend({ type: "host.theme", theme: "system", serverTime: Date.now() })
     await Bun.sleep(0)
     expect(events).toEqual(["light"])
+  })
+
+  test("does not report online until the host handshake arrives", async () => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    FakeWebSocket.autoHello = false
+    const states: string[] = []
+    const client = new OrbitRemoteClient({ onState: state => states.push(state) }, {
+      heartbeatMs: 0,
+      handshakeTimeoutMs: 50,
+      reconnectBaseMs: 100,
+    })
+    clients.push(client)
+    const connection = client.connect({ mode: "direct", host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
+    await Bun.sleep(5)
+    expect(client.connectionState).toBe("connecting")
+    expect(states).not.toContain("online")
+    await expect(connection).rejects.toThrow(/握手|关闭/)
+  })
+
+  test("replaces a stale socket immediately after a network change", async () => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    const client = new OrbitRemoteClient({}, { heartbeatMs: 0 })
+    clients.push(client)
+    await client.connect({ mode: "direct", host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
+    const first = FakeWebSocket.instances[0]
+    client.notifyForeground("network-change")
+    await Bun.sleep(0)
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    expect(FakeWebSocket.instances[1]).not.toBe(first)
+    expect(client.connectionState).toBe("online")
+  })
+
+  test("keeps the authenticated socket alive until replacement handshake succeeds", async () => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    const client = new OrbitRemoteClient({}, { heartbeatMs: 0 })
+    clients.push(client)
+    await client.connect({ mode: "direct", host: "127.0.0.1", port: 17777, token: "1234567890abcdef" })
+    const first = FakeWebSocket.instances[0]
+    FakeWebSocket.autoHello = false
+
+    client.notifyForeground("network-change")
+    await Bun.sleep(0)
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    expect(first.readyState).toBe(FakeWebSocket.OPEN)
+
+    FakeWebSocket.instances[1].serverSend({
+      type: "host.hello",
+      protocol: "orbit.remote.v1",
+      hostId: "desktop",
+      serverTime: Date.now(),
+    })
+    await Bun.sleep(0)
+    expect(first.readyState).toBe(FakeWebSocket.CLOSED)
+    expect(client.connectionState).toBe("online")
   })
 })

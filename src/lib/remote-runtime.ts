@@ -1,8 +1,19 @@
-import { OrbitRemoteClient, type RemoteClientHandlers } from "./remote-client"
-import { parsePairingUri, type RemoteHostOperation, type RemoteHostSnapshot, type RemoteJson } from "./remote-protocol"
+import {
+  OrbitRemoteClient,
+  type RemoteClientHandlers,
+  type RemoteClientState,
+  type RemoteForegroundReason,
+} from "./remote-client"
+import {
+  parsePairingEndpoints,
+  type RemoteEndpoint,
+  type RemoteHostOperation,
+  type RemoteHostSnapshot,
+  type RemoteJson,
+} from "./remote-protocol"
 
 const PAIRING_KEY = "orbit.remote.pairing.v1"
-let client: OrbitRemoteClient | null = null
+let client: StableRemoteRuntime | null = null
 
 export function storedPairingUri(): string {
   return localStorage.getItem(PAIRING_KEY)?.trim() ?? ""
@@ -14,13 +25,130 @@ export function forgetPairing(): void {
   client = null
 }
 
+class StableRemoteRuntime {
+  private active: OrbitRemoteClient | null = null
+  private readonly candidates = new Set<OrbitRemoteClient>()
+  private closed = false
+  private readonly endpoints: RemoteEndpoint[]
+  private readonly handlers: RemoteClientHandlers
+
+  constructor(endpoints: RemoteEndpoint[], handlers: RemoteClientHandlers) {
+    this.endpoints = endpoints
+    this.handlers = handlers
+  }
+
+  async connect(): Promise<void> {
+    await this.race(false)
+  }
+
+  private makeCandidate(): OrbitRemoteClient {
+    let candidate: OrbitRemoteClient
+    candidate = new OrbitRemoteClient({
+      onState: (state) => {
+        if (this.active === candidate) this.handlers.onState?.(state)
+      },
+      onReconnected: () => {
+        if (this.active === candidate) this.handlers.onReconnected?.()
+      },
+      onEvent: (event) => {
+        if (this.active === candidate) this.handlers.onEvent?.(event)
+      },
+      onPiEvent: (project, payload) => {
+        if (this.active === candidate) this.handlers.onPiEvent?.(project, payload)
+      },
+      onError: (error) => {
+        if (this.active === candidate) this.handlers.onError?.(error)
+      },
+    })
+    this.candidates.add(candidate)
+    return candidate
+  }
+
+  private async race(replacement: boolean): Promise<void> {
+    if (this.closed || this.endpoints.length === 0) throw new Error("Orbit Host 没有可用连接地址")
+    if (!replacement && this.active) return
+    if (this.candidates.size > 0) return
+    const attempts = this.endpoints.map((endpoint) => {
+      const candidate = this.makeCandidate()
+      return candidate.connect(endpoint).then(() => candidate)
+    })
+    try {
+      const winner = await Promise.any(attempts)
+      if (this.closed) {
+        winner.close()
+        throw new Error("Orbit Host 连接已关闭")
+      }
+      const previous = this.active
+      this.active = winner
+      for (const candidate of [...this.candidates]) {
+        if (candidate !== winner) candidate.close()
+        this.candidates.delete(candidate)
+      }
+      previous?.close()
+      this.handlers.onState?.("online")
+      if (previous) this.handlers.onReconnected?.()
+    } catch (error) {
+      for (const candidate of this.candidates) candidate.close()
+      this.candidates.clear()
+      if (!replacement) this.handlers.onState?.("offline")
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  notifyForeground(reason: RemoteForegroundReason): void {
+    if (this.closed) return
+    if (reason === "network-change") {
+      void this.race(true).catch(() => {})
+      return
+    }
+    if (!this.active) {
+      void this.race(false).catch(() => {})
+      return
+    }
+    this.active.notifyForeground(reason)
+  }
+
+  get connectionState(): RemoteClientState {
+    return this.active?.connectionState ?? "offline"
+  }
+
+  close(): void {
+    this.closed = true
+    this.active?.close()
+    for (const candidate of this.candidates) candidate.close()
+    this.active = null
+    this.candidates.clear()
+  }
+
+  attach(connectionId: string, timeoutMs?: number) {
+    return this.requireActive().attach(connectionId, timeoutMs)
+  }
+
+  sendPiCommand(project: string, command: Record<string, RemoteJson>, timeoutMs?: number) {
+    return this.requireActive().sendPiCommand(project, command, timeoutMs)
+  }
+
+  runHostOperation<T = RemoteJson>(operation: RemoteHostOperation, timeoutMs?: number) {
+    return this.requireActive().runHostOperation<T>(operation, timeoutMs)
+  }
+
+  getSnapshot(timeoutMs?: number) {
+    return this.requireActive().getSnapshot(timeoutMs)
+  }
+
+  private requireActive(): OrbitRemoteClient {
+    if (!this.active || this.active.connectionState !== "online") throw new Error("Orbit Host 未连接")
+    return this.active
+  }
+}
+
 export async function openRemoteRuntime(pairingUri: string, handlers: RemoteClientHandlers): Promise<RemoteHostSnapshot> {
-  const endpoint = parsePairingUri(pairingUri.trim())
+  const endpoints = parsePairingEndpoints(pairingUri.trim())
   client?.close()
-  const next = new OrbitRemoteClient(handlers)
+  const next = new StableRemoteRuntime(endpoints, handlers)
   client = next
   try {
-    await next.connect(endpoint)
+    await next.connect()
     const snapshot = await next.getSnapshot()
     localStorage.setItem(PAIRING_KEY, pairingUri.trim())
     return snapshot
@@ -31,7 +159,7 @@ export async function openRemoteRuntime(pairingUri: string, handlers: RemoteClie
   }
 }
 
-function connectedClient(): OrbitRemoteClient {
+function connectedClient(): StableRemoteRuntime {
   if (!client || client.connectionState !== "online") throw new Error("Orbit Host 未连接")
   return client
 }
@@ -50,4 +178,8 @@ export function runRemoteHostOperation<T = RemoteJson>(operation: RemoteHostOper
 
 export function remoteHostSnapshot() {
   return connectedClient().getSnapshot()
+}
+
+export function notifyRemoteForeground(reason: RemoteForegroundReason = "app-resume"): void {
+  client?.notifyForeground(reason)
 }

@@ -1,6 +1,6 @@
 # Pi 功能覆盖与边界
 
-以 Pi 0.85.1 官方 RPC / SDK / extensions 文档为基准（2026-09-18 复核）。这里区分原生 GUI、控制台和原始终端入口，不把“有个按钮”当作已支持。
+以 Pi 0.87.1 官方 RPC / SDK / extensions 文档为基准（2026-09-25 复核）。这里区分原生 GUI、控制台和原始终端入口，不把“有个按钮”当作已支持。
 
 ## 覆盖结论
 
@@ -45,7 +45,7 @@
 - RPC 文档明确指出 custom() 返回 undefined，多种终端 header/footer/editor 接口在 RPC 中为 no-op，主题 API 不可用。不能宣称任意第三方终端扩展都能原样显示在 React 中。
 - Pi 没有内置逐次工具审批；确认弹窗来自需要用户输入的扩展。本 GUI 不伪造内置审批能力。
 - 目前应用原生启动、终端入口按 **macOS** 实现。Tauri 支持其他平台不等于本应用已经在那些平台验证。
-- 本机必须已有可运行的 Node。Orbit 捆绑锁定版本的 Pi runtime 并优先使用；项目/全局 Pi 仅作为开发与兼容回退。当前 App 不捆绑独立 Node 运行时。
+- Orbit 应用内置锁定版本的 Node 与 Pi runtime 并优先使用；项目/全局 Pi 仅作为开发与兼容回退。用户不需要单独安装 Node 或 Bun。
 - GUI 使用 --offline 禁用 Pi 的启动更新和 catalog 联网；模型请求仍正常联网。更新 Pi/扩展后重新连接。
 - GUI 不信任自定义中转站缺失的图片能力声明。连接前会为 `models.json` 中每个自定义模型保留现有输入并追加 `image`，原文件首次修改前备份为 `models.json.pi-gui.bak`；真正不支持图片的端点可能返回服务端错误。
 - 项目信任沿用 Pi 保存的决定；未信任的项目本地资源可能被 Pi 忽略。可在原始 Pi 终端用 /trust 管理。
@@ -59,14 +59,13 @@
 - 实时压缩没有虚构百分比；测试确认压缩后 contextUsage 返回 null 时显示待更新。
 - LobeHub Markdown、AI Elements Conversation/PromptInput/Shimmer、assistant-ui ToolCall、组件库控件、Motion 交互动画及 Pierre 文件/差异视图已实际接入。连接提示、版本页脚、快捷键说明和原生 window.prompt 已从常用界面移除。
 
-## 上游未发布 API（2026-09-18）
+## Pi 0.87.1 升级备注（2026-09-25）
 
-Pi 的 npm / GitHub 最新正式版仍为 0.85.1。上游 `main` 在该标签之后新增了以下 API，但尚未发布，因此本项目没有把依赖切到 Git 提交：
+项目已升级到 npm / GitHub 最新正式版 0.87.1。该版本包含此前 main 分支上的模型、压缩、重试、队列输入和工具采样改进；Orbit 继续使用稳定的 RPC 命令和 JSONL 事件边界，不需要改写前端协议。
 
-| 未发布变化 | 对 GUI 的影响 |
+| 已发布变化 | 对 GUI 的影响 |
 | --- | --- |
-| `ctx.modelRegistry.stream()` / `streamSimple()` | 供扩展通过已配置 provider 发起嵌套模型调用；没有新增 RPC 命令。正式发布并升级后，使用该 API 的扩展可由 Pi 运行，GUI 只需继续显示其标准消息、工具和扩展 UI 事件。 |
-| `compaction.modelOverrides["provider/modelId"]` | 可为不同模型设置 `reserveTokens` / `keepRecentTokens`。当前正式版只有全局压缩预算；发布后应在 GUI 增加按模型编辑入口，并让运行状态按当前模型解析有效值。 |
-| `retry.maxAgentDelayMs` | 限制 agent 层重试退避时间，属于设置项；没有新增 RPC。发布后可加入高级设置。 |
-| 内置工具默认 strict-prefer constrained sampling | Pi 内部请求行为变化，GUI 无需增加控件；工具事件结构未变。 |
-| RPC `steer` / `follow_up` 经过扩展 input handlers | 修复而非新命令。正式升级即可获得，GUI 协议无需改变。 |
+| 模型注册表流式调用 | 扩展可通过已配置 provider 发起嵌套模型调用；没有新增 RPC 命令，GUI 继续显示标准消息、工具和扩展 UI 事件。 |
+| 按模型压缩预算 | Pi 支持按模型覆盖 `reserveTokens` / `keepRecentTokens`；Orbit 当前仍展示和控制全局压缩设置。 |
+| 重试退避上限 | Pi 提供默认 60 秒的 agent/摘要重试退避上限；Orbit 继续显示真实重试事件，不虚构进度。 |
+| 内置工具严格采样与队列输入处理 | Pi 内部请求和 steer/follow-up 扩展输入处理改进；工具事件和 RPC 命令结构保持兼容。 |

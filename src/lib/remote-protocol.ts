@@ -121,6 +121,9 @@ export type DirectRemoteEndpoint = {
   port: number
   token: string
   secure?: boolean
+  hostId?: string
+  /** Application-layer key. Present on new pairings; absent for legacy LAN pairings. */
+  encryptionKey?: string
 }
 
 export type RelayRemoteEndpoint = {
@@ -132,6 +135,7 @@ export type RelayRemoteEndpoint = {
 }
 
 export type RemoteEndpoint = DirectRemoteEndpoint | RelayRemoteEndpoint
+export type RemoteEndpointSet = { endpoints: RemoteEndpoint[] }
 
 export function remoteWebSocketUrl(endpoint: RemoteEndpoint): string {
   if (endpoint.mode === "relay") {
@@ -144,10 +148,15 @@ export function remoteWebSocketUrl(endpoint: RemoteEndpoint): string {
   const scheme = endpoint.secure ? "wss" : "ws"
   const token = encodeURIComponent(endpoint.token)
   const host = endpoint.host.includes(":") && !endpoint.host.startsWith("[") ? `[${endpoint.host}]` : endpoint.host
-  return `${scheme}://${host}:${endpoint.port}/ws?token=${token}`
+  const e2ee = endpoint.encryptionKey ? "&e2ee=1" : ""
+  return `${scheme}://${host}:${endpoint.port}/ws?token=${token}${e2ee}`
 }
 
 export function parsePairingUri(value: string): RemoteEndpoint {
+  return parsePairingEndpoints(value)[0]!
+}
+
+export function parsePairingEndpoints(value: string): RemoteEndpoint[] {
   let uri: URL
   try {
     uri = new URL(value)
@@ -164,7 +173,17 @@ export function parsePairingUri(value: string): RemoteEndpoint {
   if (uri.protocol !== "orbit:" || uri.hostname !== "pair" || (uri.pathname && uri.pathname !== "/")) throw new Error("无效的 Orbit 配对地址")
   if (protocol !== REMOTE_PROTOCOL) throw new Error("Orbit Host 协议版本不兼容")
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(token)) throw new Error("Orbit 配对令牌无效")
-  if (relay || hostId) {
+  const endpoints: RemoteEndpoint[] = []
+  if (host && Number.isInteger(port) && port >= 1 && port <= 65_535) {
+    try {
+      new URL(`ws://${host.includes(":") ? `[${host}]` : host}:${port}`)
+      if (encryptionKey && !/^[A-Za-z0-9_-]{43}$/.test(encryptionKey)) throw new Error("Orbit LAN 加密密钥无效")
+      endpoints.push({ mode: "direct", host, port, token, ...(hostId ? { hostId } : {}), ...(encryptionKey ? { encryptionKey } : {}) })
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("加密密钥")) throw error
+    }
+  }
+  if (relay) {
     let relayUrl: URL
     try {
       relayUrl = new URL(relay)
@@ -174,13 +193,8 @@ export function parsePairingUri(value: string): RemoteEndpoint {
     if (relayUrl.protocol !== "wss:" && !(relayUrl.protocol === "ws:" && ["localhost", "127.0.0.1", "::1"].includes(relayUrl.hostname))) throw new Error("Orbit Relay 必须使用 wss://")
     if (!/^[A-Za-z0-9-]{8,80}$/.test(hostId)) throw new Error("Orbit Relay Host ID 无效")
     if (!/^[A-Za-z0-9_-]{43}$/.test(encryptionKey)) throw new Error("Orbit Relay 加密密钥无效")
-    return { mode: "relay", relayUrl: relayUrl.toString(), hostId, token, encryptionKey }
+    endpoints.push({ mode: "relay", relayUrl: relayUrl.toString(), hostId, token, encryptionKey })
   }
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("Orbit Host 端口无效")
-  try {
-    new URL(`ws://${host.includes(":") ? `[${host}]` : host}:${port}`)
-  } catch {
-    throw new Error("Orbit Host 地址无效")
-  }
-  return { mode: "direct", host, port, token }
+  if (endpoints.length === 0) throw new Error("Orbit Host 没有可用连接地址")
+  return endpoints
 }

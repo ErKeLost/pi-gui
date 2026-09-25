@@ -72,6 +72,7 @@ mod desktop {
     };
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     use serde_json::{json, Value};
+    use serde::{Deserialize, Serialize};
     use std::{
         collections::{HashMap, HashSet},
         fs,
@@ -94,6 +95,15 @@ mod desktop {
     const EVENT_QUEUE_CAPACITY: usize = 4096;
     const CLIENT_QUEUE_CAPACITY: usize = 256;
     const SOCKET_POLL_INTERVAL: Duration = Duration::from_millis(25);
+
+    #[derive(Clone, Deserialize, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct HostIdentity {
+        host_id: String,
+        token: String,
+        relay_key: String,
+        lan_port: Option<u16>,
+    }
 
     struct Client {
         sender: SyncSender<String>,
@@ -282,6 +292,69 @@ mod desktop {
         Ok(crate::bridge::agent_dir()?.join("orbit-relay.json"))
     }
 
+    fn host_identity_path() -> Result<PathBuf, String> {
+        Ok(crate::bridge::agent_dir()?.join("orbit-host-identity.json"))
+    }
+
+    fn valid_host_id(value: &str) -> bool {
+        value.len() >= 8 && value.len() <= 80 && Uuid::parse_str(value).is_ok()
+    }
+
+    fn valid_secret(value: &str) -> bool {
+        (16..=256).contains(&value.len())
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    }
+
+    fn valid_host_identity(identity: &HostIdentity) -> bool {
+        valid_host_id(&identity.host_id)
+            && valid_secret(&identity.token)
+            && identity.relay_key.len() == 43
+            && identity
+                .relay_key
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            && identity.lan_port.is_none_or(|port| port > 0)
+    }
+
+    fn save_host_identity(identity: &HostIdentity) -> Result<(), String> {
+        let path = host_identity_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(identity).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+        }
+        Ok(())
+    }
+
+    fn load_host_identity() -> Result<HostIdentity, String> {
+        let path = host_identity_path()?;
+        if let Ok(contents) = fs::read_to_string(&path) {
+            if let Ok(identity) = serde_json::from_str::<HostIdentity>(&contents) {
+                if valid_host_identity(&identity) {
+                    return Ok(identity);
+                }
+            }
+        }
+        let identity = HostIdentity {
+            host_id: Uuid::new_v4().to_string(),
+            token: Uuid::new_v4().simple().to_string(),
+            relay_key: random_secret(32),
+            lan_port: None,
+        };
+        save_host_identity(&identity)?;
+        Ok(identity)
+    }
+
     fn load_relay_settings() -> Result<RelaySettings, String> {
         let path = relay_settings_path()?;
         let settings = serde_json::from_str::<RelaySettings>(
@@ -336,13 +409,27 @@ mod desktop {
         URL_SAFE_NO_PAD.encode(value)
     }
 
-    fn pairing_uri(address: &str, port: u16, token: &str) -> String {
-        format!("orbit://pair?host={address}&port={port}&token={token}&protocol={PROTOCOL}")
+    fn pairing_uri(address: &str, port: u16, token: &str, key: &str, host_id: &str) -> String {
+        format!("orbit://pair?host={address}&port={port}&token={token}&key={key}&hostId={host_id}&protocol={PROTOCOL}")
     }
 
     fn relay_pairing_uri(relay_url: &str, host_id: &str, token: &str, key: &str) -> String {
         format!(
             "orbit://pair?relay={}&hostId={host_id}&token={token}&key={key}&protocol={PROTOCOL}",
+            percent_encode(relay_url)
+        )
+    }
+
+    fn auto_pairing_uri(
+        address: &str,
+        port: u16,
+        relay_url: &str,
+        host_id: &str,
+        token: &str,
+        key: &str,
+    ) -> String {
+        format!(
+            "orbit://pair?host={address}&port={port}&relay={}&hostId={host_id}&token={token}&key={key}&protocol={PROTOCOL}",
             percent_encode(relay_url)
         )
     }
@@ -460,6 +547,10 @@ mod desktop {
                     .is_some_and(|token| token == expected_token)
             })
         })
+    }
+
+    fn e2ee_requested(uri: &tungstenite::http::Uri) -> bool {
+        uri.query().is_some_and(|query| query.split('&').any(|field| field == "e2ee=1"))
     }
 
     fn rejected() -> ErrorResponse {
@@ -624,16 +715,20 @@ mod desktop {
         clients: Clients,
         stop: Arc<AtomicBool>,
         host_id: String,
+        encryption_key: Arc<[u8; 32]>,
     ) {
         if is_websocket_request(&stream).ok() != Some(true) {
             serve_http(stream);
             return;
         }
         let expected = token;
+        let encrypted_request = Arc::new(AtomicBool::new(false));
+        let encrypted_request_for_handshake = encrypted_request.clone();
         let Ok(mut socket) = accept_hdr(
             stream,
             move |request: &tungstenite::handshake::server::Request, response| {
                 if authorized(request.uri(), &expected) {
+                    encrypted_request_for_handshake.store(e2ee_requested(request.uri()), Ordering::Release);
                     Ok(response)
                 } else {
                     Err(rejected())
@@ -645,7 +740,10 @@ mod desktop {
         let _ = socket
             .get_mut()
             .set_read_timeout(Some(SOCKET_POLL_INTERVAL));
-        let _ = socket.send(Message::text(json!({"type":"host.hello","protocol":PROTOCOL,"hostId":host_id,"serverTime":unix_millis(),"theme":app.state::<RemoteHost>().theme(),"machineName":app.state::<RemoteHost>().info().map(|info| info.machine_name).unwrap_or_else(|| "Orbit Desktop".into())}).to_string()));
+        let encrypted = encrypted_request.load(Ordering::Acquire);
+        let hello = json!({"type":"host.hello","protocol":PROTOCOL,"hostId":host_id,"serverTime":unix_millis(),"theme":app.state::<RemoteHost>().theme(),"machineName":app.state::<RemoteHost>().info().map(|info| info.machine_name).unwrap_or_else(|| "Orbit Desktop".into())}).to_string();
+        let hello = if encrypted { encrypt_relay_frame(&hello, &encryption_key).unwrap_or(hello) } else { hello };
+        let _ = socket.send(Message::text(hello));
         let client_id = Uuid::new_v4();
         let (outbound, incoming) = mpsc::sync_channel::<String>(CLIENT_QUEUE_CAPACITY);
         let attached = Arc::new(Mutex::new(HashSet::new()));
@@ -660,14 +758,25 @@ mod desktop {
         }
         while !stop.load(Ordering::Acquire) {
             while let Ok(frame) = incoming.try_recv() {
+                let frame = if encrypted { encrypt_relay_frame(&frame, &encryption_key).unwrap_or(frame) } else { frame };
                 if socket.send(Message::text(frame)).is_err() {
                     break;
                 }
             }
             match socket.read() {
                 Ok(Message::Text(text)) => {
+                    let text = if encrypted {
+                        match decrypt_relay_frame(&text, &encryption_key) {
+                            Ok(plain) => plain,
+                            Err(_) => break,
+                        }
+                    } else {
+                        text.to_string()
+                    };
+                    let response = handle_request(&app, &text, &attached);
+                    let response = if encrypted { encrypt_relay_frame(&response, &encryption_key).unwrap_or(response) } else { response };
                     if socket
-                        .send(Message::text(handle_request(&app, &text, &attached)))
+                        .send(Message::text(response))
                         .is_err()
                     {
                         break;
@@ -720,12 +829,15 @@ mod desktop {
         let tcp = TcpStream::connect((host.as_str(), port))
             .map_err(|error| format!("连接 Relay 失败：{error}"))?;
         tcp.set_nodelay(true).ok();
-        let mut builder = SslConnector::builder(SslMethod::tls())
-            .map_err(|error| error.to_string())?;
+        let mut builder =
+            SslConnector::builder(SslMethod::tls()).map_err(|error| error.to_string())?;
         // Vendored OpenSSL ships no trust store; load the system roots.
         if let Some(cert_file) = openssl_probe::probe().cert_file {
             if let Ok(pem) = std::fs::read(cert_file) {
-                for cert in openssl::x509::X509::stack_from_pem(&pem).into_iter().flatten() {
+                for cert in openssl::x509::X509::stack_from_pem(&pem)
+                    .into_iter()
+                    .flatten()
+                {
                     let _ = builder.cert_store_mut().add_cert(cert);
                 }
             }
@@ -1037,6 +1149,7 @@ mod desktop {
         match mode.as_deref().unwrap_or("lan") {
             "lan" => start_lan(app, bind_address, port, state),
             "relay" => start_relay(app, state),
+            "auto" => start_auto(app, bind_address, port, state),
             _ => Err("不支持的连接方式".into()),
         }
     }
@@ -1051,8 +1164,16 @@ mod desktop {
         let address = bind
             .parse::<IpAddr>()
             .map_err(|_| "Host 绑定地址无效".to_string())?;
-        let listener = TcpListener::bind(SocketAddr::new(address, port.unwrap_or(0)))
-            .map_err(|error| format!("启动 Orbit Host 失败：{error}"))?;
+        let mut identity = load_host_identity()?;
+        let preferred_port = port.or(identity.lan_port).unwrap_or(0);
+        let listener = match TcpListener::bind(SocketAddr::new(address, preferred_port)) {
+            Ok(listener) => listener,
+            Err(error) if port.is_none() && identity.lan_port.is_some() => TcpListener::bind(
+                SocketAddr::new(address, 0),
+            )
+            .map_err(|fallback| format!("启动 Orbit Host 失败：{error}；备用端口也不可用：{fallback}"))?,
+            Err(error) => return Err(format!("启动 Orbit Host 失败：{error}")),
+        };
         listener
             .set_nonblocking(true)
             .map_err(|error| error.to_string())?;
@@ -1066,8 +1187,13 @@ mod desktop {
         } else {
             address.to_string()
         };
-        let token = Uuid::new_v4().simple().to_string();
-        let host_id = Uuid::new_v4().to_string();
+        identity.lan_port = Some(local.port());
+        save_host_identity(&identity)?;
+        let token = identity.token.clone();
+        let host_id = identity.host_id.clone();
+        let mut key_bytes = [0_u8; 32];
+        key_bytes.copy_from_slice(&URL_SAFE_NO_PAD.decode(&identity.relay_key).map_err(|_| "Orbit LAN 加密密钥无效".to_string())?);
+        let encryption_key = Arc::new(key_bytes);
         let info = RemoteHostInfo {
             running: true,
             mode: "lan".into(),
@@ -1077,7 +1203,7 @@ mod desktop {
             advertised_address: advertised.clone(),
             port: local.port(),
             token: token.clone(),
-            pairing_uri: pairing_uri(&advertised, local.port(), &token),
+            pairing_uri: pairing_uri(&advertised, local.port(), &token, &identity.relay_key, &host_id),
             machine_name: machine_name(),
             connected_clients: 0,
             relay_url: None,
@@ -1094,6 +1220,7 @@ mod desktop {
         let accept_app = app.clone();
         let accept_token = token;
         let accept_host_id = host_id;
+        let accept_key = encryption_key.clone();
         let mut slot = state.running.lock().map_err(|error| error.to_string())?;
         *slot = Some(RunningHost {
             info: info.clone(),
@@ -1112,8 +1239,9 @@ mod desktop {
                         let clients = accept_clients.clone();
                         let stop = accept_stop.clone();
                         let host_id = accept_host_id.clone();
+                        let encryption_key = accept_key.clone();
                         thread::spawn(move || {
-                            client_loop(app, stream, token, clients, stop, host_id)
+                            client_loop(app, stream, token, clients, stop, host_id, encryption_key)
                         });
                     }
                     Err(error) if error.kind() == ErrorKind::WouldBlock => {
@@ -1126,11 +1254,73 @@ mod desktop {
         Ok(info)
     }
 
+    fn start_auto(
+        app: AppHandle,
+        bind_address: Option<String>,
+        port: Option<u16>,
+        state: State<'_, RemoteHost>,
+    ) -> Result<RemoteHostInfo, String> {
+        let lan_info = start_lan(app.clone(), bind_address, port, state.clone())?;
+        let settings = match load_relay_settings() {
+            Ok(settings) => settings,
+            Err(_) => return Ok(lan_info),
+        };
+        let identity = load_host_identity()?;
+        let mut key_bytes = [0_u8; 32];
+        key_bytes.copy_from_slice(
+            &URL_SAFE_NO_PAD
+                .decode(&identity.relay_key)
+                .map_err(|_| "Orbit Relay 加密密钥无效".to_string())?,
+        );
+        let (host_id, token, clients, relay_connected, stop, pairing_uri) = {
+            let mut slot = state.running.lock().map_err(|error| error.to_string())?;
+            let host = slot.as_mut().ok_or_else(|| "Orbit Host 启动失败".to_string())?;
+            let pairing_uri = auto_pairing_uri(
+                &host.info.advertised_address,
+                host.info.port,
+                &settings.relay_url,
+                &host.info.host_id,
+                &host.info.token,
+                &identity.relay_key,
+            );
+            host.info.mode = "auto".into();
+            host.info.relay_url = Some(settings.relay_url.clone());
+            host.info.pairing_uri = pairing_uri.clone();
+            (
+                host.info.host_id.clone(),
+                host.info.token.clone(),
+                host.clients.clone(),
+                host.relay_connected.clone(),
+                host.stop.clone(),
+                pairing_uri,
+            )
+        };
+        let relay_url = settings.relay_url;
+        let host_key = settings.host_key;
+        thread::spawn(move || {
+            relay_loop(
+                app,
+                relay_url,
+                host_id,
+                host_key,
+                token,
+                Arc::new(key_bytes),
+                clients,
+                relay_connected,
+                stop,
+            );
+        });
+        let mut info = state.info().ok_or_else(|| "Orbit Host 启动失败".to_string())?;
+        info.pairing_uri = pairing_uri;
+        Ok(info)
+    }
+
     fn start_relay(app: AppHandle, state: State<'_, RemoteHost>) -> Result<RemoteHostInfo, String> {
         let settings = load_relay_settings()?;
-        let token = Uuid::new_v4().simple().to_string();
-        let host_id = Uuid::new_v4().to_string();
-        let encryption_key_value = random_secret(32);
+        let identity = load_host_identity()?;
+        let token = identity.token.clone();
+        let host_id = identity.host_id.clone();
+        let encryption_key_value = identity.relay_key.clone();
         let mut key_bytes = [0_u8; 32];
         key_bytes.copy_from_slice(
             &URL_SAFE_NO_PAD
@@ -1270,8 +1460,8 @@ mod desktop {
         #[test]
         fn pairing_uri_contains_the_negotiated_endpoint() {
             assert_eq!(
-                pairing_uri("192.168.1.5", 17777, "abc"),
-                "orbit://pair?host=192.168.1.5&port=17777&token=abc&protocol=orbit.remote.v1"
+                pairing_uri("192.168.1.5", 17777, "abc", "key", "host-id"),
+                "orbit://pair?host=192.168.1.5&port=17777&token=abc&key=key&hostId=host-id&protocol=orbit.remote.v1"
             );
         }
 

@@ -1,0 +1,18 @@
+[package]
+name = "computer-use-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Platform-independent computer use observation and action safety core"
+
+[dependencies]
+serde_json = "=1.0.151"
+rustc-hash = "=2.1.1"
+
+[dev-dependencies]
+criterion = "=0.5.1"
+
+[[bench]]
+name = "ledger"
+harness = false
+
