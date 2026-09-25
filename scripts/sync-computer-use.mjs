@@ -7,7 +7,15 @@ const clipboardPackages = existsSync(clipboardScope)
   ? readdirSync(clipboardScope).filter(name => name === "clipboard" || name.startsWith("clipboard-"))
     .map(name => `@mariozechner/${name}`)
   : []
-const runtimePackages = ["@typesafe-ai", "agent-desktop", ...clipboardPackages]
+// Pi 0.87 no longer hoists its optional clipboard dependency into every
+// installation. Orbit checks and loads this package from its own resources,
+// so make the runtime dependency explicit and fail the build if it is absent.
+const runtimePackages = [
+  "@typesafe-ai",
+  "agent-desktop",
+  "@mariozechner/clipboard",
+  ...clipboardPackages.filter(name => name !== "@mariozechner/clipboard"),
+]
 
 mkdirSync(resolve(root, "src-tauri/resources"), { recursive: true })
 

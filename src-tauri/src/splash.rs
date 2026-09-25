@@ -4,15 +4,15 @@
 //! ready (and the intro had time to play) the windows are swapped.
 
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
-const MIN_VISIBLE: Duration = Duration::from_millis(2200);
-const LEAVE_ANIMATION: Duration = Duration::from_millis(450);
-const FAILSAFE: Duration = Duration::from_secs(10);
+// The failsafe is only a guard for a lost readiness signal. Normal startup
+// begins the leave animation as soon as both initialization signals arrive.
+const LEAVE_ANIMATION: Duration = Duration::from_millis(300);
+const FAILSAFE: Duration = Duration::from_secs(6);
 
 pub struct SplashState {
-    started: Instant,
     inner: Mutex<Progress>,
 }
 
@@ -25,7 +25,7 @@ struct Progress {
 
 impl Default for SplashState {
     fn default() -> Self {
-        Self { started: Instant::now(), inner: Mutex::new(Progress::default()) }
+        Self { inner: Mutex::new(Progress::default()) }
     }
 }
 
@@ -46,7 +46,7 @@ pub fn mark(app: &AppHandle, state: &SplashState, task: &str) {
         progress.frontend && progress.backend
     };
     if ready {
-        finish(app, state.started.elapsed());
+        finish(app);
     } else if task == "frontend" {
         // Dev reloads re-run the frontend after the splash is gone.
         show_main(app);
@@ -58,11 +58,11 @@ pub fn arm_failsafe(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(FAILSAFE);
-        finish(&app, FAILSAFE);
+        finish(&app);
     });
 }
 
-fn finish(app: &AppHandle, elapsed: Duration) {
+fn finish(app: &AppHandle) {
     {
         let state = app.state::<SplashState>();
         let mut progress = state.inner.lock().unwrap();
@@ -73,7 +73,6 @@ fn finish(app: &AppHandle, elapsed: Duration) {
     }
     let app = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(MIN_VISIBLE.saturating_sub(elapsed));
         let splash = app.get_webview_window("splashscreen");
         if let Some(splash) = &splash {
             let _ = splash.eval("window.__orbitSplashLeave && window.__orbitSplashLeave()");
