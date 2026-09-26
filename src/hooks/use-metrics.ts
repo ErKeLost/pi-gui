@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { RpcResponse } from "@earendil-works/pi-coding-agent";
-import { request } from "../lib/rpc";
+import { requestWithRecovery } from "../lib/rpc";
 import { useWorkspace } from "../lib/store";
 import { usePageVisible } from "../lib/page-visibility";
 
@@ -15,7 +15,7 @@ export function useMetrics() {
   const sessionId = useWorkspace(state => state.state?.sessionId);
   const runtimeText = useWorkspace(state => state.statuses["gui-runtime"]);
   const visible = usePageVisible();
-  const stats = useQuery({ queryKey: ["pi", "live-stats", connectionId || cwd, sessionId], queryFn: () => request<Stats>({ type: "get_session_stats" }, 30000, connectionId || cwd), enabled: online && visible, refetchInterval: 2000 });
+  const stats = useQuery({ queryKey: ["pi", "live-stats", connectionId || cwd, sessionId], queryFn: () => requestWithRecovery<Stats>({ type: "get_session_stats" }, 30000, connectionId || cwd), enabled: online && visible, refetchInterval: 2000 });
   let runtime: RuntimeInfo | null = null;
   try { if (runtimeText) runtime = JSON.parse(runtimeText); } catch { /* Keep absent metrics absent. */ }
   return { stats: stats.data, runtime, error: stats.error, updatedAt: stats.dataUpdatedAt, online };

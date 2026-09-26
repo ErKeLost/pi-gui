@@ -29,6 +29,7 @@ type Pending={project:string;resolve:(value:unknown)=>void;reject:(error:Error)=
 const SESSION_FILES_KEY='pi-gui.sessionFiles.v1',LEGACY_SESSION_FILES_KEY=['pi-gui','sessionFiles'].join('.')
 const pending=new Map<string,Pending>(),snapshots=new Map<string,Snapshot>(),connections=new Map<string,{token:symbol;cwd:string}>(),projectActive=new Map<string,string>(),sessionOwners=new Map<string,string>(),eventQueues=new Map<string,Event[]>(),flushTimers=new Map<string,ReturnType<typeof setTimeout>>()
 const sessionMetadataPending=new Set<string>()
+const reconnectingProjects=new Map<string,Promise<void>>()
 const REMOTE_CONNECTION_KEY='orbit.remote.connection.v1'
 const fresh=():Snapshot=>({transcript:emptyTranscript(),telemetry:emptyTelemetry(),state:null,connection:'offline',error:null,draft:'',dialogs:[],notices:[],statuses:{},widgets:{},agents:null})
 function snapshot():Snapshot{const s=useWorkspace.getState();return {transcript:s.transcript,telemetry:s.telemetry,state:s.state,connection:s.connection,error:s.error,draft:s.draft,dialogs:s.dialogs,notices:s.notices,statuses:s.statuses,widgets:s.widgets,agents:s.agents}}
@@ -307,9 +308,27 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
  const saved=snapshots.get(id)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode,connectionId:id})
  localStorage.setItem('pi-gui.cwd',cwd)
  localStorage.setItem('pi-gui.workspaceMode',workspaceMode)
- if(connections.has(id)&&saved.connection==='online'){await Promise.all([refresh(id),syncSessionModes(id)]);if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id);return}
+ if(connections.has(id)&&saved.connection==='online'){
+  try{await Promise.all([refresh(id),syncSessionModes(id)]);if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id);return}
+  catch{await closeConnection(id,'项目连接已失效')}
+ }
  await startConnection(cwd,id,{restoreLast:true})
  if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd,id)
+}
+function projectDisconnected(error:unknown){return String(error instanceof Error?error.message:error).includes('项目尚未连接')}
+export async function requestWithRecovery<T=unknown>(command:RpcCommand,timeoutMs=30000,target=useWorkspace.getState().cwd):Promise<T>{
+ try{return await request<T>(command,timeoutMs,target)}catch(error){
+  const workspace=useWorkspace.getState()
+  if(!projectDisconnected(error)||mobileRuntime()||workspace.connectionId!==target||!workspace.cwd)throw error
+  const cwd=workspace.cwd
+  let task=reconnectingProjects.get(cwd)
+  if(!task){
+   task=connect(cwd,workspace.workspaceMode).finally(()=>reconnectingProjects.delete(cwd))
+   reconnectingProjects.set(cwd,task)
+  }
+  await task
+  return request<T>(command,timeoutMs,target)
+ }
 }
 export async function disconnect(){const cwd=useWorkspace.getState().cwd;await Promise.all(connectionsFor(cwd).map(id=>closeConnection(id,'项目已断开')));projectActive.delete(cwd);useWorkspace.getState().set({...fresh(),cwd,connectionId:'',workspaceMode:useWorkspace.getState().workspaceMode})}
 export async function forgetProject(project:string){

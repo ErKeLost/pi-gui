@@ -1,7 +1,7 @@
 import {useEffect} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import type {RpcSessionState} from '@earendil-works/pi-coding-agent'
-import {request} from './rpc'
+import {requestWithRecovery} from './rpc'
 import {useWorkspace} from './store'
 import {usePageVisible} from './page-visibility'
 export function MetricsSync(){
@@ -9,9 +9,9 @@ export function MetricsSync(){
  const visible=usePageVisible()
  const online=useWorkspace(s=>s.connection==='online')
  const target=connectionId||cwd
- const state=useQuery({queryKey:['pi','live-state',target],queryFn:()=>request<RpcSessionState>({type:'get_state'},30000,target),enabled:online&&visible&&Boolean(target),refetchInterval:2000})
- const capabilities=useQuery({queryKey:['pi','capabilities',target],queryFn:()=>request<{commands:{name:string}[]}>({type:'get_commands'},30000,target),enabled:online&&Boolean(target)})
- const observation=useQuery({queryKey:['pi','runtime-snapshot',target],queryFn:async()=>{await request({type:'prompt',message:'/gui-observe'},30000,target);return true},enabled:online&&visible&&Boolean(target)&&!!capabilities.data?.commands.some(c=>c.name==='gui-observe'),refetchInterval:5000})
+ const state=useQuery({queryKey:['pi','live-state',target],queryFn:()=>requestWithRecovery<RpcSessionState>({type:'get_state'},30000,target),enabled:online&&visible&&Boolean(target),refetchInterval:2000})
+ const capabilities=useQuery({queryKey:['pi','capabilities',target],queryFn:()=>requestWithRecovery<{commands:{name:string}[]}>({type:'get_commands'},30000,target),enabled:online&&Boolean(target)})
+ const observation=useQuery({queryKey:['pi','runtime-snapshot',target],queryFn:async()=>{await requestWithRecovery({type:'prompt',message:'/gui-observe'},30000,target);return true},enabled:online&&visible&&Boolean(target)&&!!capabilities.data?.commands.some(c=>c.name==='gui-observe'),refetchInterval:5000})
  useEffect(()=>{
   if(!state.data||!online||useWorkspace.getState().connectionId!==connectionId)return
   const current=useWorkspace.getState()
