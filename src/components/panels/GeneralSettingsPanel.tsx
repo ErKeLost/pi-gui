@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
 import { useTheme } from "next-themes";
 import { gooeyToast } from "goey-toast";
@@ -9,7 +10,7 @@ import QRCode from "antd/es/qr-code";
 import type { RpcCommand, RpcSessionState } from "@earendil-works/pi-coding-agent";
 import { useWorkspace } from "../../lib/store";
 import { useRuntimeDiscovery, type RuntimeDiscovery } from "../../lib/runtime-diagnostics";
-import { computerUseKeyStatus, connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, saveComputerUseKey, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
+import { clearSessionHistory, computerUseKeyStatus, connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, saveComputerUseKey, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
 import { getRemoteHost, relaySettingsStatus, saveRelaySettings, startRemoteHost, stopRemoteHost, type RelaySettingsStatus, type RemoteHostInfo } from "../../lib/remote-host";
 import { checkMobileUpdate, mobileUpdateErrorMessage } from "../../lib/mobile-update";
 import { offerMobileUpdate } from "../UpdateChecker";
@@ -115,6 +116,22 @@ function ToolsSettings({ tools, running }: { tools: GuiTools; running: boolean }
 
 function TerminalSettings({ cwd, desktop }: { cwd: string; desktop: boolean }) {
   return <SettingRow title="原生终端环境" description={desktop ? "在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。" : "原生终端需要在电脑端打开。"}><Button variant="outline" disabled={!desktop || !cwd} onClick={() => { if (desktopRuntime()) void invoke("open_pi_terminal", { cwd, session: null, piArgs: [] }).catch(report); }}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
+}
+
+function HistorySettings({ cwd, desktop, busy, setBusy }: { cwd: string; desktop: boolean; busy: boolean; setBusy: (value: boolean) => void }) {
+  async function clearHistory() {
+    if (!desktop) return;
+    const accepted = await confirm("这会删除电脑上所有项目的 Pi Session 和 JSONL 历史记录，磁盘上的项目代码不会受影响。此操作无法撤销。", { title: "清空所有会话历史", kind: "warning" });
+    if (!accepted) return;
+    setBusy(true);
+    try {
+      const removed = await clearSessionHistory();
+      if (cwd) await connect(cwd, "project");
+      gooeyToast.success("会话历史已清空", { description: `已删除 ${removed} 个 JSONL 文件`, showTimestamp: false });
+    } catch (error) { report(error); }
+    finally { setBusy(false); }
+  }
+  return <SettingRow title="清空会话历史" description={desktop ? "删除所有项目的 Session 和 JSONL 历史记录，只保留项目文件。" : "请在电脑端清空会话历史。"}><Button variant="destructive" disabled={!desktop || busy} onClick={() => void clearHistory()}><Icon name="trash" />{busy ? "清空中…" : "清空全部历史"}</Button></SettingRow>;
 }
 
 function RuntimePath({ label, value }: { label: string; value?: string }) {
@@ -423,6 +440,7 @@ export function GeneralSettingsPanel() {
   const desktop = runtimeTarget === "desktop";
   const [path, setPath] = useState(cwd);
   const [busy, setBusy] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const [trustMode, setTrustMode] = useState<ProjectTrustMode>("ask");
   const [trustBusy, setTrustBusy] = useState(false);
   let tools: GuiTools = { tools: [], active: [] };
@@ -469,5 +487,6 @@ export function GeneralSettingsPanel() {
     <SettingsGroup title="运行环境" icon="terminal-window" description="Pi、Node、配置和资源目录的实际解析结果。"><RuntimeSettings desktop={desktop} cwd={cwd} /></SettingsGroup>
     <SettingsGroup title="电脑操作" icon="desktop" description="让当前 Pi 模型通过界面观察和点击桌面应用。有可靠 API 或 CLI 时不要用。"><ComputerUseSettings desktop={desktop} online={status === "online"} running={running} /></SettingsGroup>
     <SettingsGroup title="工具与终端" icon="wrench"><ToolsSettings tools={tools} running={running} /><TerminalSettings cwd={cwd} desktop={desktop} /></SettingsGroup>
+    <SettingsGroup title="数据管理" icon="trash" description="管理保存在电脑上的会话历史。"><HistorySettings cwd={cwd} desktop={desktop} busy={historyBusy} setBusy={setHistoryBusy} /></SettingsGroup>
   </>;
 }

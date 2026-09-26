@@ -173,6 +173,16 @@ export async function probeProviderModels(provider:string,baseUrl:string,api:str
 export async function saveProvider(input:{provider:string;name?:string;baseUrl:string;modelsUrl?:string;api:string;apiKey?:string;authHeader:boolean}):Promise<{id:string;hasApiKey:boolean}> { if(!desktopRuntime()) throw new Error('Provider 配置请在电脑端修改'); return invoke<{id:string;hasApiKey:boolean}>('save_provider',{provider:input.provider,name:input.name||null,baseUrl:input.baseUrl,modelsUrl:input.modelsUrl||null,api:input.api,apiKey:input.apiKey||null,authHeader:input.authHeader}) }
 export async function listSessions(project:string){if(mobileRuntime())return runRemoteHostOperation<import('./protocol').Session[]>({name:'session.list',cwd:project});if(!native)return [];return invoke<import('./protocol').Session[]>('list_sessions',{cwd:project})}
 export async function deleteSession(sessionPath:string):Promise<void> { if(mobileRuntime()){await runRemoteHostOperation<null>({name:'session.delete',sessionPath});return}if(!native) throw new Error('删除会话需要桌面应用'); return invoke<void>('delete_session',{sessionPath}) }
+export async function clearSessionHistory():Promise<number> {
+ if(!desktopRuntime()) throw new Error('清空会话历史请在电脑端执行')
+ const workspace=useWorkspace.getState(),cwd=workspace.cwd,workspaceMode=workspace.workspaceMode
+ await Promise.all([...connections.keys()].map(id=>closeConnection(id,'会话历史已清空')))
+ projectActive.clear();snapshots.clear();sessionOwners.clear();syncLiveSessions()
+ const result=await invoke<{removed?:number}>('clear_sessions')
+ queryClient.removeQueries({predicate:query=>query.queryKey[0]==='pi'&&query.queryKey[1]==='sessions'})
+ useWorkspace.getState().set({...fresh(),cwd,connectionId:'',workspaceMode})
+ return typeof result?.removed==='number'?result.removed:0
+}
 export async function retireSession(sessionPath:string){
  const cwd=useWorkspace.getState().cwd,owner=sessionOwners.get(sessionPath),wasActive=owner?useWorkspace.getState().connectionId===owner:useWorkspace.getState().state?.sessionFile===sessionPath
  if(mobileRuntime()&&wasActive){await changeSession({type:'new_session'});await deleteSession(sessionPath);sessionOwners.delete(sessionPath);await queryClient.invalidateQueries({queryKey:['pi','sessions',cwd]});return}

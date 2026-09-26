@@ -778,6 +778,30 @@ fn project(cwd: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+fn remove_jsonl_files(root: &Path) -> Result<usize, String> {
+    if !root.exists() {
+        return Ok(0);
+    }
+    let mut removed = 0;
+    for entry in fs::read_dir(root).map_err(|error| format!("读取 Pi 会话目录失败：{error}"))?
+    {
+        let entry = entry.map_err(|error| format!("读取 Pi 会话目录失败：{error}"))?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("读取 Pi 会话条目失败：{error}"))?;
+        if file_type.is_dir() {
+            removed += remove_jsonl_files(&path)?;
+        } else if file_type.is_file()
+            && path.extension().and_then(|value| value.to_str()) == Some("jsonl")
+        {
+            fs::remove_file(&path).map_err(|error| format!("删除 Pi 会话失败：{error}"))?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 fn collect_project_files(
     root: &std::path::Path,
     current: &std::path::Path,
@@ -2269,6 +2293,27 @@ pub async fn delete_session(session_path: String) -> Result<(), String> {
     .await
     .map_err(|e| e.to_string())?
 }
+
+#[tauri::command]
+pub async fn clear_sessions(state: State<'_, Bridge>) -> Result<Value, String> {
+    #[cfg(mobile)]
+    {
+        let _ = state;
+        return Err("清空会话历史请在电脑端执行".into());
+    }
+    #[cfg(desktop)]
+    {
+        // Stop every project worker first so no process keeps an open session
+        // file while the history directory is being cleared.
+        state.stop();
+        tauri::async_runtime::spawn_blocking(|| {
+            let removed = remove_jsonl_files(&sessions_dir()?)?;
+            Ok(json!({ "removed": removed }))
+        })
+        .await
+        .map_err(|error| error.to_string())?
+    }
+}
 #[tauri::command]
 pub async fn session_turn_durations(app: AppHandle, session_path: String) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -2544,6 +2589,22 @@ mod tests {
             .send(&root.to_string_lossy(), json!({"type":"get_state"}))
             .unwrap();
         bridge.stop();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn remove_jsonl_files_clears_nested_session_history_only() {
+        let root = temporary_root("clear-sessions");
+        let nested = root.join("project");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(root.join("one.jsonl"), "{}").unwrap();
+        fs::write(nested.join("two.jsonl"), "{}").unwrap();
+        fs::write(nested.join("keep.txt"), "keep").unwrap();
+
+        assert_eq!(remove_jsonl_files(&root).unwrap(), 2);
+        assert!(!root.join("one.jsonl").exists());
+        assert!(!nested.join("two.jsonl").exists());
+        assert!(nested.join("keep.txt").exists());
         fs::remove_dir_all(root).unwrap();
     }
 }

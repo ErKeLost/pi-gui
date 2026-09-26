@@ -169,6 +169,7 @@ pub fn run() {
             bridge::list_sessions,
             bridge::list_project_files,
             bridge::delete_session,
+            bridge::clear_sessions,
             bridge::session_turn_durations,
             bridge::open_pi_terminal,
             mobile_update::mobile_update_install,
