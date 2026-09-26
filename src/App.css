@@ -5096,6 +5096,13 @@ html[data-theme="light"] .composer-agent-mode-indicator {
   font-size: 13px;
   font-weight: 560;
 }
+.sidebar-flower-row.is-project .sidebar-flower-main > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sidebar-flower-row.is-session.is-active .sidebar-flower-main {
   color: var(--sidebar-foreground);
   font-weight: 520;
