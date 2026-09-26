@@ -7,6 +7,8 @@ import { checkMobileUpdate, type MobileUpdate } from "../lib/mobile-update"
 
 const RETRY_DELAY_MS = 3_000
 
+type DesktopUpdateOptions = { notifyNoUpdate?: boolean }
+
 async function installUpdate(update: import("@tauri-apps/plugin-updater").Update) {
   try {
     const installation = update.downloadAndInstall()
@@ -52,6 +54,23 @@ export function offerMobileUpdate(update: MobileUpdate) {
   })
 }
 
+export async function checkForDesktopUpdate({ notifyNoUpdate = false }: DesktopUpdateOptions = {}) {
+  const current = await getVersion()
+  const { check } = await import("@tauri-apps/plugin-updater")
+  const update = await check()
+  if (!update) {
+    if (notifyNoUpdate) gooeyToast.success(`当前已是最新版本（${current}）`, { showTimestamp: false })
+    return null
+  }
+  gooeyToast.info(`发现 Orbit ${update.version}`, {
+    description: update.body || `当前版本 ${current}，可以安装新版本。`,
+    duration: Infinity,
+    showTimestamp: false,
+    action: { label: "更新并重启", onClick: () => void installUpdate(update) },
+  })
+  return update
+}
+
 export function UpdateChecker() {
   const runtimeTarget = useWorkspace(state => state.runtimeTarget)
   useEffect(() => {
@@ -68,21 +87,10 @@ export function UpdateChecker() {
           if (update && !disposed) offerMobileUpdate(update)
           return
         }
-        const { check } = await import("@tauri-apps/plugin-updater")
-        const update = await check()
-        if (!update || disposed) return
-        gooeyToast.info(`发现 Orbit ${update.version}`, {
-          description: update.body || "新版本已经可以安装。",
-          duration: Infinity,
-          showTimestamp: false,
-          action: {
-            label: "更新并重启",
-            onClick: () => void installUpdate(update),
-          },
-        })
+        if (!disposed) await checkForDesktopUpdate()
       } catch (error) {
         if (!disposed) gooeyToast.warning("自动更新检查失败", {
-          description: "网络恢复后会自动重试。",
+          description: `${error instanceof Error ? error.message : String(error)}；网络恢复后会自动重试。`,
           showTimestamp: false,
         })
         throw error

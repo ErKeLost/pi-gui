@@ -13,7 +13,7 @@ import { useRuntimeDiscovery, type RuntimeDiscovery } from "../../lib/runtime-di
 import { clearSessionHistory, computerUseKeyStatus, connect, desktopRuntime, disconnect, getProjectTrustMode, loadMessages, native, refresh, report, request, saveComputerUseKey, setComputerUseMode, setProjectTrustMode, type ProjectTrustMode } from "../../lib/rpc";
 import { getRemoteHost, relaySettingsStatus, saveRelaySettings, startRemoteHost, stopRemoteHost, type RelaySettingsStatus, type RemoteHostInfo } from "../../lib/remote-host";
 import { checkMobileUpdate, mobileUpdateErrorMessage } from "../../lib/mobile-update";
-import { offerMobileUpdate } from "../UpdateChecker";
+import { checkForDesktopUpdate, offerMobileUpdate } from "../UpdateChecker";
 import { Button, Input, Select, Switch } from "../UI";
 import { usePrompt } from "../../lib/prompt";
 import { Icon } from "../Icon";
@@ -116,6 +116,17 @@ function ToolsSettings({ tools, running }: { tools: GuiTools; running: boolean }
 
 function TerminalSettings({ cwd, desktop }: { cwd: string; desktop: boolean }) {
   return <SettingRow title="原生终端环境" description={desktop ? "在独立终端中使用账户登录、包安装和完整的 Pi 交互能力。" : "原生终端需要在电脑端打开。"}><Button variant="outline" disabled={!desktop || !cwd} onClick={() => { if (desktopRuntime()) void invoke("open_pi_terminal", { cwd, session: null, piArgs: [] }).catch(report); }}><Icon name="terminal-window" />打开终端</Button></SettingRow>;
+}
+
+function DesktopUpdateSettings({ desktop }: { desktop: boolean }) {
+  const [busy, setBusy] = useState(false);
+  async function checkNow() {
+    setBusy(true);
+    try { await checkForDesktopUpdate({ notifyNoUpdate: true }); }
+    catch (error) { report(error); }
+    finally { setBusy(false); }
+  }
+  return <SettingRow title="软件更新" description={desktop ? "启动时会自动检查；也可以手动检查当前 Apple Silicon 安装包是否有新版本。" : "软件更新请在电脑端检查。"}><Button variant="outline" disabled={!desktop || busy} onClick={() => void checkNow()}>{busy ? "检查中…" : "检查更新"}</Button></SettingRow>;
 }
 
 function HistorySettings({ cwd, desktop, busy, setBusy }: { cwd: string; desktop: boolean; busy: boolean; setBusy: (value: boolean) => void }) {
@@ -485,6 +496,7 @@ export function GeneralSettingsPanel() {
     <SettingsGroup title="上下文" icon="brain" description="管理当前会话的容量与压缩方式。"><ContextSettings cwd={cwd} status={status} running={running} state={state} onCompact={manualCompact} /></SettingsGroup>
     <SettingsGroup title="消息队列" icon="chats"><QueueSettings status={status} state={state} /></SettingsGroup>
     <SettingsGroup title="运行环境" icon="terminal-window" description="Pi、Node、配置和资源目录的实际解析结果。"><RuntimeSettings desktop={desktop} cwd={cwd} /></SettingsGroup>
+    <SettingsGroup title="更新" icon="arrows-clockwise"><DesktopUpdateSettings desktop={desktop} /></SettingsGroup>
     <SettingsGroup title="电脑操作" icon="desktop" description="让当前 Pi 模型通过界面观察和点击桌面应用。有可靠 API 或 CLI 时不要用。"><ComputerUseSettings desktop={desktop} online={status === "online"} running={running} /></SettingsGroup>
     <SettingsGroup title="工具与终端" icon="wrench"><ToolsSettings tools={tools} running={running} /><TerminalSettings cwd={cwd} desktop={desktop} /></SettingsGroup>
     <SettingsGroup title="数据管理" icon="trash" description="管理保存在电脑上的会话历史。"><HistorySettings cwd={cwd} desktop={desktop} busy={historyBusy} setBusy={setHistoryBusy} /></SettingsGroup>

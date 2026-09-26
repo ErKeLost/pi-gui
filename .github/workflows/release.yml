@@ -83,7 +83,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: Orbit v__VERSION__
           releaseBody: Orbit installers for macOS, Linux, and Windows. macOS builds use ad-hoc signing and are not notarized.
-          releaseDraft: false
+          # Keep the release out of /releases/latest until every desktop
+          # matrix job has uploaded its updater metadata.
+          releaseDraft: true
           prerelease: false
           generateReleaseNotes: true
           uploadUpdaterJson: true
@@ -170,9 +172,22 @@ jobs:
         run: |
           tag="${GITHUB_REF_NAME}"
           asset="orbit-android-arm64-${tag}.apk"
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 120); do
             if gh release view "$tag" >/dev/null 2>&1; then break; fi
             sleep 10
           done
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Orbit $tag" --generate-notes
+          gh release view "$tag" >/dev/null 2>&1 || { echo "Draft release $tag was not created" >&2; exit 1; }
           gh release upload "$tag" "$asset" --clobber
+
+  publish:
+    name: Publish release
+    needs: [release, android]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false --prerelease=false
