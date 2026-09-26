@@ -9,14 +9,14 @@ export type Project = {
 const PROJECTS_KEY = "pi-gui.projects.v1"
 const LEGACY_PROJECTS_KEY = ["pi-gui", "projects"].join(".")
 
-function normalizePath(value: string): string {
+export function normalizeProjectPath(value: string): string {
   return value.replace(/\/+$/, "") || "/"
 }
 
 export function projectRoots(project: Project): string[] {
   const seen = new Set<string>()
   return [project.path, ...(project.roots ?? [])].flatMap(value => {
-    const path = normalizePath(value)
+    const path = normalizeProjectPath(value)
     if (seen.has(path)) return []
     seen.add(path)
     return [path]
@@ -28,7 +28,7 @@ export function projectExtraRoots(project: Project): string[] {
 }
 
 function normalizeProject(project: Project): Project {
-  const path = normalizePath(project.path)
+  const path = normalizeProjectPath(project.path)
   const roots = projectRoots({ ...project, path })
   return {
     path,
@@ -43,7 +43,7 @@ export function mergeProjects(existing: Project[], paths: string[]): Project[] {
     return [normalized.path, normalized]
   }))
   for (const raw of paths) {
-    const path = normalizePath(raw)
+    const path = normalizeProjectPath(raw)
     if (!all.has(path)) all.set(path, normalizeProject({ path, name: path.split("/").filter(Boolean).at(-1) || "/" }))
   }
   return [...all.values()]

@@ -187,7 +187,7 @@ export function WorkspaceSidebar({ sidebarOpen, onToggleSidebar, online, panel, 
                     <Icon name={isExpanded ? "folder-open" : "folder-simple"} /><span title={project.path}>{project.name}</span>{busyProject === project.path && <i className="session-working-indicator" aria-hidden />}
                   </ContextMenuTrigger>
                   <Button className="sidebar-project-new" title={`在 ${project.name} 新建会话`} aria-label={`在 ${project.name} 新建会话`} disabled={busyProject === project.path} onClick={event => { event.preventDefault(); event.stopPropagation(); void newSession(project.path); }}><Icon name="plus-circle" /></Button>
-                  <ProjectActions project={project} homeDir={homeDir} taskCount={merged.sessions.length} onEdit={() => setEditingProject(project)} />
+                  <ProjectActions project={project} homeDir={homeDir} taskCount={merged.sessions.length} onEdit={() => setEditingProject(project)} onRemove={() => setDeletingProject(project)} />
                 </div>
                 <ContextMenuContent className="w-52"><ContextMenuItem onClick={() => void chooseProject(project.path)}><Icon name="folder-simple" />打开项目</ContextMenuItem><ContextMenuItem onClick={() => void newSession(project.path)}><Icon name="note-pencil" />新建会话</ContextMenuItem><ContextMenuItem onClick={() => setEditingProject(project)}><Icon name="gear-six" />编辑项目</ContextMenuItem><ContextMenuItem onClick={() => void navigator.clipboard.writeText(project.path)}><Icon name="copy" />复制路径</ContextMenuItem><ContextMenuSeparator /><ContextMenuItem variant="destructive" onClick={() => setDeletingProject(project)}><Icon name="trash" />移除项目</ContextMenuItem></ContextMenuContent>
               </ContextMenu>];

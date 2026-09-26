@@ -1,7 +1,7 @@
 import {test,expect} from 'bun:test'
 import {observe,emptyTelemetry} from '../src/lib/telemetry'
 import {getChange,getToolCodePresentation,MAX_CODE_PREVIEW_CHARS} from '../src/lib/changes'
-import {mergeProjects,projectExtraRoots,projectRoots,removeProject,replaceProject} from '../src/lib/projects'
+import {mergeProjects,normalizeProjectPath,projectExtraRoots,projectRoots,removeProject,replaceProject} from '../src/lib/projects'
 import {mergeProjectSessions} from '../src/hooks/use-project-sessions'
 test('compaction keeps actual status and estimates, never invents progress percentages',()=>{
  let state=observe(emptyTelemetry(),{type:'compaction_start',reason:'threshold'},1000)
@@ -32,6 +32,11 @@ test('tool code presentations use diffs for read, bash, and edit without renderi
 test('multiple project directories deduplicate by path, not by display name',()=>{
  const projects=mergeProjects([] ,['/a/app/','/b/app','/a/app'])
  expect(projects).toEqual([{path:'/a/app',name:'app'},{path:'/b/app',name:'app'}])
+})
+
+test('project connection paths use one stable spelling',()=>{
+ expect(normalizeProjectPath('/Users/work/pi-gui/')).toBe('/Users/work/pi-gui')
+ expect(normalizeProjectPath('/')).toBe('/')
 })
 test('removing a project only removes the exact workspace path',()=>{
  const projects=mergeProjects([] ,['/a/app','/b/app'])

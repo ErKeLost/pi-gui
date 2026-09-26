@@ -87,7 +87,24 @@ impl Bridge {
             return Err("RPC command requires a type".into());
         }
         let mut slot = self.0.lock().map_err(|e| e.to_string())?;
-        let worker = slot.get_mut(project).ok_or("项目尚未连接")?;
+        // The UI may restore an older project path spelling (for example a
+        // trailing slash) while the worker keeps the canonical directory.
+        // Resolve that alias before reporting a missing connection. Exact
+        // connection ids still win so concurrent sessions remain isolated.
+        let key = if slot.contains_key(project) {
+            project.to_owned()
+        } else {
+            let canonical = PathBuf::from(project).canonicalize().ok();
+            slot.iter()
+                .find_map(|(id, worker)| {
+                    canonical
+                        .as_deref()
+                        .filter(|path| *path == worker.cwd.as_path())
+                        .map(|_| id.clone())
+                })
+                .ok_or("项目尚未连接")?
+        };
+        let worker = slot.get_mut(&key).ok_or("项目尚未连接")?;
         let mut bytes = serde_json::to_vec(&command).map_err(|e| e.to_string())?;
         bytes.push(b'\n');
         worker
@@ -2506,5 +2523,27 @@ mod tests {
             let _ = child.kill();
             let _ = child.wait();
         };
+    }
+
+    #[test]
+    fn send_accepts_a_canonical_alias_for_an_existing_project_worker() {
+        let bridge = Bridge::default();
+        let root = temporary_root("bridge-alias");
+        fs::create_dir_all(&root).unwrap();
+        let alias = format!("{}/", root.display());
+        let worker = worker();
+        bridge.0.lock().unwrap().insert(
+            alias,
+            Worker {
+                cwd: root.canonicalize().unwrap(),
+                ..worker
+            },
+        );
+
+        bridge
+            .send(&root.to_string_lossy(), json!({"type":"get_state"}))
+            .unwrap();
+        bridge.stop();
+        fs::remove_dir_all(root).unwrap();
     }
 }

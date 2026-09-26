@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { useProjects } from "../lib/projects";
+import { normalizeProjectPath, useProjects } from "../lib/projects";
 import { changeSession, connect, connectRemoteConnection, dispatchRemoteEvent, loadMessages, report, suspendRemoteConnection } from "../lib/rpc";
 import { detectRuntimeEnvironment } from "../lib/runtime-environment";
 import { useRuntimeDiscovery } from "../lib/runtime-diagnostics";
@@ -134,7 +134,7 @@ export function useWorkspaceBootstrap() {
       useWorkspace.getState().set({ cwd: "", workspaceMode: "project" });
       return;
     }
-    const path = storedPath || savedProjects[0]?.path || discovery.data.cwd;
+    const path = (storedPath ? normalizeProjectPath(storedPath) : "") || savedProjects[0]?.path || normalizeProjectPath(discovery.data.cwd);
     useProjects.getState().add([path]);
     void connect(path, "project").catch(report);
   }, [discovery.data]);

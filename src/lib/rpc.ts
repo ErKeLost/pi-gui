@@ -4,7 +4,7 @@ import {Channel,invoke,isTauri} from '@tauri-apps/api/core'
 import {QueryClient} from '@tanstack/react-query'
 import type {RpcCommand,RpcResponse} from '@earendil-works/pi-coding-agent'
 import {useWorkspace,type LiveSession,type Workspace,type WorkspaceMode} from './store'
-import {projectExtraRoots,useProjects} from './projects'
+import {normalizeProjectPath,projectExtraRoots,useProjects} from './projects'
 import {parseAgentSnapshot} from './agents'
 import {emptyTranscript,hydrate,reduceEvent,type Event,type PiMessage,type RpcSessionState,type UiRequest} from './protocol'
 import {attachRemoteConnection,remoteHostSnapshot,runRemoteHostOperation,sendRemotePiCommand} from './remote-runtime'
@@ -291,6 +291,7 @@ export async function connect(cwd:string,workspaceMode:WorkspaceMode=useWorkspac
   if(workspaceMode==='project')await syncConfiguredProjectRoots(cwd)
   return
  }
+ cwd=normalizeProjectPath(cwd)
  const previous=useWorkspace.getState();if(previous.connectionId)snapshots.set(previous.connectionId,snapshot())
  const id=projectActive.get(cwd)??cwd
  const saved=snapshots.get(id)??fresh();useWorkspace.getState().set({...saved,cwd,workspaceMode,connectionId:id})

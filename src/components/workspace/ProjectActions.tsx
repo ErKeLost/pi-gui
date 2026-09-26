@@ -11,9 +11,10 @@ type ProjectActionsProps = {
   homeDir: string
   taskCount: number
   onEdit: () => void
+  onRemove: () => void
 }
 
-export function ProjectActions({ project, homeDir, taskCount, onEdit }: ProjectActionsProps) {
+export function ProjectActions({ project, homeDir, taskCount, onEdit, onRemove }: ProjectActionsProps) {
   const [open, setOpen] = useState(false)
   const roots = projectRoots(project)
   const choose = (action: () => void) => {
@@ -35,6 +36,7 @@ export function ProjectActions({ project, homeDir, taskCount, onEdit }: ProjectA
         <div className="project-actions-info"><Icon name="chat-circle" /><span>{taskCount} 个任务</span></div>
         <div className="project-actions-info"><Icon name="folder-simple" /><span title={project.path}>{shortenPath(project.path, homeDir)}</span></div>
         <Button onClick={() => choose(onEdit)}><Icon name="gear-six" />编辑项目</Button>
+        <Button className="project-actions-danger" variant="destructive" onClick={() => choose(onRemove)}><Icon name="trash" />移除项目</Button>
       </div>
     </PopoverContent>
   </Popover>
